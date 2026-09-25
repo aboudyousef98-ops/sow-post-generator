@@ -5,6 +5,6 @@ export default defineConfig({
   plugins: [react()],
   test: {
     environment: 'node',
-    include: ['src/**/*.test.ts', 'netlify/**/*.test.ts'],
+    include: ['src/**/*.test.{ts,tsx}', 'netlify/**/*.test.ts'],
   },
 });
