@@ -68,6 +68,18 @@ Date: 2026-09-26 · Built by Claude Code from `../spec/` (all 9 spec files + fix
 - STR system is Next.js; spec fixes Vite — mirrored its conventions (TS strict, zod, ESLint 9,
   Node 20, commented netlify.toml, env-in-UI-only) rather than its framework.
 
+## v2 revision (2026-09-26, after Aboud's review)
+
+- Removed the drivers checklist, descriptors and level-suggestion UI entirely — Aboud picks the
+  level himself from a plain "Project Level" select (official names kept verbatim in the post).
+- Compose changed from 3 side-by-side columns to a vertical one-page flow (max 860 px, centered):
+  Source → Project details (2-col field grid) → Notes → Tags → Preview/Output.
+- Scheduled Work Items / Coordinator notes now shown read-only in a collapsible
+  "Coordination info" section instead of editable textareas.
+- The classification library (`lib/classify.ts`: suggestLevel, layoutSeed, keyword table) and its
+  tests are KEPT but unused by the UI — available if a compact "advanced" mode returns later.
+- v1 snapshot: git tag `v1-phase1` + `../_versions/sow-post-generator-v1.zip`.
+
 ## Next
 
 - Phase 2 (quality of life): merge-paste driver suggestions UI polish, history search/filters,
