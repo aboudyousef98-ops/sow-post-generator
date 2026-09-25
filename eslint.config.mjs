@@ -11,4 +11,10 @@ export default tseslint.config(
     plugins: { 'react-hooks': reactHooks },
     rules: reactHooks.configs.recommended.rules,
   },
+  {
+    files: ['scripts/**/*.mjs', 'netlify/**/*.{ts,mts}'],
+    languageOptions: {
+      globals: { console: 'readonly', process: 'readonly', URL: 'readonly', fetch: 'readonly', Response: 'readonly', Request: 'readonly' },
+    },
+  },
 );

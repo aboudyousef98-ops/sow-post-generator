@@ -186,6 +186,55 @@ export function installWeekday(iso: string | undefined): string {
   return iso ? weekdayName(iso) : '';
 }
 
+/** Image-extraction result (spec/05 §A) → SfFields + the same warnings as the text parser. */
+export function extractedToFields(
+  extracted: object,
+  today?: string,
+): ParseResult {
+  const e = extracted as Record<string, string | number | null>;
+  const warnings: string[] = [];
+  const fields: Partial<SfFields> = { source: 'image' };
+  const s = (k: string) => (typeof e[k] === 'string' && (e[k] as string).trim() ? (e[k] as string).trim() : undefined);
+
+  fields.customerName = s('customerName');
+  fields.recordTitle = s('recordTitle');
+  if (typeof e.systemSizeKw === 'number') fields.systemSizeKw = e.systemSizeKw;
+  fields.projectStatus = s('projectStatus');
+  const date = s('installScheduledDate');
+  if (date) fields.installScheduledDate = /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : (usDateToIso(date) ?? undefined);
+  fields.latestScheduledVisit = s('latestScheduledVisit');
+  fields.siteAddress = s('siteAddress');
+  fields.jurisdiction = s('jurisdiction');
+  fields.utility = s('utility');
+  fields.lender = s('lender');
+  fields.fundingStage = s('fundingStage');
+  fields.scheduledWorkItems = s('scheduledWorkItems');
+  fields.coordinatorNotes = s('coordinatorNotes');
+  const regionRaw = s('installRegionRaw');
+  if (regionRaw) {
+    fields.installRegionRaw = regionRaw;
+    fields.region = normalizeRegion(regionRaw);
+    if (fields.region === 'OTHER') warnings.push(`Region not recognized: ${regionRaw} — please select.`);
+  }
+
+  if (fields.installScheduledDate && fields.latestScheduledVisit) {
+    const visitIso = usDateToIso(fields.latestScheduledVisit) ?? (/^\d{4}-\d{2}-\d{2}/.test(fields.latestScheduledVisit) ? fields.latestScheduledVisit.slice(0, 10) : null);
+    if (visitIso && visitIso !== fields.installScheduledDate) {
+      warnings.push(
+        `Latest Scheduled Visit (${isoToUs(visitIso)}) differs from Install Scheduled Date (${isoToUs(fields.installScheduledDate)}) — the post uses Install Scheduled Date.`,
+      );
+    }
+  }
+  if (!fields.installScheduledDate) warnings.push('No install date found.');
+  if (fields.installScheduledDate && today && isPast(fields.installScheduledDate, today)) {
+    warnings.push(`Install Scheduled Date (${isoToUs(fields.installScheduledDate)}) is in the past.`);
+  }
+  if (!fields.customerName) warnings.push('Customer name missing.');
+  if (e.confidence !== 'high') warnings.push('Extracted from image — please verify the date and name.');
+
+  return { fields, warnings, rawPairs: {} };
+}
+
 /**
  * Merge a second paste into the current fields — later paste overwrites only
  * the fields it contains (spec/03 "Second paste").
