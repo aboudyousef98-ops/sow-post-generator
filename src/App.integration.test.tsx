@@ -60,12 +60,8 @@ describe('Compose acceptance flow', () => {
     // Tags include the HOU region lead.
     expect(screen.getByText('@Diego Banegas')).toBeTruthy();
 
-    // Tick mpu + relocation ≤ 20 ft → suggested L3, seed mentions "MPU with relocation".
-    fireEvent.click(screen.getByLabelText(/Main Panel Upgrade/));
-    fireEvent.click(screen.getByLabelText(/Equipment relocation ≤ 20 ft/));
-    expect(screen.getByText(/Suggested: L3 — Service Equipment Modification/)).toBeTruthy();
-    const layout = screen.getByPlaceholderText(/Auto-seeded from drivers/) as HTMLTextAreaElement;
-    expect(layout.value).toContain('MPU with relocation');
+    // Pick Level 3 directly (simple flow — no driver checklist).
+    fireEvent.change(screen.getByLabelText(/Project Level/), { target: { value: '3' } });
 
     // Preview contains the canonical lines.
     const preview = container.querySelector('.preview')!;

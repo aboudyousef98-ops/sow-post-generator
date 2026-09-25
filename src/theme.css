@@ -121,15 +121,21 @@ h4 {
   margin: 0 auto;
 }
 
+/* Vertical one-page flow: Source → details → notes → tags → output. */
 .compose-grid {
-  display: grid;
-  grid-template-columns: 1fr 1.15fr 1fr;
-  gap: 16px;
-  align-items: start;
+  max-width: 860px;
+  margin: 0 auto;
 }
 
-@media (max-width: 1100px) {
-  .compose-grid {
+/* Compact two-column field pairs inside a card; stacks on narrow screens. */
+.fields-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 16px;
+}
+
+@media (max-width: 700px) {
+  .fields-2col {
     grid-template-columns: 1fr;
   }
 }
