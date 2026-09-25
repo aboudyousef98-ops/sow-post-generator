@@ -1,0 +1,43 @@
+# Netlify build config for the SOW Post Generator (Vite SPA + Functions).
+#
+# Environment variables are set in the Netlify UI (Site settings -> Environment
+# variables) — NEVER committed here. Required:
+#   OPENAI_API_KEY, ALLOWED_ORIGINS, API_PATH_TOKEN, VITE_API_PATH_TOKEN
+# Optional (have defaults): OPENAI_MODEL_VISION, OPENAI_MODEL_TEXT
+#
+# Access control (07-netlify-functions.md): no login. Every function checks
+# Origin/Referer against ALLOWED_ORIGINS and validates the :token path segment
+# against API_PATH_TOKEN. netlify.toml cannot read env vars in redirects, so
+# the token is validated inside the functions, not here.
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Tokenized API paths -> function files. :token is validated server-side.
+[[redirects]]
+  from = "/api/:token/extract"
+  to = "/.netlify/functions/extract"
+  status = 200
+
+[[redirects]]
+  from = "/api/:token/rewrite"
+  to = "/.netlify/functions/rewrite"
+  status = 200
+
+[[redirects]]
+  from = "/api/:token/health"
+  to = "/.netlify/functions/health"
+  status = 200
+
+# SPA fallback — must stay last.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
