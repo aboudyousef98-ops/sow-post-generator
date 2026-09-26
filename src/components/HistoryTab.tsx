@@ -80,7 +80,10 @@ export default function HistoryTab({ history, settings, records, setRecords, set
   return (
     <div className="card">
       <h3>History</h3>
-      <p className="muted">History is stored in this browser only. Export regularly.</p>
+      <p className="muted">
+        History is shared with the whole team ("Team synced" pill in the top bar). Export JSON is
+        still available as an occasional offline backup.
+      </p>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
         <button type="button" className="btn secondary small" onClick={() => downloadExport(settings, records)}>
           Export JSON

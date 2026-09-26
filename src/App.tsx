@@ -4,12 +4,13 @@ import DraftsTab from './components/DraftsTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
 import { Toasts, type Toast } from './components/Toast';
-import { health } from './lib/api';
+import { fetchSharedRecords, health, putSharedRecords } from './lib/api';
 import { blankRecord } from './lib/record';
 import {
   loadCurrentId,
   loadRecords,
   loadSettings,
+  mergeRecords,
   saveCurrentId,
   saveRecords,
   saveSettings,
@@ -25,6 +26,7 @@ export default function App() {
   const [tab, setTab] = useState<Tab>('compose');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'off'>('checking');
+  const [syncStatus, setSyncStatus] = useState<'checking' | 'synced' | 'local'>('checking');
 
   const [current, setCurrent] = useState<PostRecord>(() => {
     const stored = loadRecords();
@@ -40,9 +42,42 @@ export default function App() {
     saveSettings(s);
   }, []);
 
+  // Phase 4: every records change is pushed to the shared Netlify Blobs store
+  // (debounced). localStorage stays the offline cache; a failed push just
+  // flips the pill to "Local only" and the next successful push self-heals.
+  const pushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const setRecords = useCallback((r: PostRecord[]) => {
     setRecordsState(r);
     saveRecords(r);
+    clearTimeout(pushTimer.current);
+    pushTimer.current = setTimeout(() => {
+      putSharedRecords(r)
+        .then((merged) => {
+          setRecordsState(merged);
+          saveRecords(merged);
+          setSyncStatus('synced');
+        })
+        .catch(() => setSyncStatus('local'));
+    }, 1500);
+  }, []);
+
+  // Initial sync: pull the shared history, merge (newer updatedAt wins),
+  // then push so local-only records reach the team store.
+  useEffect(() => {
+    (async () => {
+      try {
+        const server = await fetchSharedRecords();
+        const { records: merged } = mergeRecords(loadRecords(), server);
+        setRecordsState(merged);
+        saveRecords(merged);
+        const final = await putSharedRecords(merged);
+        setRecordsState(final);
+        saveRecords(final);
+        setSyncStatus('synced');
+      } catch {
+        setSyncStatus('local');
+      }
+    })();
   }, []);
 
   // Autosave the Compose form (debounced 500 ms). A draft exists the moment
@@ -141,30 +176,46 @@ export default function App() {
     [setRecords, toast],
   );
 
+  // Delete = tombstone (deletedAt) so the deletion syncs to every browser
+  // instead of the record resurrecting on the next merge.
   const deleteRecord = useCallback(
     (id: string) => {
       const rec = recordsRef.current.find((r) => r.id === id);
       if (!rec) return;
-      setRecords(recordsRef.current.filter((r) => r.id !== id));
+      const now = new Date().toISOString();
+      setRecords(
+        recordsRef.current.map((r) => (r.id === id ? { ...r, deletedAt: now, updatedAt: now } : r)),
+      );
       toast('Deleted.', {
         label: 'Undo',
-        fn: () => setRecords([...recordsRef.current, rec]),
+        fn: () => {
+          const undoAt = new Date().toISOString();
+          setRecords(
+            recordsRef.current.map((r) =>
+              r.id === id ? { ...r, deletedAt: undefined, updatedAt: undoAt } : r,
+            ),
+          );
+        },
       });
     },
     [setRecords, toast],
   );
 
   // The current record appears here once it has a customer name (autosave adds it).
+  // Tombstoned (deleted) records are hidden everywhere.
   const allDrafts = useMemo(
     () =>
       records
-        .filter((r) => r.status === 'draft')
+        .filter((r) => r.status === 'draft' && !r.deletedAt)
         .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [records],
   );
 
   const history = useMemo(
-    () => records.filter((r) => r.status === 'posted').sort((a, b) => (b.postedAt ?? '').localeCompare(a.postedAt ?? '')),
+    () =>
+      records
+        .filter((r) => r.status === 'posted' && !r.deletedAt)
+        .sort((a, b) => (b.postedAt ?? '').localeCompare(a.postedAt ?? '')),
     [records],
   );
 
@@ -188,6 +239,12 @@ export default function App() {
           ))}
         </nav>
         <span className="spacer" />
+        <span
+          className={`ai-pill ${syncStatus === 'synced' ? 'ok' : 'off'}`}
+          title="Shared team history via Netlify. 'Local only' = changes stay in this browser until the connection returns."
+        >
+          {syncStatus === 'checking' ? 'Sync…' : syncStatus === 'synced' ? 'Team synced' : 'Local only'}
+        </span>
         <span className={`ai-pill ${aiStatus === 'ok' ? 'ok' : 'off'}`}>
           {aiStatus === 'checking' ? 'AI…' : aiStatus === 'ok' ? 'AI available' : 'AI offline'}
         </span>

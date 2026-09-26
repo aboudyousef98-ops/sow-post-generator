@@ -113,12 +113,15 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
                 type="button"
                 className="btn danger"
                 onClick={() => {
-                  setRecords([]);
+                  // Tombstone instead of hard-delete so the clear also syncs
+                  // to the shared team history (otherwise records resurrect).
+                  const now = new Date().toISOString();
+                  setRecords(records.map((r) => ({ ...r, deletedAt: now, updatedAt: now })));
                   setConfirmClear(false);
-                  toast('All records cleared.');
+                  toast('All records cleared (for the whole team).');
                 }}
               >
-                Really clear ALL records?
+                Really clear ALL records — for the whole team?
               </button>
               <button type="button" className="btn secondary" onClick={() => setConfirmClear(false)}>
                 Cancel

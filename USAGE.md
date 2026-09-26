@@ -54,9 +54,19 @@ npm run test
 _TODO: add three screenshots (Compose after paste, polished notes, final preview) after the first
 deploy._
 
-## Known limitations (Phase 1)
+## Shared team history (Phase 4 — built in)
+
+- Drafts and history are stored in **Netlify Blobs** (store `sowpost`), shared by all three
+  designers. No extra setup, no env vars — it activates automatically once the site is deployed
+  (and `netlify dev` emulates it locally).
+- The top-bar pill shows **Team synced** / **Local only**. When offline, everything keeps working
+  from the browser cache and re-syncs on the next successful save.
+- Conflicts merge by "newer edit wins" per record; deletions sync too (and Clear All in Settings
+  clears for the WHOLE team).
+- Export JSON is now just an occasional offline backup, not a routine chore.
+
+## Known limitations
 
 - Pasted `@Name` text does not become a live Slack mention — re-type `@` after pasting
   (direct Slack posting is Phase 3).
-- History/drafts are per-browser; consolidate via export/import (shared history is Phase 4).
-- Chips editor and history search/filters/reopen arrive in Phase 2.
+- Chips editor arrives in Phase 2.

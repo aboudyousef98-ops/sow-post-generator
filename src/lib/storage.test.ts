@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportFile, PostRecord } from '../types';
-import { defaultSettings, exportFileName, mergeImport } from './storage';
+import { defaultSettings, exportFileName, mergeImport, mergeRecords } from './storage';
 
 function rec(id: string, updatedAt: string, customer: string): PostRecord {
   return {
@@ -48,6 +48,22 @@ describe('mergeImport', () => {
     const { records, updated } = mergeImport(current, incoming);
     expect(updated).toBe(0);
     expect(records[0].sf.customerName).toBe('Current A');
+  });
+});
+
+describe('mergeRecords — shared-history sync', () => {
+  it('a newer tombstone wins over an older live record (deletion propagates)', () => {
+    const live = rec('a', '2026-09-10T00:00:00.000Z', 'A');
+    const tombstone: PostRecord = { ...rec('a', '2026-09-12T00:00:00.000Z', 'A'), deletedAt: '2026-09-12T00:00:00.000Z' };
+    const { records } = mergeRecords([live], [tombstone]);
+    expect(records[0].deletedAt).toBe('2026-09-12T00:00:00.000Z');
+  });
+
+  it('a newer undo wins over an older tombstone (restore propagates)', () => {
+    const tombstone: PostRecord = { ...rec('a', '2026-09-12T00:00:00.000Z', 'A'), deletedAt: '2026-09-12T00:00:00.000Z' };
+    const restored = rec('a', '2026-09-13T00:00:00.000Z', 'A');
+    const { records } = mergeRecords([tombstone], [restored]);
+    expect(records[0].deletedAt).toBeUndefined();
   });
 });
 

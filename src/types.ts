@@ -89,6 +89,12 @@ export interface PostRecord {
   createdAt: string;
   updatedAt: string;
   postedAt?: string;
+  /**
+   * Tombstone for shared-history sync (Phase 4): deleted records keep their id
+   * so the deletion propagates to every browser instead of resurrecting on the
+   * next merge. Filtered out of all lists.
+   */
+  deletedAt?: string;
   schemaVersion: 1;
 }
 

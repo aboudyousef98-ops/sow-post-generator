@@ -80,6 +80,22 @@ Date: 2026-09-26 · Built by Claude Code from `../spec/` (all 9 spec files + fix
   tests are KEPT but unused by the UI — available if a compact "advanced" mode returns later.
 - v1 snapshot: git tag `v1-phase1` + `../_versions/sow-post-generator-v1.zip`.
 
+## v2 additions (2026-09-26, same session)
+
+- Level scope + planning-window helper text under the Project Level select (spec/04 table).
+- Post format: bullets (•/<ul>) instead of numbers; empty bullets dropped; Jurisdiction and
+  Site Address as their own lines; Region line no longer carries the jurisdiction.
+- Required-field gating: Customer, Install date, Jurisdiction, Site address (+ Region text for
+  OTHER) must be filled before any Copy button or Mark as posted works.
+- Split paste zone: text box + screenshot box.
+- Nearest-metro for OTHER regions: offline Texas-city table (haversine vs Dallas/Houston) with
+  `/api/region` AI fallback; post shows "Corpus Christi – Near Houston"; lead tag follows.
+- Search/filter/sort bar on Drafts and History (`lib/listQuery.ts` + `ListControls`).
+- **Phase 4 shared history**: `/api/records` GET/PUT on Netlify Blobs (store `sowpost`),
+  merge-by-newer-updatedAt, `deletedAt` tombstones for synced deletion, pull-merge-push on load,
+  debounced push on every change, "Team synced / Local only" pill. localStorage = offline cache.
+  Aboud confirmed his paid Netlify plan; Blobs needs no extra config.
+
 ## Next
 
 - Phase 2 (quality of life): merge-paste driver suggestions UI polish, history search/filters,

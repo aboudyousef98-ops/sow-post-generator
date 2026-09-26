@@ -113,17 +113,17 @@ export function exportFileName(now = new Date()): string {
 }
 
 /**
- * Import merge (02 §Rules): merge by id; when both exist keep the newer
- * `updatedAt`. Settings are applied only when `importSettings` is true.
+ * Merge two record sets by id; when both exist the newer `updatedAt` wins.
+ * Used by import, and by the Phase-4 shared-history sync (both directions).
  */
-export function mergeImport(
+export function mergeRecords(
   current: PostRecord[],
-  incoming: ExportFile,
+  incoming: PostRecord[],
 ): { records: PostRecord[]; added: number; updated: number } {
   const byId = new Map(current.map((r) => [r.id, r]));
   let added = 0;
   let updated = 0;
-  for (const rec of incoming.records ?? []) {
+  for (const rec of incoming ?? []) {
     if (!rec?.id) continue;
     const existing = byId.get(rec.id);
     if (!existing) {
@@ -135,4 +135,15 @@ export function mergeImport(
     }
   }
   return { records: [...byId.values()], added, updated };
+}
+
+/**
+ * Import merge (02 §Rules). Settings are applied only when `importSettings`
+ * is true (handled by the caller).
+ */
+export function mergeImport(
+  current: PostRecord[],
+  incoming: ExportFile,
+): { records: PostRecord[]; added: number; updated: number } {
+  return mergeRecords(current, incoming.records ?? []);
 }

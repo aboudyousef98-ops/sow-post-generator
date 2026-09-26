@@ -102,6 +102,53 @@ describe('Compose acceptance flow', () => {
     second.unmount();
   });
 
+  it('pulls the shared team history on load and shows it in History', async () => {
+    const serverRecord = {
+      id: 'srv-1',
+      status: 'posted',
+      author: 'Omar Rajab',
+      sf: {
+        customerName: 'Team Customer',
+        installScheduledDate: '2026-10-05',
+        region: 'DFW',
+        jurisdiction: 'Frisco',
+        siteAddress: '1 Main St, Frisco, TX',
+        source: 'text',
+      },
+      drivers: [],
+      suggestedLevel: 2,
+      level: 2,
+      notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
+      usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
+      tags: [],
+      warnings: [],
+      createdAt: '2026-09-20T00:00:00.000Z',
+      updatedAt: '2026-09-20T00:00:00.000Z',
+      postedAt: '2026-09-20T00:00:00.000Z',
+      schemaVersion: 1,
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/records')) {
+          const body =
+            init?.method === 'PUT'
+              ? (JSON.parse(String(init.body)) as { records: unknown[] })
+              : { records: [serverRecord] };
+          return new Response(JSON.stringify(init?.method === 'PUT' ? body : { records: [serverRecord] }), { status: 200 });
+        }
+        return new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 });
+      }),
+    );
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('Team synced')).toBeTruthy());
+    fireEvent.click(screen.getByText(/History \(1\)/));
+    expect(screen.getByText('Team Customer')).toBeTruthy();
+    // And it landed in the localStorage cache too.
+    const cached = JSON.parse(localStorage.getItem('sowpost.records') ?? '[]');
+    expect(cached.map((r: { id: string }) => r.id)).toContain('srv-1');
+  });
+
   it('offline text flow works end-to-end without AI (health fails)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new Error('offline'))));
     const { container } = render(<App />);

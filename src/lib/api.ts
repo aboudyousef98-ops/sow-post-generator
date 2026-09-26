@@ -86,6 +86,34 @@ export function regionLookup(location: string): Promise<RegionResponse> {
   return post<RegionResponse>('region', { location });
 }
 
+// ---- Phase 4: shared team history (Netlify Blobs behind /api/records) -----
+
+import type { PostRecord } from '../types';
+
+function recordsPath(): string {
+  return `/api/${TOKEN}/records`;
+}
+
+export async function fetchSharedRecords(): Promise<PostRecord[]> {
+  const res = await fetch(recordsPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { records?: PostRecord[] };
+  if (!Array.isArray(json.records)) throw { status: 502, message: 'Bad records response' } satisfies ApiError;
+  return json.records;
+}
+
+/** Push local records; the server merges by id/updatedAt and returns the merged set. */
+export async function putSharedRecords(records: PostRecord[]): Promise<PostRecord[]> {
+  const res = await fetch(recordsPath(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ records }),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { records?: PostRecord[] };
+  return Array.isArray(json.records) ? json.records : records;
+}
+
 export interface HealthResponse {
   ok: boolean;
   hasKey: boolean;
