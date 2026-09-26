@@ -1,5 +1,8 @@
+import { useMemo, useState } from 'react';
 import { isoToUs } from '../lib/dates';
+import { applyQuery, authorsIn, defaultQuery } from '../lib/listQuery';
 import type { PostRecord } from '../types';
+import ListControls from './ListControls';
 
 interface Props {
   drafts: PostRecord[];
@@ -9,6 +12,9 @@ interface Props {
 }
 
 export default function DraftsTab({ drafts, onOpen, onDuplicate, onDelete }: Props) {
+  const [query, setQuery] = useState(() => defaultQuery('updated'));
+  const shown = useMemo(() => applyQuery(drafts, query), [drafts, query]);
+
   if (drafts.length === 0) {
     return (
       <div className="card">
@@ -20,6 +26,14 @@ export default function DraftsTab({ drafts, onOpen, onDuplicate, onDelete }: Pro
   return (
     <div className="card">
       <h3>Drafts</h3>
+      <ListControls
+        query={query}
+        onChange={setQuery}
+        authors={authorsIn(drafts)}
+        sortOptions={['updated', 'installDate', 'customer', 'level', 'region', 'author']}
+        count={shown.length}
+        total={drafts.length}
+      />
       <table className="list">
         <thead>
           <tr>
@@ -32,7 +46,7 @@ export default function DraftsTab({ drafts, onOpen, onDuplicate, onDelete }: Pro
           </tr>
         </thead>
         <tbody>
-          {drafts.map((d) => (
+          {shown.map((d) => (
             <tr key={d.id} className="row" onClick={() => onOpen(d.id)}>
               <td>{d.sf.customerName || '—'}</td>
               <td>{d.sf.installScheduledDate ? isoToUs(d.sf.installScheduledDate) : '—'}</td>

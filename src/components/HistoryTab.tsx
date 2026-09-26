@@ -1,8 +1,10 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { downloadExport, readImportFile } from '../lib/dataio';
 import { isoToUs } from '../lib/dates';
+import { applyQuery, authorsIn, defaultQuery } from '../lib/listQuery';
 import { buildPostHtml, buildPostText } from '../lib/template';
 import type { PostRecord, Settings } from '../types';
+import ListControls from './ListControls';
 
 interface Props {
   history: PostRecord[];
@@ -17,6 +19,8 @@ export default function HistoryTab({ history, settings, records, setRecords, set
   const [openId, setOpenId] = useState<string | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const [importSettingsToo, setImportSettingsToo] = useState(false);
+  const [query, setQuery] = useState(() => defaultQuery('posted'));
+  const shown = useMemo(() => applyQuery(history, query), [history, query]);
   const open = history.find((r) => r.id === openId);
 
   const copy = async (rec: PostRecord, rich: boolean) => {
@@ -107,6 +111,15 @@ export default function HistoryTab({ history, settings, records, setRecords, set
       {history.length === 0 ? (
         <p className="muted">Nothing posted yet.</p>
       ) : (
+        <>
+        <ListControls
+          query={query}
+          onChange={setQuery}
+          authors={authorsIn(history)}
+          sortOptions={['posted', 'installDate', 'customer', 'level', 'region', 'author']}
+          count={shown.length}
+          total={history.length}
+        />
         <table className="list">
           <thead>
             <tr>
@@ -120,7 +133,7 @@ export default function HistoryTab({ history, settings, records, setRecords, set
             </tr>
           </thead>
           <tbody>
-            {history.map((r) => (
+            {shown.map((r) => (
               <tr key={r.id} className="row" onClick={() => setOpenId(r.id)}>
                 <td>{r.postedAt ? new Date(r.postedAt).toLocaleString() : '—'}</td>
                 <td>{r.author}</td>
@@ -135,6 +148,7 @@ export default function HistoryTab({ history, settings, records, setRecords, set
             ))}
           </tbody>
         </table>
+        </>
       )}
     </div>
   );
