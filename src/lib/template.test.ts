@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
 import { defaultSettings } from './storage';
-import { buildPostHtml, buildPostText, finalTags, regionLine } from './template';
+import { buildPostHtml, buildPostText, finalTags, missingRequired, regionLine } from './template';
 
 function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
   return {
@@ -13,6 +13,7 @@ function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
       installScheduledDate: '2026-10-01',
       region: 'HOU',
       jurisdiction: 'Pasadena',
+      siteAddress: '1317 Skylark Rd, Pasadena, TX 77502',
       source: 'text',
     },
     drivers: [],
@@ -35,18 +36,21 @@ function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
   };
 }
 
-// Expected output — verbatim from spec/06-output-template.md §2.
+// Expected output — spec/06 §2 revised per Aboud (2026-09-26): bullets instead
+// of numbers, Jurisdiction + Site Address as their own lines, empty lines dropped.
 const NORCA_EXPECTED = `Hello Team,
 Kindly find attached the elevation drawing and BOS for Norca Garcia.
 Please take the following notes into consideration:
-1. *Installation Date & Day:* Thursday, 10/01/2026.
-2. *Region:* HOU – Pasadena.
-3. *Project Classification:* Level 1 – Standard Installation.
-4. *Installation Layout:* Standard exterior placement, with the equipment installed back-to-back and direct grid, load, and PV routing.
-5. *Clearance:* All required clearance requirements have been met.
-6. *Site Survey Feedback:* All good.
-7. *Design Feedback:* All good.
-8. *Homeowner Feedback:* No feedback.
+• *Installation Date & Day:* Thursday, 10/01/2026.
+• *Region:* HOU.
+• *Jurisdiction:* Pasadena.
+• *Site Address:* 1317 Skylark Rd, Pasadena, TX 77502.
+• *Project Classification:* Level 1 – Standard Installation.
+• *Installation Layout:* Standard exterior placement, with the equipment installed back-to-back and direct grid, load, and PV routing.
+• *Clearance:* All required clearance requirements have been met.
+• *Site Survey Feedback:* All good.
+• *Design Feedback:* All good.
+• *Homeowner Feedback:* No feedback.
 @Tarek Abu Hseini @Mohammed Azizi @Diego Banegas`;
 
 describe('buildPostText', () => {
@@ -79,10 +83,47 @@ describe('buildPostText', () => {
     expect(regionLine(rec)).toBe('San Antonio');
   });
 
-  it('region without jurisdiction prints just the code', () => {
-    const rec = norcaRecord();
+  it('region line is just the code (jurisdiction has its own line)', () => {
+    expect(regionLine(norcaRecord())).toBe('HOU');
+  });
+
+  it('drops empty bullets entirely (empty layout, missing jurisdiction)', () => {
+    const rec = norcaRecord({
+      notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
+    });
     rec.sf.jurisdiction = undefined;
-    expect(regionLine(rec)).toBe('HOU');
+    const text = buildPostText(rec, defaultSettings());
+    expect(text).not.toContain('*Installation Layout:*');
+    expect(text).not.toContain('*Jurisdiction:*');
+    // Defaults still fill the feedback bullets.
+    expect(text).toContain('*Site Survey Feedback:* All good.');
+  });
+});
+
+describe('missingRequired', () => {
+  it('empty when the major fields are filled', () => {
+    expect(missingRequired(norcaRecord())).toEqual([]);
+  });
+
+  it('lists every missing major field', () => {
+    const rec = norcaRecord();
+    rec.sf.customerName = '';
+    rec.sf.installScheduledDate = '';
+    rec.sf.jurisdiction = undefined;
+    rec.sf.siteAddress = ' ';
+    expect(missingRequired(rec)).toEqual([
+      'Customer name',
+      'Install date',
+      'Jurisdiction',
+      'Site address',
+    ]);
+  });
+
+  it('requires the region text for OTHER regions', () => {
+    const rec = norcaRecord();
+    rec.sf.region = 'OTHER';
+    rec.sf.installRegionRaw = undefined;
+    expect(missingRequired(rec)).toContain('Region text');
   });
 });
 
@@ -101,12 +142,13 @@ describe('finalTags', () => {
 });
 
 describe('buildPostHtml', () => {
-  it('renders <ol> items with <strong> labels and plain tags', () => {
+  it('renders <ul> bullets with <strong> labels and plain tags', () => {
     const html = buildPostHtml(norcaRecord(), defaultSettings());
-    expect(html).toContain('<ol>');
+    expect(html).toContain('<ul>');
     expect(html).toContain('<li><strong>Installation Date &amp; Day:</strong> Thursday, 10/01/2026.</li>');
+    expect(html).toContain('<li><strong>Site Address:</strong> 1317 Skylark Rd, Pasadena, TX 77502.</li>');
     expect(html).toContain('<p>@Tarek Abu Hseini @Mohammed Azizi @Diego Banegas</p>');
-    expect(html.match(/<li>/g)).toHaveLength(8);
+    expect(html.match(/<li>/g)).toHaveLength(10);
   });
 
   it('escapes HTML in user text', () => {

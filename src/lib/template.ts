@@ -24,12 +24,24 @@ export function effectiveNote(record: PostRecord, key: NoteKey, settings: Settin
   return punctuate(defaults[key]);
 }
 
-/** Region line value: `HOU – Pasadena`, `DFW`, or the raw region text for OTHER. */
+/** Region line value: `HOU`, `DFW`, or the raw region text for OTHER (jurisdiction has its own line). */
 export function regionLine(record: PostRecord): string {
-  const base =
-    record.sf.region === 'OTHER' ? record.sf.installRegionRaw || 'Other' : record.sf.region;
-  const jur = record.sf.jurisdiction?.trim();
-  return jur ? `${base} – ${jur}` : base;
+  return record.sf.region === 'OTHER' ? record.sf.installRegionRaw || 'Other' : record.sf.region;
+}
+
+/**
+ * Required fields (Aboud, 2026-09-26): the copy buttons and "Mark as posted"
+ * stay disabled until these are filled. Notes are NOT required — empty note
+ * bullets are simply dropped from the post.
+ */
+export function missingRequired(record: PostRecord): string[] {
+  const missing: string[] = [];
+  if (!record.sf.customerName.trim()) missing.push('Customer name');
+  if (!record.sf.installScheduledDate) missing.push('Install date');
+  if (record.sf.region === 'OTHER' && !record.sf.installRegionRaw?.trim()) missing.push('Region text');
+  if (!record.sf.jurisdiction?.trim()) missing.push('Jurisdiction');
+  if (!record.sf.siteAddress?.trim()) missing.push('Site address');
+  return missing;
 }
 
 /** Final ordered tag list: fixed → region lead → designer → manual extras, deduped, nulls skipped. */
@@ -52,34 +64,34 @@ interface PostLines {
 
 function buildLines(record: PostRecord, settings: Settings): PostLines {
   const iso = record.sf.installScheduledDate;
-  const dateLine = iso ? `${weekdayName(iso)}, ${isoToUs(iso)}.` : '—';
+  const items = [
+    { label: 'Installation Date & Day', value: iso ? `${weekdayName(iso)}, ${isoToUs(iso)}.` : '' },
+    { label: 'Region', value: punctuate(regionLine(record)) },
+    { label: 'Jurisdiction', value: punctuate(record.sf.jurisdiction ?? '') },
+    { label: 'Site Address', value: punctuate(record.sf.siteAddress ?? '') },
+    { label: 'Project Classification', value: `Level ${record.level} – ${LEVEL_NAMES[record.level]}.` },
+    { label: 'Installation Layout', value: effectiveNote(record, 'layout', settings) },
+    { label: 'Clearance', value: 'All required clearance requirements have been met.' },
+    { label: 'Site Survey Feedback', value: effectiveNote(record, 'siteSurvey', settings) },
+    { label: 'Design Feedback', value: effectiveNote(record, 'design', settings) },
+    { label: 'Homeowner Feedback', value: effectiveNote(record, 'homeowner', settings) },
+  ];
   return {
     intro: [
       'Hello Team,',
       `Kindly find attached the elevation drawing and BOS for ${record.sf.customerName || '—'}.`,
       'Please take the following notes into consideration:',
     ],
-    items: [
-      { label: 'Installation Date & Day', value: dateLine },
-      { label: 'Region', value: punctuate(regionLine(record)) },
-      { label: 'Project Classification', value: `Level ${record.level} – ${LEVEL_NAMES[record.level]}.` },
-      { label: 'Installation Layout', value: effectiveNote(record, 'layout', settings) },
-      { label: 'Clearance', value: 'All required clearance requirements have been met.' },
-      { label: 'Site Survey Feedback', value: effectiveNote(record, 'siteSurvey', settings) },
-      { label: 'Design Feedback', value: effectiveNote(record, 'design', settings) },
-      { label: 'Homeowner Feedback', value: effectiveNote(record, 'homeowner', settings) },
-    ],
+    // Empty bullets are removed from the post entirely (Aboud, 2026-09-26).
+    items: items.filter((it) => it.value.trim() !== ''),
     tags: finalTags(record),
   };
 }
 
-/** Slack mrkdwn version (also the plain-text clipboard fallback). */
+/** Slack mrkdwn version (also the plain-text clipboard fallback). Bulleted list. */
 export function buildPostText(record: PostRecord, settings: Settings): string {
   const { intro, items, tags } = buildLines(record, settings);
-  const lines = [
-    ...intro,
-    ...items.map((it, i) => `${i + 1}. *${it.label}:* ${it.value}`),
-  ];
+  const lines = [...intro, ...items.map((it) => `• *${it.label}:* ${it.value}`)];
   if (tags.length) lines.push(tags.map((t) => `@${t}`).join(' '));
   return lines.join('\n');
 }
@@ -88,14 +100,14 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/** Rich-text clipboard version: <p> lines, <strong> labels, <ol> items, tags plain. */
+/** Rich-text clipboard version: <p> lines, <strong> labels, <ul> bullets, tags plain. */
 export function buildPostHtml(record: PostRecord, settings: Settings): string {
   const { intro, items, tags } = buildLines(record, settings);
   const parts = [
     ...intro.map((l) => `<p>${esc(l)}</p>`),
-    '<ol>',
+    '<ul>',
     ...items.map((it) => `<li><strong>${esc(it.label)}:</strong> ${esc(it.value)}</li>`),
-    '</ol>',
+    '</ul>',
   ];
   if (tags.length) parts.push(`<p>${esc(tags.map((t) => `@${t}`).join(' '))}</p>`);
   return parts.join('');

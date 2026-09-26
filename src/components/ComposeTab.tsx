@@ -289,7 +289,7 @@ export default function ComposeTab({
             </select>
           </label>
           <label className="field">
-            Jurisdiction{badge('jurisdiction')}
+            Jurisdiction *{badge('jurisdiction')}
             <input
               type="text"
               value={record.sf.jurisdiction ?? ''}
@@ -307,7 +307,7 @@ export default function ComposeTab({
             </label>
           )}
           <label className="field">
-            Site address{badge('siteAddress')}
+            Site address *{badge('siteAddress')}
             <input
               type="text"
               value={record.sf.siteAddress ?? ''}

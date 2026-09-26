@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from 'react';
-import { buildPostHtml, buildPostText } from '../lib/template';
+import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import type { PostRecord, Settings } from '../types';
 
 interface Props {
@@ -14,7 +14,11 @@ export default function OutputColumn({ record, settings, onMarkPosted, onNewPost
   const text = buildPostText(record, settings);
   const html = buildPostHtml(record, settings);
 
+  const missing = missingRequired(record);
+  const ready = missing.length === 0;
+
   const copyForSlack = useCallback(async () => {
+    if (missingRequired(record).length) return; // also blocks the Ctrl+Shift+C shortcut
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -26,7 +30,7 @@ export default function OutputColumn({ record, settings, onMarkPosted, onNewPost
       await navigator.clipboard.writeText(text);
     }
     toast('Copied. Paste into Slack, then re-type the @mentions if they appear as plain text.');
-  }, [html, text, toast]);
+  }, [html, text, toast, record]);
 
   const copyPlain = useCallback(async () => {
     await navigator.clipboard.writeText(text);
@@ -45,8 +49,6 @@ export default function OutputColumn({ record, settings, onMarkPosted, onNewPost
     return () => window.removeEventListener('keydown', onKey);
   }, [copyForSlack]);
 
-  const ready = record.sf.customerName.trim() !== '' && record.sf.installScheduledDate !== '';
-
   return (
     <div>
       <div className="card">
@@ -56,10 +58,16 @@ export default function OutputColumn({ record, settings, onMarkPosted, onNewPost
       </div>
       <div className="card">
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-          <button type="button" className="btn primary" onClick={() => void copyForSlack()} title="Ctrl+Shift+C">
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!ready}
+            onClick={() => void copyForSlack()}
+            title="Ctrl+Shift+C"
+          >
             Copy for Slack
           </button>
-          <button type="button" className="btn secondary" onClick={() => void copyPlain()}>
+          <button type="button" className="btn secondary" disabled={!ready} onClick={() => void copyPlain()}>
             Copy plain text
           </button>
           <button type="button" className="btn secondary" disabled={!ready} onClick={onMarkPosted}>
@@ -69,7 +77,11 @@ export default function OutputColumn({ record, settings, onMarkPosted, onNewPost
             New post
           </button>
         </div>
-        {!ready && <div className="muted" style={{ marginTop: 6 }}>Customer name and install date are required to mark as posted.</div>}
+        {!ready && (
+          <div className="error-inline" style={{ marginTop: 6 }}>
+            Required before copying: {missing.join(', ')}.
+          </div>
+        )}
       </div>
     </div>
   );
