@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { extract, rewrite } from '../lib/api';
+import { LEVEL_INFO } from '../lib/classify';
 import { todayIso } from '../lib/dates';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
@@ -340,6 +341,11 @@ export default function ComposeTab({
               <option value={3}>Level 3 – Service Equipment Modification</option>
               <option value={4}>Level 4 – Major Electrical & Civil Construction</option>
             </select>
+            <span className="level-info">
+              <b>Scope:</b> {LEVEL_INFO[record.level].scope}
+              <br />
+              <b>Planning window:</b> {LEVEL_INFO[record.level].window}
+            </span>
           </label>
         </div>
         {(record.sf.scheduledWorkItems || record.sf.coordinatorNotes) && (

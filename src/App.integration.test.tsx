@@ -60,8 +60,11 @@ describe('Compose acceptance flow', () => {
     // Tags include the HOU region lead.
     expect(screen.getByText('@Diego Banegas')).toBeTruthy();
 
-    // Pick Level 3 directly (simple flow — no driver checklist).
+    // Pick Level 3 directly (simple flow — no driver checklist); the scope /
+    // planning-window helper text follows the selection.
     fireEvent.change(screen.getByLabelText(/Project Level/), { target: { value: '3' } });
+    expect(screen.getByText(/MPU, FSU, FTP, relocation ≤ 20 ft/)).toBeTruthy();
+    expect(screen.getByText(/1\.5–2 crew-days/)).toBeTruthy();
 
     // Preview contains the canonical lines.
     const preview = container.querySelector('.preview')!;

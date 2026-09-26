@@ -10,6 +10,28 @@ export const LEVEL_NAMES: Record<Level, string> = {
   4: 'Major Electrical & Civil Construction',
 };
 
+/** Governing scope + planning window per level — verbatim from the 2026 standard's table (spec/04 §1). */
+export const LEVEL_INFO: Record<Level, { scope: string; window: string }> = {
+  1: {
+    scope: 'Back-to-back, or standard exterior placement with direct grid, load and PV routes',
+    window: '1 crew-day',
+  },
+  2: {
+    scope:
+      'Spread equipment, attic run, runs up to 25 ft with additional bends, generator connection, existing PV/system integration',
+    window: '1–1.5 crew-days',
+  },
+  3: {
+    scope: 'MPU, FSU, FTP, relocation ≤ 20 ft, or a short manual trench with controlled access',
+    window: '1.5–2 crew-days',
+  },
+  4: {
+    scope:
+      'Dirt or concrete trenching, difficult MPU/FSU (interior, obstructed, restricted space), obstructed access, or work outside standard limits',
+    window: 'Site-specific, minimum 2 days; field verification before scheduling & material release',
+  },
+};
+
 export interface DriverDef {
   id: DriverId;
   label: string;
