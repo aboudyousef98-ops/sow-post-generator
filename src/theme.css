@@ -251,7 +251,19 @@ textarea {
   border: 1px solid var(--dyn-line);
 }
 
-/* Paste zone */
+/* Paste zones — text on the left, screenshot on the right */
+.paste-split {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .paste-split {
+    grid-template-columns: 1fr;
+  }
+}
+
 .paste-zone {
   border: 2px dashed var(--dyn-line);
   border-radius: var(--radius-card);

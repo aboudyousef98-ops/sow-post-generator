@@ -210,41 +210,50 @@ export default function ComposeTab({
           </select>
         </label>
 
-        <div
-          className="paste-zone"
-          tabIndex={0}
-          onPaste={onPaste}
-          onDrop={onDrop}
-          onDragOver={(e) => e.preventDefault()}
-          onClick={() => fileInput.current?.click()}
-        >
-          {extractState.busy ? (
+        <div className="paste-split">
+          <div className="paste-zone" tabIndex={0} onPaste={onPaste}>
             <span>
-              <span className="spin">⏳</span> Extracting…
-            </span>
-          ) : (
-            <span>
-              Click here, then <b>Ctrl+V</b> the Salesforce page text or a screenshot.
+              📋 <b>Paste text</b>
               <br />
-              <span className="muted">(or drag-drop / click to pick an image)</span>
+              Click here, then <b>Ctrl+V</b> the Salesforce page text.
             </span>
-          )}
-          {extractState.thumb && !extractState.busy && (
-            <div>
-              <img className="thumb" src={extractState.thumb} alt="pasted screenshot" />
-            </div>
-          )}
-          <input
-            ref={fileInput}
-            type="file"
-            accept="image/png,image/jpeg"
-            style={{ display: 'none' }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (f) void handleImage(f);
-              e.target.value = '';
-            }}
-          />
+          </div>
+          <div
+            className="paste-zone"
+            tabIndex={0}
+            onPaste={onPaste}
+            onDrop={onDrop}
+            onDragOver={(e) => e.preventDefault()}
+            onClick={() => fileInput.current?.click()}
+          >
+            {extractState.busy ? (
+              <span>
+                <span className="spin">⏳</span> Extracting…
+              </span>
+            ) : (
+              <span>
+                🖼 <b>Attach a screenshot</b>
+                <br />
+                Click to choose an image, or <b>Ctrl+V</b> / drag-drop it here.
+              </span>
+            )}
+            {extractState.thumb && !extractState.busy && (
+              <div>
+                <img className="thumb" src={extractState.thumb} alt="pasted screenshot" />
+              </div>
+            )}
+            <input
+              ref={fileInput}
+              type="file"
+              accept="image/png,image/jpeg"
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void handleImage(f);
+                e.target.value = '';
+              }}
+            />
+          </div>
         </div>
         {extractState.error && <div className="error-inline">{extractState.error}</div>}
 
