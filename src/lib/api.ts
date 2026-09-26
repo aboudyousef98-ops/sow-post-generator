@@ -6,7 +6,7 @@ import type { Notes } from '../types';
 
 const TOKEN = import.meta.env.VITE_API_PATH_TOKEN ?? 'changeme';
 
-function apiPath(endpoint: 'health' | 'rewrite' | 'extract'): string {
+function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region'): string {
   return `/api/${TOKEN}/${endpoint}`;
 }
 
@@ -15,7 +15,7 @@ export interface ApiError {
   message: string;
 }
 
-async function post<T>(endpoint: 'rewrite' | 'extract', body: unknown): Promise<T> {
+async function post<T>(endpoint: 'rewrite' | 'extract' | 'region', body: unknown): Promise<T> {
   const res = await fetch(apiPath(endpoint), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -73,6 +73,17 @@ export interface ExtractResponse {
 
 export function extract(imageDataUrl: string): Promise<ExtractResponse> {
   return post<ExtractResponse>('extract', { imageDataUrl });
+}
+
+export interface RegionResponse {
+  metro: 'HOU' | 'DFW';
+  model: string;
+  ms: number;
+}
+
+/** AI fallback for locations the offline Texas-city table doesn't know. */
+export function regionLookup(location: string): Promise<RegionResponse> {
+  return post<RegionResponse>('region', { location });
 }
 
 export interface HealthResponse {

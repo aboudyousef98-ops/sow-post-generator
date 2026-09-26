@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { extract, rewrite } from '../lib/api';
+import { extract, regionLookup, rewrite } from '../lib/api';
 import { LEVEL_INFO } from '../lib/classify';
 import { todayIso } from '../lib/dates';
+import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
 import { droppedTokens } from '../lib/tokenGuard';
-import type { Level, NoteKey, PostRecord, Region, Settings } from '../types';
+import type { Level, NoteKey, PostRecord, Region, Settings, SfFields } from '../types';
 import OutputColumn from './OutputColumn';
 
 interface Props {
@@ -45,21 +46,52 @@ export default function ComposeTab({
   const [dropped, setDropped] = useState<Partial<Record<NoteKey, string[]>>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
+  // ---- nearest-metro resolution for OTHER regions ------------------------
+
+  /** Offline city table first; AI fallback only for unknown places. */
+  const resolveNear = useCallback(
+    async (sf: SfFields) => {
+      const location = [sf.installRegionRaw, sf.jurisdiction, sf.siteAddress].filter(Boolean).join(', ');
+      if (!location) return;
+      let metro: Metro | null = nearestMetro(location)?.metro ?? null;
+      if (!metro && aiAvailable) {
+        try {
+          metro = (await regionLookup(location)).metro;
+        } catch {
+          return; // leave the "please select" warning in place
+        }
+      }
+      if (!metro) return;
+      const m = metro;
+      update((r) => {
+        if (r.sf.region !== 'OTHER' || r.sf.nearMetro) return r;
+        const warnings = [
+          ...r.warnings.filter((w) => !w.startsWith('Region not recognized')),
+          `Region "${r.sf.installRegionRaw ?? location}" resolved as Near ${metroCityName(m)} — please confirm the tag.`,
+        ];
+        return { ...r, sf: { ...r.sf, nearMetro: m }, warnings, tags: autoTags(m, settings, r.tags) };
+      });
+    },
+    [aiAvailable, update, settings],
+  );
+
   // ---- paste / extract ---------------------------------------------------
 
   const applyParsed = useCallback(
     (fields: Partial<PostRecord['sf']>, warnings: string[], pairs: Record<string, string>) => {
       setRawPairs(Object.keys(pairs).length ? pairs : null);
+      const merged = mergeSfFields(record.sf, fields);
       update((r) => {
         const sf = mergeSfFields(r.sf, fields);
         sf.source = fields.source ?? r.sf.source;
-        const region = sf.region ?? r.sf.region;
-        const tags = region !== r.sf.region ? autoTags(region, settings, r.tags) : r.tags;
-        return { ...r, sf, warnings, tags };
+        if (sf.region !== 'OTHER') sf.nearMetro = undefined;
+        const lead: Region = sf.region === 'OTHER' ? (sf.nearMetro ?? 'OTHER') : sf.region;
+        return { ...r, sf, warnings, tags: autoTags(lead, settings, r.tags) };
       });
       setManualFields(new Set());
+      if (merged.region === 'OTHER' && !merged.nearMetro) void resolveNear(merged);
     },
-    [update, settings],
+    [update, settings, record.sf, resolveNear],
   );
 
   const handleText = useCallback(
@@ -122,9 +154,13 @@ export default function ComposeTab({
     setManualFields((s) => new Set(s).add(fieldName));
     update((r) => {
       const sf = { ...r.sf, ...patch };
-      const tags = patch.region && patch.region !== r.sf.region ? autoTags(patch.region, settings, r.tags) : r.tags;
+      if (patch.region && patch.region !== 'OTHER') sf.nearMetro = undefined;
+      const regionish = patch.region !== undefined || 'nearMetro' in patch;
+      const lead: Region = sf.region === 'OTHER' ? (sf.nearMetro ?? 'OTHER') : sf.region;
+      const tags = regionish ? autoTags(lead, settings, r.tags) : r.tags;
       return { ...r, sf, tags };
     });
+    if (patch.region === 'OTHER') void resolveNear({ ...record.sf, ...patch });
   };
 
   const badge = (fieldName: string) => {
@@ -306,14 +342,29 @@ export default function ComposeTab({
             />
           </label>
           {record.sf.region === 'OTHER' && (
-            <label className="field">
-              Region text (printed in the post)
-              <input
-                type="text"
-                value={record.sf.installRegionRaw ?? ''}
-                onChange={(e) => setSf({ installRegionRaw: e.target.value }, 'installRegionRaw')}
-              />
-            </label>
+            <>
+              <label className="field">
+                Region text (printed in the post)
+                <input
+                  type="text"
+                  value={record.sf.installRegionRaw ?? ''}
+                  onChange={(e) => setSf({ installRegionRaw: e.target.value }, 'installRegionRaw')}
+                />
+              </label>
+              <label className="field">
+                Nearest metro (sets the lead tag + "– Near …")
+                <select
+                  value={record.sf.nearMetro ?? ''}
+                  onChange={(e) =>
+                    setSf({ nearMetro: (e.target.value || undefined) as Metro | undefined }, 'nearMetro')
+                  }
+                >
+                  <option value="">— detecting / choose —</option>
+                  <option value="HOU">Near Houston</option>
+                  <option value="DFW">Near Dallas</option>
+                </select>
+              </label>
+            </>
           )}
           <label className="field">
             Site address *{badge('siteAddress')}

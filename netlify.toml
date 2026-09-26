@@ -32,6 +32,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/:token/region"
+  to = "/.netlify/functions/region"
+  status = 200
+
+[[redirects]]
   from = "/api/:token/health"
   to = "/.netlify/functions/health"
   status = 200

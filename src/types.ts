@@ -32,6 +32,8 @@ export interface SfFields {
   latestScheduledVisit?: string; // raw text as in SF
   installRegionRaw?: string;
   region: Region;
+  /** For region OTHER: which metro the site is closer to (drives the lead tag and "– Near …"). */
+  nearMetro?: 'HOU' | 'DFW';
   jurisdiction?: string;
   siteAddress?: string;
   systemSizeKw?: number;

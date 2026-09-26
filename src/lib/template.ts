@@ -24,9 +24,15 @@ export function effectiveNote(record: PostRecord, key: NoteKey, settings: Settin
   return punctuate(defaults[key]);
 }
 
-/** Region line value: `HOU`, `DFW`, or the raw region text for OTHER (jurisdiction has its own line). */
+/**
+ * Region line value: `HOU`, `DFW`, or for OTHER the raw text plus the resolved
+ * nearest metro, e.g. `Corpus Christi – Near Houston`.
+ */
 export function regionLine(record: PostRecord): string {
-  return record.sf.region === 'OTHER' ? record.sf.installRegionRaw || 'Other' : record.sf.region;
+  if (record.sf.region !== 'OTHER') return record.sf.region;
+  const raw = record.sf.installRegionRaw || 'Other';
+  const near = record.sf.nearMetro;
+  return near ? `${raw} – Near ${near === 'HOU' ? 'Houston' : 'Dallas'}` : raw;
 }
 
 /**

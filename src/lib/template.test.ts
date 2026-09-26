@@ -87,6 +87,16 @@ describe('buildPostText', () => {
     expect(regionLine(norcaRecord())).toBe('HOU');
   });
 
+  it('OTHER region with resolved metro prints "– Near Houston/Dallas"', () => {
+    const rec = norcaRecord();
+    rec.sf.region = 'OTHER';
+    rec.sf.installRegionRaw = 'Corpus Christi';
+    rec.sf.nearMetro = 'HOU';
+    expect(regionLine(rec)).toBe('Corpus Christi – Near Houston');
+    rec.sf.nearMetro = 'DFW';
+    expect(regionLine(rec)).toBe('Corpus Christi – Near Dallas');
+  });
+
   it('drops empty bullets entirely (empty layout, missing jurisdiction)', () => {
     const rec = norcaRecord({
       notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
