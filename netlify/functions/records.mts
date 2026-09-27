@@ -5,8 +5,9 @@
 //
 // PUT merges by id (newer `updatedAt` wins) instead of overwriting, so three
 // designers can push concurrently; deletions travel as `deletedAt` tombstones.
-// A simultaneous PUT can still lose the race on the final write, but with
-// merge-on-write and 3 users the next push self-heals.
+// The write is an etag compare-and-swap (onlyIfMatch/onlyIfNew), so two
+// simultaneous PUTs cannot overwrite each other's read-merge-write; on
+// repeated conflict we return 503 and the client re-pushes later.
 
 import { getStore } from '@netlify/blobs';
 import { z } from 'zod';
@@ -47,13 +48,22 @@ export default async (req: Request): Promise<Response> => {
     const parsed = PutSchema.safeParse(body);
     if (!parsed.success) return jsonResponse(400, { error: 'bad payload' }, cors);
 
-    const existing = ((await store.get('records', { type: 'json' })) as AnyRecord[] | null) ?? [];
-    const merged = merge(existing, parsed.data.records);
-    await store.setJSON('records', merged);
-    console.log(
-      JSON.stringify({ at: new Date().toISOString(), endpoint: 'records', put: parsed.data.records.length, total: merged.length }),
-    );
-    return jsonResponse(200, { records: merged }, cors);
+    for (let attempt = 0; attempt < 5; attempt++) {
+      const existing = (await store.getWithMetadata('records', { type: 'json' })) as
+        | { data: AnyRecord[] | null; etag?: string }
+        | null;
+      const merged = merge(existing?.data ?? [], parsed.data.records);
+      // No etag (e.g. local emulator) → best-effort unconditional write.
+      const cond = existing ? (existing.etag ? { onlyIfMatch: existing.etag } : {}) : { onlyIfNew: true };
+      const res = await store.setJSON('records', merged, cond);
+      if (res.modified || (existing && !existing.etag)) {
+        console.log(
+          JSON.stringify({ at: new Date().toISOString(), endpoint: 'records', put: parsed.data.records.length, total: merged.length, attempt }),
+        );
+        return jsonResponse(200, { records: merged }, cors);
+      }
+    }
+    return jsonResponse(503, { error: 'conflict, retry' }, cors);
   }
 
   return jsonResponse(405, { error: 'method not allowed' }, cors);

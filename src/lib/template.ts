@@ -1,6 +1,7 @@
 // Canonical post template + clipboard formats — spec/06-output-template.md.
 
-import type { NoteKey, PostRecord, Settings } from '../types';
+import type { Ahj, NoteKey, PostRecord, Settings } from '../types';
+import { livePosts, matchAhj } from './ahj';
 import { LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
 
@@ -94,10 +95,29 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
   };
 }
 
+/**
+ * AHJ requirements section (Phase 5) — only when the designer approved THIS
+ * AHJ ("Include AHJ requirements in the post") AND the Jurisdiction still
+ * matches it AND it has live posts. Returns null otherwise.
+ */
+export function ahjSection(record: PostRecord, ahjs: Ahj[] | undefined): { name: string; posts: string[] } | null {
+  if (!record.ahjApprovedId || !ahjs?.length) return null;
+  const m = matchAhj(record.sf.jurisdiction, ahjs);
+  if (!m || m.ahj.id !== record.ahjApprovedId) return null;
+  const posts = livePosts(m.ahj).map((p) => p.text.trim());
+  return posts.length ? { name: m.ahj.name, posts } : null;
+}
+
 /** Slack mrkdwn version (also the plain-text clipboard fallback). Bulleted list. */
-export function buildPostText(record: PostRecord, settings: Settings): string {
+export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj[]): string {
   const { intro, items, tags } = buildLines(record, settings);
   const lines = [...intro, ...items.map((it) => `• *${it.label}:* ${it.value}`)];
+  const ahj = ahjSection(record, ahjs);
+  if (ahj) {
+    lines.push(`*AHJ Requirements (${ahj.name}):*`);
+    // Multi-line posts keep their line breaks, indented under the bullet.
+    lines.push(...ahj.posts.map((t) => `• ${t.split('\n').filter((l) => l.trim()).join('\n   ')}`));
+  }
   if (tags.length) lines.push(tags.map((t) => `@${t}`).join(' '));
   return lines.join('\n');
 }
@@ -107,7 +127,7 @@ function esc(s: string): string {
 }
 
 /** Rich-text clipboard version: <p> lines, <strong> labels, <ul> bullets, tags plain. */
-export function buildPostHtml(record: PostRecord, settings: Settings): string {
+export function buildPostHtml(record: PostRecord, settings: Settings, ahjs?: Ahj[]): string {
   const { intro, items, tags } = buildLines(record, settings);
   const parts = [
     ...intro.map((l) => `<p>${esc(l)}</p>`),
@@ -115,6 +135,15 @@ export function buildPostHtml(record: PostRecord, settings: Settings): string {
     ...items.map((it) => `<li><strong>${esc(it.label)}:</strong> ${esc(it.value)}</li>`),
     '</ul>',
   ];
+  const ahj = ahjSection(record, ahjs);
+  if (ahj) {
+    parts.push(
+      `<p><strong>AHJ Requirements (${esc(ahj.name)}):</strong></p>`,
+      '<ul>',
+      ...ahj.posts.map((t) => `<li>${esc(t).replace(/\n/g, '<br>')}</li>`),
+      '</ul>',
+    );
+  }
   if (tags.length) parts.push(`<p>${esc(tags.map((t) => `@${t}`).join(' '))}</p>`);
   return parts.join('');
 }

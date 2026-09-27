@@ -1,15 +1,19 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { downloadExport, readImportFile } from '../lib/dataio';
 import { defaultSettings } from '../lib/storage';
-import type { PostRecord, Region, Settings } from '../types';
+import type { Ahj, PostRecord, Region, Settings } from '../types';
 
 interface Props {
   settings: Settings;
   setSettings: (s: Settings) => void;
   records: PostRecord[];
   setRecords: (r: PostRecord[]) => void;
+  ahjs: Ahj[];
+  setAhjs: (a: Ahj[]) => void;
   toast: (text: string) => void;
 }
+
+const parseLines = (text: string) => text.split('\n').map((s) => s.trim()).filter(Boolean);
 
 /** One name per line ↔ string[]. */
 function LinesEditor({
@@ -21,19 +25,30 @@ function LinesEditor({
   values: string[];
   onChange: (v: string[]) => void;
 }) {
+  // The textarea shows raw text so Enter / blank lines survive while typing;
+  // the parent only ever sees the cleaned list.
+  const [text, setText] = useState(values.join('\n'));
+  useEffect(() => {
+    // Re-sync only on external changes (reset, import) — not our own echoes.
+    setText((prev) => (parseLines(prev).join('\n') === values.join('\n') ? prev : values.join('\n')));
+  }, [values]);
+
   return (
     <label className="field">
       {label} <span className="badge">one per line</span>
       <textarea
-        value={values.join('\n')}
+        value={text}
         rows={Math.max(3, values.length + 1)}
-        onChange={(e) => onChange(e.target.value.split('\n').map((s) => s.trim()).filter(Boolean))}
+        onChange={(e) => {
+          setText(e.target.value);
+          onChange(parseLines(e.target.value));
+        }}
       />
     </label>
   );
 }
 
-export default function SettingsTab({ settings, setSettings, records, setRecords, toast }: Props) {
+export default function SettingsTab({ settings, setSettings, records, setRecords, ahjs, setAhjs, toast }: Props) {
   const importInput = useRef<HTMLInputElement>(null);
   const [confirmClear, setConfirmClear] = useState(false);
 
@@ -97,7 +112,7 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
       <div className="card">
         <h3>Data</h3>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="btn secondary" onClick={() => downloadExport(settings, records)}>
+          <button type="button" className="btn secondary" onClick={() => downloadExport(settings, records, ahjs)}>
             Export all
           </button>
           <button type="button" className="btn secondary" onClick={() => importInput.current?.click()}>
@@ -137,9 +152,10 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
           onChange={(e) => {
             const f = e.target.files?.[0];
             if (f) {
-              void readImportFile(f, records, true)
+              void readImportFile(f, records, true, ahjs)
                 .then((result) => {
                   setRecords(result.records);
+                  setAhjs(result.ahjs);
                   if (result.settings) setSettings(result.settings);
                   toast(result.summary);
                 })

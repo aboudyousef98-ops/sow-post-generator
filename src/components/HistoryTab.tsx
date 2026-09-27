@@ -3,7 +3,7 @@ import { downloadExport, readImportFile } from '../lib/dataio';
 import { isoToUs } from '../lib/dates';
 import { applyQuery, authorsIn, defaultQuery } from '../lib/listQuery';
 import { buildPostHtml, buildPostText } from '../lib/template';
-import type { PostRecord, Settings } from '../types';
+import type { Ahj, PostRecord, Settings } from '../types';
 import ListControls from './ListControls';
 
 interface Props {
@@ -12,10 +12,12 @@ interface Props {
   records: PostRecord[];
   setRecords: (r: PostRecord[]) => void;
   setSettings: (s: Settings) => void;
+  ahjs: Ahj[];
+  setAhjs: (a: Ahj[]) => void;
   toast: (text: string) => void;
 }
 
-export default function HistoryTab({ history, settings, records, setRecords, setSettings, toast }: Props) {
+export default function HistoryTab({ history, settings, records, setRecords, setSettings, ahjs, setAhjs, toast }: Props) {
   const [openId, setOpenId] = useState<string | null>(null);
   const importInput = useRef<HTMLInputElement>(null);
   const [importSettingsToo, setImportSettingsToo] = useState(false);
@@ -23,13 +25,16 @@ export default function HistoryTab({ history, settings, records, setRecords, set
   const shown = useMemo(() => applyQuery(history, query), [history, query]);
   const open = history.find((r) => r.id === openId);
 
+  // Posted records copy their FROZEN text/html (finalText/finalHtml). The
+  // rebuild fallbacks (old records posted before finalHtml existed) never see
+  // live AHJ boards, so History output can't drift after posting.
   const copy = async (rec: PostRecord, rich: boolean) => {
     const text = rec.finalText ?? buildPostText(rec, settings);
     if (rich) {
       try {
         await navigator.clipboard.write([
           new ClipboardItem({
-            'text/html': new Blob([buildPostHtml(rec, settings)], { type: 'text/html' }),
+            'text/html': new Blob([rec.finalHtml ?? buildPostHtml(rec, settings)], { type: 'text/html' }),
             'text/plain': new Blob([text], { type: 'text/plain' }),
           }),
         ]);
@@ -44,8 +49,9 @@ export default function HistoryTab({ history, settings, records, setRecords, set
 
   const onImport = async (file: File) => {
     try {
-      const result = await readImportFile(file, records, importSettingsToo);
+      const result = await readImportFile(file, records, importSettingsToo, ahjs);
       setRecords(result.records);
+      setAhjs(result.ahjs);
       if (result.settings) setSettings(result.settings);
       toast(result.summary);
     } catch (err) {
@@ -85,7 +91,7 @@ export default function HistoryTab({ history, settings, records, setRecords, set
         still available as an occasional offline backup.
       </p>
       <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-        <button type="button" className="btn secondary small" onClick={() => downloadExport(settings, records)}>
+        <button type="button" className="btn secondary small" onClick={() => downloadExport(settings, records, ahjs)}>
           Export JSON
         </button>
         <button type="button" className="btn secondary small" onClick={() => importInput.current?.click()}>

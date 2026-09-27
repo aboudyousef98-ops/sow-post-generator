@@ -1,28 +1,34 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import AhjTab from './components/AhjTab';
 import ComposeTab from './components/ComposeTab';
 import DraftsTab from './components/DraftsTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
 import { Toasts, type Toast } from './components/Toast';
-import { fetchSharedRecords, health, putSharedRecords } from './lib/api';
+import { fetchSharedAhjs, fetchSharedRecords, health, putSharedAhjs, putSharedRecords } from './lib/api';
+import { mergeAhjs } from './lib/ahj';
 import { blankRecord } from './lib/record';
 import {
+  loadAhjs,
   loadCurrentId,
   loadRecords,
   loadSettings,
   mergeRecords,
+  saveAhjs,
   saveCurrentId,
   saveRecords,
   saveSettings,
 } from './lib/storage';
-import { buildPostText } from './lib/template';
-import type { PostRecord, Settings } from './types';
+import { buildPostHtml, buildPostText } from './lib/template';
+import type { Ahj, PostRecord, Settings } from './types';
 
-type Tab = 'compose' | 'drafts' | 'history' | 'settings';
+type Tab = 'compose' | 'drafts' | 'history' | 'ahj' | 'settings';
 
 export default function App() {
   const [settings, setSettingsState] = useState<Settings>(() => loadSettings());
   const [records, setRecordsState] = useState<PostRecord[]>(() => loadRecords());
+  const [ahjs, setAhjsState] = useState<Ahj[]>(() => loadAhjs());
+  const [ahjSelectedId, setAhjSelectedId] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('compose');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'off'>('checking');
@@ -42,6 +48,32 @@ export default function App() {
     saveSettings(s);
   }, []);
 
+  // Per-store sync health; the pill is green only when BOTH stores are ok.
+  const storeSync = useRef<{ records: boolean; ahjs: boolean }>({ records: false, ahjs: false });
+  const reportSync = useCallback((store: 'records' | 'ahjs', ok: boolean) => {
+    storeSync.current[store] = ok;
+    setSyncStatus(storeSync.current.records && storeSync.current.ahjs ? 'synced' : 'local');
+  }, []);
+
+  // A server response is a SNAPSHOT of what we pushed, merged with the store —
+  // by the time it arrives the user may have made newer local changes, so it
+  // must be MERGED into current state, never assigned over it (otherwise a
+  // post/record created while a push is in flight is silently dropped).
+  const applyServerRecords = useCallback((server: PostRecord[]) => {
+    setRecordsState((cur) => {
+      const { records: merged } = mergeRecords(cur, server);
+      saveRecords(merged);
+      return merged;
+    });
+  }, []);
+  const applyServerAhjs = useCallback((server: Ahj[]) => {
+    setAhjsState((cur) => {
+      const merged = mergeAhjs(cur, server);
+      saveAhjs(merged);
+      return merged;
+    });
+  }, []);
+
   // Phase 4: every records change is pushed to the shared Netlify Blobs store
   // (debounced). localStorage stays the offline cache; a failed push just
   // flips the pill to "Local only" and the next successful push self-heals.
@@ -53,31 +85,52 @@ export default function App() {
     pushTimer.current = setTimeout(() => {
       putSharedRecords(r)
         .then((merged) => {
-          setRecordsState(merged);
-          saveRecords(merged);
-          setSyncStatus('synced');
+          applyServerRecords(merged);
+          reportSync('records', true);
         })
-        .catch(() => setSyncStatus('local'));
+        .catch(() => reportSync('records', false));
     }, 1500);
-  }, []);
+  }, [applyServerRecords, reportSync]);
 
-  // Initial sync: pull the shared history, merge (newer updatedAt wins),
-  // then push so local-only records reach the team store.
+  // AHJ boards sync the same way (Phase 5): debounced deep-merge push.
+  const ahjPushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const setAhjs = useCallback((a: Ahj[]) => {
+    setAhjsState(a);
+    saveAhjs(a);
+    clearTimeout(ahjPushTimer.current);
+    ahjPushTimer.current = setTimeout(() => {
+      putSharedAhjs(a)
+        .then((merged) => {
+          applyServerAhjs(merged);
+          reportSync('ahjs', true);
+        })
+        .catch(() => reportSync('ahjs', false));
+    }, 1500);
+  }, [applyServerAhjs, reportSync]);
+
+  // Initial sync: pull the shared history + AHJ boards, merge (newer updatedAt
+  // wins; AHJ posts merge individually), then push so local-only data reaches
+  // the team store. "Team synced" only when both stores made the round trip.
   useEffect(() => {
     (async () => {
-      try {
-        const server = await fetchSharedRecords();
-        const { records: merged } = mergeRecords(loadRecords(), server);
-        setRecordsState(merged);
-        saveRecords(merged);
-        const final = await putSharedRecords(merged);
-        setRecordsState(final);
-        saveRecords(final);
-        setSyncStatus('synced');
-      } catch {
-        setSyncStatus('local');
-      }
+      const results = await Promise.allSettled([
+        (async () => {
+          const server = await fetchSharedRecords();
+          applyServerRecords(server);
+          const final = await putSharedRecords(mergeRecords(loadRecords(), server).records);
+          applyServerRecords(final);
+        })(),
+        (async () => {
+          const server = await fetchSharedAhjs();
+          applyServerAhjs(server);
+          const final = await putSharedAhjs(mergeAhjs(loadAhjs(), server));
+          applyServerAhjs(final);
+        })(),
+      ]);
+      reportSync('records', results[0].status === 'fulfilled');
+      reportSync('ahjs', results[1].status === 'fulfilled');
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   // Autosave the Compose form (debounced 500 ms). A draft exists the moment
@@ -121,11 +174,15 @@ export default function App() {
     setTab('compose');
   }, [settings]);
 
+  const ahjsRef = useRef(ahjs);
+  ahjsRef.current = ahjs;
+
   const markAsPosted = useCallback(() => {
     const posted: PostRecord = {
       ...current,
       status: 'posted',
-      finalText: buildPostText(current, settings),
+      finalText: buildPostText(current, settings, ahjsRef.current),
+      finalHtml: buildPostHtml(current, settings, ahjsRef.current),
       postedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -136,7 +193,7 @@ export default function App() {
     toast('Marked as posted.', {
       label: 'Undo',
       fn: () => {
-        const reverted: PostRecord = { ...posted, status: 'draft', postedAt: undefined, finalText: undefined };
+        const reverted: PostRecord = { ...posted, status: 'draft', postedAt: undefined, finalText: undefined, finalHtml: undefined };
         setRecords([...recordsRef.current.filter((r) => r.id !== posted.id), reverted]);
         setCurrent(reverted);
         saveCurrentId(reverted.id);
@@ -167,6 +224,7 @@ export default function App() {
         status: 'draft',
         postedAt: undefined,
         finalText: undefined,
+        finalHtml: undefined,
         createdAt: now,
         updatedAt: now,
       };
@@ -230,6 +288,7 @@ export default function App() {
               ['compose', 'Compose'],
               ['drafts', `Drafts (${allDrafts.length})`],
               ['history', `History (${history.length})`],
+              ['ahj', 'AHJ Requirements'],
               ['settings', '⚙ Settings'],
             ] as [Tab, string][]
           ).map(([key, label]) => (
@@ -261,6 +320,22 @@ export default function App() {
             onNewPost={newPost}
             toast={toast}
             aiAvailable={aiStatus === 'ok'}
+            ahjs={ahjs}
+            onOpenAhjBoard={(id) => {
+              setAhjSelectedId(id);
+              setTab('ahj');
+            }}
+          />
+        )}
+        {tab === 'ahj' && (
+          <AhjTab
+            ahjs={ahjs}
+            setAhjs={setAhjs}
+            selectedId={ahjSelectedId}
+            onSelect={setAhjSelectedId}
+            settings={settings}
+            setSettings={setSettings}
+            toast={toast}
           />
         )}
         {tab === 'drafts' && (
@@ -273,6 +348,8 @@ export default function App() {
             records={records}
             setRecords={setRecords}
             setSettings={setSettings}
+            ahjs={ahjs}
+            setAhjs={setAhjs}
             toast={toast}
           />
         )}
@@ -282,6 +359,8 @@ export default function App() {
             setSettings={setSettings}
             records={records}
             setRecords={setRecords}
+            ahjs={ahjs}
+            setAhjs={setAhjs}
             toast={toast}
           />
         )}

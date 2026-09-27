@@ -100,3 +100,15 @@ Date: 2026-09-26 · Built by Claude Code from `../spec/` (all 9 spec files + fix
 
 - Phase 2 (quality of life): merge-paste driver suggestions UI polish, history search/filters,
   reopen-as-draft, duplicate detection, chips editor, keyboard map, mini analytics.
+
+## Bugfix 2026-09-26 — Settings roster textareas ate Enter
+
+- Symptom: pressing Enter in the "one per line" roster editors (Authors / Fixed tags /
+  Designers) did nothing — the newline vanished immediately.
+- Root cause: `LinesEditor` in `src/components/SettingsTab.tsx` was fully controlled by the
+  parsed array; every keystroke was normalized (`trim` + drop blank lines) and echoed back, so a
+  trailing newline (and trailing spaces) never survived the re-render.
+- Fix: the textarea now holds raw local text while typing and only reports the cleaned list to
+  settings; external changes (Reset to defaults, Import) still re-sync the textarea.
+- Tests: new `src/components/SettingsTab.test.tsx` (3 regression tests). Full suite 74/74 green,
+  `tsc --noEmit` clean.

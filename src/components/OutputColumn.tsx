@@ -1,18 +1,19 @@
 import { useCallback, useEffect } from 'react';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
-import type { PostRecord, Settings } from '../types';
+import type { Ahj, PostRecord, Settings } from '../types';
 
 interface Props {
   record: PostRecord;
   settings: Settings;
+  ahjs?: Ahj[];
   onMarkPosted: () => void;
   onNewPost: () => void;
   toast: (text: string) => void;
 }
 
-export default function OutputColumn({ record, settings, onMarkPosted, onNewPost, toast }: Props) {
-  const text = buildPostText(record, settings);
-  const html = buildPostHtml(record, settings);
+export default function OutputColumn({ record, settings, ahjs, onMarkPosted, onNewPost, toast }: Props) {
+  const text = buildPostText(record, settings, ahjs);
+  const html = buildPostHtml(record, settings, ahjs);
 
   const missing = missingRequired(record);
   const ready = missing.length === 0;

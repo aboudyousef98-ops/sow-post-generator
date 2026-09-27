@@ -114,6 +114,34 @@ export async function putSharedRecords(records: PostRecord[]): Promise<PostRecor
   return Array.isArray(json.records) ? json.records : records;
 }
 
+// ---- Phase 5: shared AHJ requirements (Netlify Blobs behind /api/ahjs) ----
+
+import type { Ahj } from '../types';
+
+function ahjsPath(): string {
+  return `/api/${TOKEN}/ahjs`;
+}
+
+export async function fetchSharedAhjs(): Promise<Ahj[]> {
+  const res = await fetch(ahjsPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { ahjs?: Ahj[] };
+  if (!Array.isArray(json.ahjs)) throw { status: 502, message: 'Bad ahjs response' } satisfies ApiError;
+  return json.ahjs;
+}
+
+/** Push local AHJs; the server deep-merges (meta by updatedAt, posts by id) and returns the merged set. */
+export async function putSharedAhjs(ahjs: Ahj[]): Promise<Ahj[]> {
+  const res = await fetch(ahjsPath(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ahjs }),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { ahjs?: Ahj[] };
+  return Array.isArray(json.ahjs) ? json.ahjs : ahjs;
+}
+
 export interface HealthResponse {
   ok: boolean;
   hasKey: boolean;

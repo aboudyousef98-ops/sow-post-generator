@@ -85,7 +85,16 @@ export interface PostRecord {
   tags: string[];
   designerTag?: string;
   warnings: string[];
+  /**
+   * Designer's approval to append AHJ requirements to the post — stores the id
+   * of the SPECIFIC AHJ that was approved. The section renders only while the
+   * Jurisdiction still matches that AHJ, so switching to a different AHJ
+   * automatically un-approves (and switching back restores the approval).
+   */
+  ahjApprovedId?: string;
   finalText?: string; // frozen at "Mark as posted"
+  /** Rich-clipboard version frozen alongside finalText, so later AHJ board edits never change what History copies. */
+  finalHtml?: string;
   createdAt: string;
   updatedAt: string;
   postedAt?: string;
@@ -95,6 +104,41 @@ export interface PostRecord {
    * next merge. Filtered out of all lists.
    */
   deletedAt?: string;
+  schemaVersion: 1;
+}
+
+// ---- AHJ Requirements (Phase 5) ------------------------------------------
+// Each AHJ is a board of requirement posts. Deletions are tombstones (same
+// rationale as PostRecord.deletedAt); every post keeps its full edit history.
+
+export interface AhjPostVersion {
+  text: string;
+  at: string; // ISO — when this text stopped being current
+  by: string;
+}
+
+export interface AhjPost {
+  id: string; // uuid
+  text: string;
+  by: string; // author name (from Settings.authors)
+  at: string; // ISO — posted
+  editedAt?: string;
+  editedBy?: string;
+  history: AhjPostVersion[]; // newest first
+  pinned: boolean;
+  deleted?: { at: string; by: string };
+  /** Bumped on ANY post change (edit/pin/delete/restore) — per-post merge key. */
+  updatedAt: string;
+}
+
+export interface Ahj {
+  id: string; // uuid
+  name: string;
+  aliases: string[]; // alternate jurisdiction spellings, e.g. "City of Corpus Christi"
+  posts: AhjPost[];
+  deleted?: { at: string; by: string };
+  /** Meta merge key — bumped on name/aliases/deleted changes only. Posts merge individually. */
+  updatedAt: string;
   schemaVersion: 1;
 }
 
@@ -114,4 +158,5 @@ export interface ExportFile {
   schemaVersion: 1;
   settings: Settings;
   records: PostRecord[];
+  ahjs?: Ahj[]; // absent in pre-Phase-5 backups
 }

@@ -1,11 +1,12 @@
 // localStorage persistence — spec/02-data-model.md. Keys: sowpost.records,
-// sowpost.settings, sowpost.currentId. No credentials are ever stored.
+// sowpost.settings, sowpost.currentId, sowpost.ahjs. No credentials are ever stored.
 
-import type { ExportFile, PostRecord, Settings } from '../types';
+import type { Ahj, ExportFile, PostRecord, Settings } from '../types';
 
 const KEY_RECORDS = 'sowpost.records';
 const KEY_SETTINGS = 'sowpost.settings';
 const KEY_CURRENT = 'sowpost.currentId';
+const KEY_AHJS = 'sowpost.ahjs';
 
 export function defaultSettings(): Settings {
   return {
@@ -101,8 +102,17 @@ export function saveCurrentId(id: string | null): void {
   else localStorage.setItem(KEY_CURRENT, id);
 }
 
-export function buildExport(settings: Settings, records: PostRecord[]): ExportFile {
-  return { exportedAt: new Date().toISOString(), schemaVersion: 1, settings, records };
+export function loadAhjs(): Ahj[] {
+  const arr = read<Ahj[]>(KEY_AHJS);
+  return Array.isArray(arr) ? arr.map((a) => migrate(a)) : [];
+}
+
+export function saveAhjs(ahjs: Ahj[]): void {
+  localStorage.setItem(KEY_AHJS, JSON.stringify(ahjs));
+}
+
+export function buildExport(settings: Settings, records: PostRecord[], ahjs: Ahj[] = []): ExportFile {
+  return { exportedAt: new Date().toISOString(), schemaVersion: 1, settings, records, ahjs };
 }
 
 export function exportFileName(now = new Date()): string {

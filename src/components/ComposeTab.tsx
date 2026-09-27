@@ -4,10 +4,11 @@ import { LEVEL_INFO } from '../lib/classify';
 import { todayIso } from '../lib/dates';
 import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
+import { livePosts, matchAhj } from '../lib/ahj';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
 import { droppedTokens } from '../lib/tokenGuard';
-import type { Level, NoteKey, PostRecord, Region, Settings, SfFields } from '../types';
+import type { Ahj, Level, NoteKey, PostRecord, Region, Settings, SfFields } from '../types';
 import OutputColumn from './OutputColumn';
 
 interface Props {
@@ -19,6 +20,8 @@ interface Props {
   onNewPost: () => void;
   toast: (text: string) => void;
   aiAvailable: boolean;
+  ahjs: Ahj[];
+  onOpenAhjBoard: (id: string) => void;
 }
 
 const NOTE_FIELDS: { key: NoteKey; label: string }[] = [
@@ -37,6 +40,8 @@ export default function ComposeTab({
   onNewPost,
   toast,
   aiAvailable,
+  ahjs,
+  onOpenAhjBoard,
 }: Props) {
   const [manualFields, setManualFields] = useState<Set<string>>(new Set());
   const [rawPairs, setRawPairs] = useState<Record<string, string> | null>(null);
@@ -162,6 +167,16 @@ export default function ComposeTab({
     });
     if (patch.region === 'OTHER') void resolveNear({ ...record.sf, ...patch });
   };
+
+  // ---- AHJ requirements banner (Phase 5) ---------------------------------
+  // Approval is stored as the approved AHJ's id (record.ahjApprovedId), so it
+  // is inherently per-AHJ: a different match shows unticked, a typo that
+  // briefly breaks the match doesn't destroy the approval, and reopening a
+  // draft keeps whatever the designer decided.
+
+  const ahjMatch = matchAhj(record.sf.jurisdiction, ahjs);
+  const ahjPosts = ahjMatch ? livePosts(ahjMatch.ahj) : [];
+  const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
 
   const badge = (fieldName: string) => {
     if (record.sf.source === 'manual') return null;
@@ -341,6 +356,56 @@ export default function ComposeTab({
               onChange={(e) => setSf({ jurisdiction: e.target.value }, 'jurisdiction')}
             />
           </label>
+          {ahjMatch && (
+            <div className="ahj-banner">
+              <div className="ahj-banner-head">
+                <strong style={{ color: 'var(--dyn-ink)', fontSize: 14.5 }}>
+                  ⚠ AHJ requirements on file — {ahjMatch.ahj.name}
+                </strong>
+                <span style={{ display: 'flex', gap: 12, alignItems: 'baseline', fontSize: 12, flexWrap: 'wrap' }}>
+                  <span>
+                    {ahjMatch.via === 'name' ? 'Matched by name' : `Matched alias “${ahjMatch.via}”`} ·{' '}
+                    {ahjPosts.length} requirement{ahjPosts.length === 1 ? '' : 's'}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => onOpenAhjBoard(ahjMatch.ahj.id)}
+                    style={{ background: 'none', border: 0, padding: 0, color: 'var(--dyn-navy)', fontWeight: 700, cursor: 'pointer', fontSize: 12, textDecoration: 'underline' }}
+                  >
+                    Open board
+                  </button>
+                </span>
+              </div>
+              <div className="ahj-banner-posts">
+                {ahjPosts.map((p) => (
+                  <div key={p.id} className="ahj-banner-post">
+                    <span className="muted" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ color: 'var(--dyn-ink)' }}>{p.by}</strong>
+                      {new Date(p.editedAt ?? p.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                      {p.editedAt && ' · edited'}
+                      {p.pinned && <span className="pin-chip" style={{ fontSize: 11, padding: '1px 8px' }}>Pinned</span>}
+                    </span>
+                    <span style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, color: 'var(--dyn-ink)', fontSize: 13.5 }}>
+                      {p.text}
+                    </span>
+                  </div>
+                ))}
+                {ahjPosts.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No requirement posts yet.</div>}
+              </div>
+              <label className="ahj-banner-include">
+                <input
+                  type="checkbox"
+                  checked={ahjApproved}
+                  disabled={ahjPosts.length === 0}
+                  onChange={(e) => {
+                    const approvedId = e.target.checked ? ahjMatch.ahj.id : undefined;
+                    update((r) => ({ ...r, ahjApprovedId: approvedId }));
+                  }}
+                />
+                Include AHJ requirements in the post
+              </label>
+            </div>
+          )}
           {record.sf.region === 'OTHER' && (
             <>
               <label className="field">
@@ -575,6 +640,7 @@ export default function ComposeTab({
       <OutputColumn
         record={record}
         settings={settings}
+        ahjs={ahjs}
         onMarkPosted={onMarkPosted}
         onNewPost={onNewPost}
         toast={toast}

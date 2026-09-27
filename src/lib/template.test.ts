@@ -168,3 +168,75 @@ describe('buildPostHtml', () => {
     expect(buildPostHtml(rec, defaultSettings())).toContain('Run &lt;20 ft &amp; short.');
   });
 });
+
+// ---- Phase 5: AHJ requirements section -------------------------------------
+
+import type { Ahj } from '../types';
+
+const ccAhj: Ahj = {
+  id: 'cc',
+  name: 'Corpus Christi',
+  aliases: ['City of Corpus Christi'],
+  posts: [
+    {
+      id: 'p1',
+      text: 'Use Square D for the AC Disconnect.\nIt is physically big — plan enclosure space.',
+      by: 'Aboud Yousef',
+      at: '2026-09-18T00:00:00.000Z',
+      history: [],
+      pinned: false,
+      updatedAt: '2026-09-18T00:00:00.000Z',
+    },
+    {
+      id: 'p2',
+      text: 'Deleted rule.',
+      by: 'Omar Rajab',
+      at: '2026-09-19T00:00:00.000Z',
+      history: [],
+      pinned: false,
+      deleted: { at: '2026-09-20T00:00:00.000Z', by: 'Omar Rajab' },
+      updatedAt: '2026-09-20T00:00:00.000Z',
+    },
+  ],
+  updatedAt: '2026-09-18T00:00:00.000Z',
+  schemaVersion: 1,
+};
+
+describe('AHJ requirements in the post', () => {
+  it('is absent without the designer approval, even when the AHJ matches', () => {
+    const rec = norcaRecord();
+    rec.sf.jurisdiction = 'Corpus Christi';
+    expect(buildPostText(rec, defaultSettings(), [ccAhj])).not.toContain('AHJ Requirements');
+  });
+
+  it('is absent when approved but no AHJ matches', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'cc' }); // jurisdiction stays Pasadena
+    expect(buildPostText(rec, defaultSettings(), [ccAhj])).not.toContain('AHJ Requirements');
+  });
+
+  it('is absent when the matched AHJ differs from the approved one', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'some-other-ahj' });
+    rec.sf.jurisdiction = 'Corpus Christi';
+    expect(buildPostText(rec, defaultSettings(), [ccAhj])).not.toContain('AHJ Requirements');
+  });
+
+  it('appends the matched AHJ posts (alias match, multi-line indented, deleted posts skipped) before the tags', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'cc' });
+    rec.sf.jurisdiction = 'City of Corpus Christi';
+    const text = buildPostText(rec, defaultSettings(), [ccAhj]);
+    expect(text).toContain(
+      '*AHJ Requirements (Corpus Christi):*\n• Use Square D for the AC Disconnect.\n   It is physically big — plan enclosure space.',
+    );
+    expect(text).not.toContain('Deleted rule');
+    // Tags (@mentions) stay the last line so Slack pings still work.
+    expect(text.trim().split('\n').at(-1)).toContain('@Tarek Abu Hseini');
+  });
+
+  it('appears in the rich-text HTML clipboard version too', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'cc' });
+    rec.sf.jurisdiction = 'Corpus Christi';
+    const html = buildPostHtml(rec, defaultSettings(), [ccAhj]);
+    expect(html).toContain('AHJ Requirements (Corpus Christi):');
+    expect(html).toContain('Use Square D for the AC Disconnect.');
+  });
+});

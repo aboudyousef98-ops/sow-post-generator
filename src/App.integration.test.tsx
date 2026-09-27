@@ -137,6 +137,10 @@ describe('Compose acceptance flow', () => {
               : { records: [serverRecord] };
           return new Response(JSON.stringify(init?.method === 'PUT' ? body : { records: [serverRecord] }), { status: 200 });
         }
+        if (String(url).includes('/ahjs')) {
+          const body = init?.method === 'PUT' ? JSON.parse(String(init.body)) : { ahjs: [] };
+          return new Response(JSON.stringify(body), { status: 200 });
+        }
         return new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 });
       }),
     );
@@ -159,5 +163,121 @@ describe('Compose acceptance flow', () => {
     // Polish button disabled, but the preview (manual flow) is complete.
     expect((screen.getByText(/Polish with AI/).closest('button') as HTMLButtonElement).disabled).toBe(true);
     expect(container.querySelector('.preview')!.textContent).toContain('Norca Garcia');
+  });
+});
+
+// ---- Phase 5: AHJ requirements banner in Compose ---------------------------
+
+import type { Ahj } from './types';
+
+const AHJ_SEED: Ahj[] = [
+  {
+    id: 'cc',
+    name: 'Corpus Christi',
+    aliases: ['City of Corpus Christi'],
+    posts: [
+      {
+        id: 'p1',
+        text: 'Use Square D for the AC Disconnect.',
+        by: 'Aboud Yousef',
+        at: '2026-09-18T00:00:00.000Z',
+        history: [],
+        pinned: false,
+        updatedAt: '2026-09-18T00:00:00.000Z',
+      },
+    ],
+    updatedAt: '2026-09-18T00:00:00.000Z',
+    schemaVersion: 1,
+  },
+  {
+    id: 'hou',
+    name: 'Houston',
+    aliases: [],
+    posts: [
+      {
+        id: 'h1',
+        text: 'Submit the plan set as one combined PDF.',
+        by: 'Omar Rajab',
+        at: '2026-09-10T00:00:00.000Z',
+        history: [],
+        pinned: false,
+        updatedAt: '2026-09-10T00:00:00.000Z',
+      },
+    ],
+    updatedAt: '2026-09-10T00:00:00.000Z',
+    schemaVersion: 1,
+  },
+];
+
+describe('AHJ requirements in Compose', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    localStorage.setItem('sowpost.ahjs', JSON.stringify(AHJ_SEED));
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 })),
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const getTick = () => screen.getByLabelText(/Include AHJ requirements in the post/) as HTMLInputElement;
+
+  it('alias match shows the banner; approval is per-AHJ (different AHJ unticked, typo tolerated)', async () => {
+    render(<App />);
+
+    const jur = screen.getByLabelText(/Jurisdiction/) as HTMLInputElement;
+    fireEvent.change(jur, { target: { value: 'City of Corpus Christi' } });
+
+    // Banner with the post and the alias attribution.
+    await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Corpus Christi/)).toBeTruthy());
+    expect(screen.getByText(/Matched alias “City of Corpus Christi”/)).toBeTruthy();
+    expect(screen.getByText('Use Square D for the AC Disconnect.')).toBeTruthy();
+
+    // Default: not included in the post.
+    expect(document.querySelector('.preview')!.textContent).not.toContain('AHJ Requirements');
+
+    // Designer approval → appended to the post.
+    fireEvent.click(getTick());
+    await waitFor(() => expect(document.querySelector('.preview')!.textContent).toContain('AHJ Requirements (Corpus Christi):'));
+    expect(document.querySelector('.preview')!.textContent).toContain('Use Square D for the AC Disconnect.');
+
+    // A DIFFERENT AHJ shows unticked — the approval belongs to Corpus Christi.
+    fireEvent.change(jur, { target: { value: 'Houston' } });
+    await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Houston/)).toBeTruthy());
+    expect(getTick().checked).toBe(false);
+    expect(document.querySelector('.preview')!.textContent).not.toContain('AHJ Requirements');
+
+    // A typo (no match) hides the banner but does NOT destroy the approval…
+    fireEvent.change(jur, { target: { value: 'Corpus Christ' } });
+    await waitFor(() => expect(screen.queryByText(/AHJ requirements on file/)).toBeNull());
+    // …so returning to the approved AHJ restores the tick and the section.
+    fireEvent.change(jur, { target: { value: 'Corpus Christi' } });
+    await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Corpus Christi/)).toBeTruthy());
+    expect(getTick().checked).toBe(true);
+    expect(document.querySelector('.preview')!.textContent).toContain('AHJ Requirements (Corpus Christi):');
+  });
+
+  it('the approval is saved on the draft — reopening it keeps the tick', async () => {
+    render(<App />);
+
+    const jur = screen.getByLabelText(/Jurisdiction/) as HTMLInputElement;
+    fireEvent.change(jur, { target: { value: 'Corpus Christi' } });
+    await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Corpus Christi/)).toBeTruthy());
+    fireEvent.click(getTick());
+
+    // Name the draft so autosave stores it, then leave and come back.
+    fireEvent.change(screen.getByLabelText(/Customer name/), { target: { value: 'Approval Keeper' } });
+    await waitFor(() => expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/New post/));
+    fireEvent.click(screen.getByText(/Drafts \(1\)/));
+    fireEvent.click(screen.getByText('Approval Keeper'));
+
+    await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Corpus Christi/)).toBeTruthy());
+    expect(getTick().checked).toBe(true);
+    expect(document.querySelector('.preview')!.textContent).toContain('AHJ Requirements (Corpus Christi):');
   });
 });
