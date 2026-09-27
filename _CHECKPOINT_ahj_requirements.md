@@ -81,3 +81,16 @@ summary reports AHJ boards; stable trash row keys; scroll timer cleanup.
   fixed. Acceptable for a 3-person team; noted here for future debugging.
 - If two designers edit the SAME post concurrently, the newer edit becomes current and the
   older edit is kept as a history version (not auto-merged into the text).
+
+---
+
+## Shipped — 2026-09-27
+
+- Committed as `2d4fb8f` on `main` (Phase 5 + hardening + `_versions/v1-phase1/` archive).
+- Deployed to Netlify production via `netlify deploy --build --prod`:
+  https://sow-post-generator.netlify.app (deploy `6ab8cd6ce3eebf6420bf3bf2`, 6 functions).
+- Pre-deploy gate re-run clean: 107/107 tests, `tsc --noEmit`, `eslint`, `check:nosecrets`, `vite build`.
+- Post-deploy smoke test: site root 200; `/ahjs` and `/records` functions return 403 to
+  unauthorized callers (guard live, not 404); deployed bundle contains the AHJ tab,
+  `ahjApprovedId`, and the `/ahjs` call. No new env vars were needed.
+- **Not done: no `git push`** — this repo has no git remote configured, so the commit is local only.
