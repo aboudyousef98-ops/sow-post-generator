@@ -1,0 +1,26 @@
+Fulfillment
+Patrick Lingwall | FF | Rooftop Solar
+
+System Size (KW)
+14.76
+Project Status
+Install Scheduled
+Project
+[Patrick Lingwall](https://dynamicsslr.lightning.force.com/lightning/r/Project__c/xxx/view)
+Install Scheduled Date
+9/28/2026
+Installed
+Site
+[1001 Allston Street, Houston, TX 77008](https://dynamicsslr.lightning.force.com/lightning/r/Site__c/xxx/view)
+Jurisdiction
+[Houston](https://dynamicsslr.lightning.force.com/lightning/r/Jurisdiction__c/xxx/view)
+Utility Company
+[Centerpoint](https://dynamicsslr.lightning.force.com/lightning/r/Utility_Company__c/xxx/view)
+Lender
+SOLRITE
+Funding Stage
+DOCS SIGNED
+Install Region
+Houston / Beaumont
+Latest Scheduled Visit
+9/28/2026, 8:00 AM

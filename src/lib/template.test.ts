@@ -1,7 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
 import { defaultSettings } from './storage';
-import { buildPostHtml, buildPostText, finalTags, missingRequired, regionLine } from './template';
+import {
+  buildPostHtml,
+  buildPostText,
+  finalTags,
+  missingRequired,
+  regionLine,
+  titleBlockFields,
+  titleBlockRegion,
+  titleBlockTsv,
+} from './template';
 
 function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
   return {
@@ -87,14 +96,33 @@ describe('buildPostText', () => {
     expect(regionLine(norcaRecord())).toBe('HOU');
   });
 
-  it('OTHER region with resolved metro prints "– Near Houston/Dallas"', () => {
+  it('OTHER region with resolved metro prints "– Near HOU/DFW"', () => {
     const rec = norcaRecord();
     rec.sf.region = 'OTHER';
     rec.sf.installRegionRaw = 'Corpus Christi';
     rec.sf.nearMetro = 'HOU';
-    expect(regionLine(rec)).toBe('Corpus Christi – Near Houston');
+    expect(regionLine(rec)).toBe('Corpus Christi – Near HOU');
     rec.sf.nearMetro = 'DFW';
-    expect(regionLine(rec)).toBe('Corpus Christi – Near Dallas');
+    expect(regionLine(rec)).toBe('Corpus Christi – Near DFW');
+  });
+
+  // Aboud, 2026-09-28: the post prints the Salesforce region text with the
+  // metro tag beside it on EVERY project, not just unrecognized ones.
+  it('recognized regions print the SF text + "– Near HOU/DFW"', () => {
+    const rec = norcaRecord();
+    rec.sf.installRegionRaw = 'Houston / Beaumont';
+    expect(regionLine(rec)).toBe('Houston / Beaumont – Near HOU');
+    expect(buildPostText(rec, defaultSettings())).toContain(
+      '*Region:* Houston / Beaumont – Near HOU.',
+    );
+    rec.sf.region = 'DFW';
+    rec.sf.installRegionRaw = 'Dallas / Fort Worth';
+    expect(regionLine(rec)).toBe('Dallas / Fort Worth – Near DFW');
+  });
+
+  it('never prints a redundant "HOU – Near HOU" when Salesforce text is absent', () => {
+    const rec = norcaRecord(); // manual entry: no installRegionRaw
+    expect(regionLine(rec)).toBe('HOU');
   });
 
   it('drops empty bullets entirely (empty layout, missing jurisdiction)', () => {
@@ -238,5 +266,105 @@ describe('AHJ requirements in the post', () => {
     const html = buildPostHtml(rec, defaultSettings(), [ccAhj]);
     expect(html).toContain('AHJ Requirements (Corpus Christi):');
     expect(html).toContain('Use Square D for the AC Disconnect.');
+  });
+});
+
+// ---- Bulleted notes (Aboud, 2026-09-28) ------------------------------------
+// The team writes the four feedback notes as bullet points, one per line. One
+// source line = one bullet, in the same order; a single-line note stays inline.
+
+describe('multi-line notes render as sub-bullets', () => {
+  const multi = () =>
+    norcaRecord({
+      notes: {
+        layout: 'Standard exterior placement.',
+        siteSurvey: '',
+        design: 'Solar tag should read PVC, not EMT\nElevation shows an expansion unit missing from the one-line',
+        homeowner: '',
+      },
+    });
+
+  it('keeps a single-line note inline after its label', () => {
+    expect(buildPostText(norcaRecord(), defaultSettings())).toContain(
+      '• *Installation Layout:* Standard exterior placement, with the equipment installed back-to-back and direct grid, load, and PV routing.',
+    );
+  });
+
+  it('puts each line of a multi-line note on its own sub-bullet', () => {
+    expect(buildPostText(multi(), defaultSettings())).toContain(
+      '• *Design Feedback:*\n    ◦ Solar tag should read PVC, not EMT.\n    ◦ Elevation shows an expansion unit missing from the one-line.',
+    );
+  });
+
+  it('drops blank lines and strips bullet characters the user typed', () => {
+    const rec = norcaRecord({
+      notes: { layout: '', siteSurvey: '- First point\n\n• Second point\n   \n* Third point', design: '', homeowner: '' },
+    });
+    const text = buildPostText(rec, defaultSettings());
+    expect(text).toContain(
+      '• *Site Survey Feedback:*\n    ◦ First point.\n    ◦ Second point.\n    ◦ Third point.',
+    );
+    expect(text).not.toContain('◦ - First');
+    expect(text).not.toContain('◦ • Second');
+  });
+
+  it('nests a <ul> inside the <li> for the rich-text clipboard version', () => {
+    const html = buildPostHtml(multi(), defaultSettings());
+    expect(html).toContain(
+      '<li><strong>Design Feedback:</strong><ul><li>Solar tag should read PVC, not EMT.</li><li>Elevation shows an expansion unit missing from the one-line.</li></ul></li>',
+    );
+  });
+
+  it('polished multi-line text bullets the same way as the raw draft', () => {
+    const rec = norcaRecord({
+      notes: { layout: '', siteSurvey: '', design: 'tag wrong\nunit missing', homeowner: '' },
+      polished: { design: 'The solar tag is incorrect.\nThe expansion unit is missing.' },
+    });
+    expect(buildPostText(rec, defaultSettings())).toContain(
+      '• *Design Feedback:*\n    ◦ The solar tag is incorrect.\n    ◦ The expansion unit is missing.',
+    );
+  });
+});
+
+// ---- AutoCAD title block (Aboud, 2026-09-28) -------------------------------
+
+describe('AutoCAD title block', () => {
+  it('maps the five title-block cells from the record', () => {
+    const rec = norcaRecord();
+    rec.sf.installRegionRaw = 'Houston / Beaumont';
+    expect(titleBlockFields(rec)).toEqual([
+      { label: 'Project Name', value: 'Norca Garcia' },
+      { label: 'Property Address', value: '1317 Skylark Rd, Pasadena, TX 77502' },
+      { label: 'Region', value: 'Houston / Beaumont' },
+      { label: 'AHJ', value: 'Pasadena' },
+      { label: 'SOW Coordinator', value: 'Aboud Yousef' },
+    ]);
+  });
+
+  it('uses the SF region text with no "Near" suffix, unlike the post', () => {
+    const rec = norcaRecord();
+    rec.sf.region = 'OTHER';
+    rec.sf.installRegionRaw = 'Corpus Christi';
+    rec.sf.nearMetro = 'HOU';
+    expect(regionLine(rec)).toBe('Corpus Christi – Near HOU');
+    expect(titleBlockRegion(rec)).toBe('Corpus Christi');
+  });
+
+  it('falls back to the region code when Salesforce text is absent', () => {
+    expect(titleBlockRegion(norcaRecord())).toBe('HOU');
+  });
+
+  it('builds a one-value-per-line block for the multi-cell paste', () => {
+    const rec = norcaRecord();
+    rec.sf.installRegionRaw = 'Houston / Beaumont';
+    expect(titleBlockTsv(rec)).toBe(
+      'Norca Garcia\n1317 Skylark Rd, Pasadena, TX 77502\nHouston / Beaumont\nPasadena\nAboud Yousef',
+    );
+  });
+
+  it('leaves a missing field as an empty cell rather than a dash', () => {
+    const rec = norcaRecord();
+    rec.sf.siteAddress = undefined;
+    expect(titleBlockFields(rec)[1]).toEqual({ label: 'Property Address', value: '' });
   });
 });

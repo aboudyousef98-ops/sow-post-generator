@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import type { Ahj, PostRecord, Settings } from '../types';
+import TitleBlockCard from './TitleBlockCard';
 
 interface Props {
   record: PostRecord;
@@ -8,10 +9,19 @@ interface Props {
   ahjs?: Ahj[];
   onMarkPosted: () => void;
   onNewPost: () => void;
+  onSaveDraft: () => void;
   toast: (text: string) => void;
 }
 
-export default function OutputColumn({ record, settings, ahjs, onMarkPosted, onNewPost, toast }: Props) {
+export default function OutputColumn({
+  record,
+  settings,
+  ahjs,
+  onMarkPosted,
+  onNewPost,
+  onSaveDraft,
+  toast,
+}: Props) {
   const text = buildPostText(record, settings, ahjs);
   const html = buildPostHtml(record, settings, ahjs);
 
@@ -74,6 +84,14 @@ export default function OutputColumn({ record, settings, ahjs, onMarkPosted, onN
           <button type="button" className="btn secondary" disabled={!ready} onClick={onMarkPosted}>
             ✅ Mark as posted
           </button>
+          <button
+            type="button"
+            className="btn secondary"
+            onClick={onSaveDraft}
+            title="Save this project to Drafts right now"
+          >
+            💾 Save as Draft
+          </button>
           <button type="button" className="btn secondary" onClick={onNewPost}>
             New post
           </button>
@@ -83,7 +101,12 @@ export default function OutputColumn({ record, settings, ahjs, onMarkPosted, onN
             Required before copying: {missing.join(', ')}.
           </div>
         )}
+        <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
+          Your work is saved to Drafts automatically as you type — “Save as Draft” just saves it this second.
+        </div>
       </div>
+
+      <TitleBlockCard record={record} toast={toast} />
     </div>
   );
 }

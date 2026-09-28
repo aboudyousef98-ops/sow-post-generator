@@ -7,7 +7,7 @@ import SettingsTab from './components/SettingsTab';
 import { Toasts, type Toast } from './components/Toast';
 import { fetchSharedAhjs, fetchSharedRecords, health, putSharedAhjs, putSharedRecords } from './lib/api';
 import { mergeAhjs } from './lib/ahj';
-import { blankRecord } from './lib/record';
+import { blankRecord, hasContent } from './lib/record';
 import {
   loadAhjs,
   loadCurrentId,
@@ -133,19 +133,51 @@ export default function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
-  // Autosave the Compose form (debounced 500 ms). A draft exists the moment
-  // a customer name exists (spec/01 Drafts).
   const recordsRef = useRef(records);
   recordsRef.current = records;
+  const currentRef = useRef(current);
+  currentRef.current = current;
+
+  /** Write the Compose record into the draft list immediately (local + queued push). */
+  const commitDraft = useCallback(
+    (rec: PostRecord) => {
+      setRecords([...recordsRef.current.filter((r) => r.id !== rec.id), rec]);
+      saveCurrentId(rec.id);
+    },
+    [setRecords],
+  );
+
+  // Autosave the Compose form (debounced 500 ms). A draft now exists the moment
+  // ANY field holds content (Aboud, 2026-09-28) — it used to require a customer
+  // name, which meant notes typed before the name existed were never saved.
   useEffect(() => {
-    if (!current.sf.customerName.trim()) return;
-    const t = setTimeout(() => {
-      const rest = recordsRef.current.filter((r) => r.id !== current.id);
-      setRecords([...rest, current]);
-      saveCurrentId(current.id);
-    }, 500);
+    if (!hasContent(current)) return;
+    const t = setTimeout(() => commitDraft(current), 500);
     return () => clearTimeout(t);
-  }, [current, setRecords]);
+  }, [current, commitDraft]);
+
+  // Last-resort flush: closing the tab inside the 500 ms autosave window would
+  // otherwise drop the most recent keystrokes, so write straight to
+  // localStorage synchronously. The next load merges it back to the team store.
+  useEffect(() => {
+    const flush = () => {
+      const rec = currentRef.current;
+      if (!hasContent(rec)) return;
+      saveRecords([...recordsRef.current.filter((r) => r.id !== rec.id), rec]);
+      saveCurrentId(rec.id);
+    };
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+      document.removeEventListener('visibilitychange', onHide);
+    };
+  }, []);
 
   useEffect(() => {
     health()
@@ -168,39 +200,80 @@ export default function App() {
   }, []);
 
   const newPost = useCallback(() => {
-    // Current work is already in Drafts via autosave.
+    // Force-save before clearing: the 500 ms autosave may not have fired yet,
+    // so "New post" must never be able to discard typed work.
+    if (hasContent(currentRef.current)) commitDraft(currentRef.current);
     setCurrent(blankRecord(settings.lastAuthor ?? settings.authors[0], settings));
     saveCurrentId(null);
     setTab('compose');
-  }, [settings]);
+  }, [settings, commitDraft]);
+
+  /** Explicit "Save as Draft" — bypasses the debounce and confirms out loud. */
+  const saveDraftNow = useCallback(() => {
+    const rec = currentRef.current;
+    if (!hasContent(rec)) {
+      toast('Nothing to save yet — fill in at least one field.');
+      return;
+    }
+    commitDraft(rec);
+    toast('Saved to Drafts.');
+  }, [commitDraft, toast]);
 
   const ahjsRef = useRef(ahjs);
   ahjsRef.current = ahjs;
 
-  const markAsPosted = useCallback(() => {
-    const posted: PostRecord = {
-      ...current,
-      status: 'posted',
-      finalText: buildPostText(current, settings, ahjsRef.current),
-      finalHtml: buildPostHtml(current, settings, ahjsRef.current),
-      postedAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    setRecords([...recordsRef.current.filter((r) => r.id !== posted.id), posted]);
-    const fresh = blankRecord(current.author, settings);
-    setCurrent(fresh);
-    saveCurrentId(null);
-    toast('Marked as posted.', {
-      label: 'Undo',
-      fn: () => {
-        const reverted: PostRecord = { ...posted, status: 'draft', postedAt: undefined, finalText: undefined, finalHtml: undefined };
-        setRecords([...recordsRef.current.filter((r) => r.id !== posted.id), reverted]);
-        setCurrent(reverted);
-        saveCurrentId(reverted.id);
-        setTab('compose');
-      },
-    });
-  }, [current, settings, setRecords, toast]);
+  /**
+   * Freeze a record and move it to History. Works on any draft id, so it can be
+   * driven from a Drafts row without opening the draft in Compose first
+   * (Aboud, 2026-09-28).
+   */
+  const markPostedById = useCallback(
+    (id: string) => {
+      const rec =
+        currentRef.current.id === id
+          ? currentRef.current
+          : recordsRef.current.find((r) => r.id === id && !r.deletedAt);
+      if (!rec || rec.status === 'posted') return;
+      const now = new Date().toISOString();
+      const posted: PostRecord = {
+        ...rec,
+        status: 'posted',
+        finalText: buildPostText(rec, settings, ahjsRef.current),
+        finalHtml: buildPostHtml(rec, settings, ahjsRef.current),
+        postedAt: now,
+        updatedAt: now,
+      };
+      setRecords([...recordsRef.current.filter((r) => r.id !== posted.id), posted]);
+      // Only clear Compose when the record being posted is the one open in it.
+      const wasOpen = currentRef.current.id === posted.id;
+      if (wasOpen) {
+        setCurrent(blankRecord(rec.author, settings));
+        saveCurrentId(null);
+      }
+      toast(`Marked as posted${rec.sf.customerName ? ` — ${rec.sf.customerName}` : ''}.`, {
+        label: 'Undo',
+        fn: () => {
+          const reverted: PostRecord = {
+            ...posted,
+            status: 'draft',
+            postedAt: undefined,
+            finalText: undefined,
+            finalHtml: undefined,
+            updatedAt: new Date().toISOString(),
+          };
+          setRecords([...recordsRef.current.filter((r) => r.id !== posted.id), reverted]);
+          if (wasOpen) {
+            setCurrent(reverted);
+            saveCurrentId(reverted.id);
+            setTab('compose');
+          }
+        },
+      });
+    },
+    [settings, setRecords, toast],
+  );
+
+  const markAsPosted = useCallback(() => markPostedById(currentRef.current.id), [markPostedById]);
 
   const openDraft = useCallback(
     (id: string) => {
@@ -318,6 +391,7 @@ export default function App() {
             update={updateCurrent}
             onMarkPosted={markAsPosted}
             onNewPost={newPost}
+            onSaveDraft={saveDraftNow}
             toast={toast}
             aiAvailable={aiStatus === 'ok'}
             ahjs={ahjs}
@@ -339,7 +413,13 @@ export default function App() {
           />
         )}
         {tab === 'drafts' && (
-          <DraftsTab drafts={allDrafts} onOpen={openDraft} onDuplicate={duplicateDraft} onDelete={deleteRecord} />
+          <DraftsTab
+            drafts={allDrafts}
+            onOpen={openDraft}
+            onDuplicate={duplicateDraft}
+            onDelete={deleteRecord}
+            onMarkDone={markPostedById}
+          />
         )}
         {tab === 'history' && (
           <HistoryTab

@@ -42,12 +42,37 @@ npm run test
 3. Check the warnings strip; fix any field (everything is editable).
 4. Tick the drivers → the suggested level and the Installation Layout seed update automatically.
    The Project Level select is yours — the hint never blocks.
-5. Write the four notes in your own words (Arabic/English ok) → **✨ Polish with AI**
-   (Ctrl+Enter in any note field). Red "AI output dropped:" hints mean a number/unit went
-   missing — check before posting. "Revert to my draft" is per field.
+5. Write the four notes in your own words (Arabic/English ok), **one bullet per line** →
+   **✨ Polish with AI** (Ctrl+Enter in any note field). The AI edits each line separately and
+   keeps your wording — it will not merge your bullets into a paragraph. Red hints mean either a
+   number/unit went missing or the AI changed the number of bullets — check before posting.
+   "Revert to my draft" is per field.
 6. **Copy for Slack** (Ctrl+Shift+C) → paste in the channel → re-type the @mentions → attach the
    elevation PDF + BOS → **✅ Mark as posted**.
 7. **Export JSON** from History regularly — history lives in your browser only.
+
+## Nothing gets lost (2026-09-28)
+
+- Your work is written to **Drafts automatically** as soon as you fill in *any* field — you no
+  longer need a customer name first. It is also flushed when you close or switch away from the tab.
+- **💾 Save as Draft** (next to Mark as posted) saves on the spot if you want the confirmation.
+- **New post** saves whatever is open before clearing the form — it cannot discard your work.
+- In the **Drafts** tab each row has **✅ Mark as done**, which freezes the post and sends it to
+  History without opening it first. It asks once to confirm, and the toast has an **Undo**.
+  The button is disabled until the required fields (customer, date, jurisdiction, address) are in.
+
+## AutoCAD title block (2026-09-28)
+
+Under the preview in Compose, open **AutoCAD title block**. It shows the five values the
+PROJECT INFORMATION table needs — Project Name, Property Address, Region, AHJ, SOW Coordinator
+(the "Posting as" name).
+
+- **Copy** next to a row copies that one value — paste into the cell, `Esc`, next cell.
+- **Copy all 5** puts all five on the clipboard as a column: in AutoCAD double-click the table,
+  click the first *value* cell and `Ctrl+V`. If your AutoCAD version refuses the multi-cell paste,
+  use the five single Copy buttons — same result.
+- The Region cell is the Salesforce region text only (`Corpus Christi`), without the
+  `– Near HOU` tag that the Slack post carries.
 
 ## Screenshots
 

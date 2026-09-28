@@ -7,7 +7,7 @@ import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { livePosts, matchAhj } from '../lib/ahj';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
-import { droppedTokens } from '../lib/tokenGuard';
+import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
 import type { Ahj, Level, NoteKey, PostRecord, Region, Settings, SfFields } from '../types';
 import OutputColumn from './OutputColumn';
 
@@ -18,6 +18,7 @@ interface Props {
   update: (updater: (r: PostRecord) => PostRecord) => void;
   onMarkPosted: () => void;
   onNewPost: () => void;
+  onSaveDraft: () => void;
   toast: (text: string) => void;
   aiAvailable: boolean;
   ahjs: Ahj[];
@@ -38,6 +39,7 @@ export default function ComposeTab({
   update,
   onMarkPosted,
   onNewPost,
+  onSaveDraft,
   toast,
   aiAvailable,
   ahjs,
@@ -49,6 +51,8 @@ export default function ComposeTab({
   const [polishState, setPolishState] = useState<{ busy: boolean; ms?: number; error?: string }>({ busy: false });
   const [extractState, setExtractState] = useState<{ busy: boolean; error?: string; thumb?: string }>({ busy: false });
   const [dropped, setDropped] = useState<Partial<Record<NoteKey, string[]>>>({});
+  // Set when the AI returned a different number of bullets than we sent it.
+  const [bulletDrift, setBulletDrift] = useState<Partial<Record<NoteKey, { from: number; to: number }>>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
   // ---- nearest-metro resolution for OTHER regions ------------------------
@@ -188,6 +192,7 @@ export default function ComposeTab({
 
   const setNote = (key: NoteKey, value: string) => {
     setDropped((d) => ({ ...d, [key]: undefined }));
+    setBulletDrift((d) => ({ ...d, [key]: undefined }));
     update((r) => {
       // Editing the raw draft invalidates that field's stale polished version.
       const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
@@ -208,12 +213,16 @@ export default function ComposeTab({
     try {
       const res = await rewrite(record.notes);
       const nextDropped: Partial<Record<NoteKey, string[]>> = {};
+      const nextDrift: Partial<Record<NoteKey, { from: number; to: number }>> = {};
       for (const { key } of NOTE_FIELDS) {
         if (record.notes[key].trim() && res.polished[key]) {
           nextDropped[key] = droppedTokens(record.notes[key], res.polished[key]);
+          // The prompt forbids merging bullets, but the model can still do it.
+          nextDrift[key] = bulletCountChange(record.notes[key], res.polished[key]) ?? undefined;
         }
       }
       setDropped(nextDropped);
+      setBulletDrift(nextDrift);
       update((r) => ({
         ...r,
         polished: res.polished,
@@ -527,20 +536,26 @@ export default function ComposeTab({
                 onKeyDown={noteKeyDown}
                 placeholder={
                   key === 'siteSurvey' || key === 'design'
-                    ? 'Empty → "All good."'
+                    ? 'One bullet per line. Empty → "All good."'
                     : key === 'homeowner'
-                      ? 'Empty → "No feedback."'
-                      : 'Describe the layout in your own words (Arabic/English ok — AI will polish)'
+                      ? 'One bullet per line. Empty → "No feedback."'
+                      : 'One bullet per line — Arabic/English ok, AI will polish each line separately'
                 }
               />
               {hasPolished && record.usePolished[key] && (
-                <div className="muted" style={{ marginTop: 3 }}>
+                <div className="muted" style={{ marginTop: 3, whiteSpace: 'pre-wrap' }}>
                   ✨ {polished}
                 </div>
               )}
               {dropped[key] && dropped[key]!.length > 0 && (
                 <div className="dropped-tokens">
                   AI output dropped: {dropped[key]!.map((t) => `\`${t}\``).join(', ')} — check before posting
+                </div>
+              )}
+              {bulletDrift[key] && (
+                <div className="dropped-tokens">
+                  AI returned {bulletDrift[key]!.to} bullet{bulletDrift[key]!.to === 1 ? '' : 's'} instead of{' '}
+                  {bulletDrift[key]!.from} — check it before posting, or “Revert to my draft”.
                 </div>
               )}
               <div className="chips">
@@ -643,6 +658,7 @@ export default function ComposeTab({
         ahjs={ahjs}
         onMarkPosted={onMarkPosted}
         onNewPost={onNewPost}
+        onSaveDraft={onSaveDraft}
         toast={toast}
       />
     </div>

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { droppedTokens, extractGuardTokens } from './tokenGuard';
+import { bulletCountChange, droppedTokens, extractGuardTokens } from './tokenGuard';
 
 describe('extractGuardTokens', () => {
   it('finds numbers with units and known engineering tokens', () => {
@@ -31,5 +31,35 @@ describe('droppedTokens', () => {
 
   it('keeps quiet when tokens are present with different spacing', () => {
     expect(droppedTokens('200 A breaker', 'A 200A breaker.')).toEqual([]);
+  });
+});
+
+describe('bulletCountChange', () => {
+  it('flags the AI merging three bullets into a paragraph', () => {
+    const raw = 'tag wrong\nunit missing\nwrong conduit';
+    expect(bulletCountChange(raw, 'The tag is wrong, the unit is missing and the conduit is wrong.')).toEqual({
+      from: 3,
+      to: 1,
+    });
+  });
+
+  it('flags the AI splitting one bullet into two', () => {
+    expect(bulletCountChange('tag wrong and unit missing', 'Tag wrong.\nUnit missing.')).toEqual({
+      from: 1,
+      to: 2,
+    });
+  });
+
+  it('stays quiet when the bullet count is preserved', () => {
+    expect(bulletCountChange('tag wrong\nunit missing', 'Tag wrong.\nUnit missing.')).toBeNull();
+  });
+
+  it('ignores blank lines on either side', () => {
+    expect(bulletCountChange('tag wrong\n\n\nunit missing', 'Tag wrong.\nUnit missing.\n')).toBeNull();
+  });
+
+  it('returns null when there is nothing to compare', () => {
+    expect(bulletCountChange('', 'x')).toBeNull();
+    expect(bulletCountChange('x', '')).toBeNull();
   });
 });

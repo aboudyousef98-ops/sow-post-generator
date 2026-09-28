@@ -23,6 +23,30 @@ export function blankRecord(author: string, settings: Settings): PostRecord {
 }
 
 /**
+ * Does this record hold anything worth keeping? (Aboud, 2026-09-28)
+ *
+ * Autosave used to require a customer name, so notes typed before the name was
+ * filled in were never persisted at all — the most likely way two projects were
+ * lost. Now ANY filled field makes the draft real. `tags` and `level` are
+ * excluded because blankRecord() pre-populates them, so counting them would
+ * make every empty form a draft.
+ */
+export function hasContent(r: PostRecord): boolean {
+  const { sf } = r;
+  const filled = [
+    sf.customerName,
+    sf.installScheduledDate,
+    sf.siteAddress,
+    sf.jurisdiction,
+    sf.installRegionRaw,
+    sf.recordTitle,
+    r.designerTag,
+    ...Object.values(r.notes),
+  ];
+  return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined;
+}
+
+/**
  * Auto tags = fixed tags + region lead, then any manual extras the user added.
  * Called when the region changes: replaces the previous lead, keeps extras.
  */

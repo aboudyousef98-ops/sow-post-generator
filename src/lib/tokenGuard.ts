@@ -28,3 +28,21 @@ export function droppedTokens(raw: string, polished: string): string[] {
   const target = norm(polished);
   return extractGuardTokens(raw).filter((t) => !target.includes(norm(t)));
 }
+
+/** Non-empty lines = bullets. Mirrors noteLines() in template.ts. */
+function countBullets(text: string): number {
+  return text.split('\n').filter((l) => l.trim()).length;
+}
+
+/**
+ * Bullet-count guard (Aboud, 2026-09-28): the complaint was the AI collapsing a
+ * bulleted note into one paragraph. The prompt forbids it, but the model can
+ * still disobey — so compare the counts and let the UI warn instead of letting
+ * the merge reach Slack unnoticed. Null = counts match (or nothing to compare).
+ */
+export function bulletCountChange(raw: string, polished: string): { from: number; to: number } | null {
+  if (!raw.trim() || !polished.trim()) return null;
+  const from = countBullets(raw);
+  const to = countBullets(polished);
+  return from === to ? null : { from, to };
+}

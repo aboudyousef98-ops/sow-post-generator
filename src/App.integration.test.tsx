@@ -90,7 +90,8 @@ describe('Compose acceptance flow', () => {
 
     // Mark as posted → moves to History; Compose resets.
     fireEvent.click(screen.getByText('✅ Mark as posted'));
-    expect(screen.getByText('Marked as posted.')).toBeTruthy();
+    // Toast names the project, so the same button on a Drafts row is unambiguous.
+    expect(screen.getByText('Marked as posted — Norca Garcia.')).toBeTruthy();
     const records = JSON.parse(localStorage.getItem('sowpost.records') ?? '[]');
     expect(records).toHaveLength(1);
     expect(records[0].status).toBe('posted');
@@ -279,5 +280,113 @@ describe('AHJ requirements in Compose', () => {
     await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Corpus Christi/)).toBeTruthy());
     expect(getTick().checked).toBe(true);
     expect(document.querySelector('.preview')!.textContent).toContain('AHJ Requirements (Corpus Christi):');
+  });
+});
+
+// ---- Draft safety (Aboud, 2026-09-28) --------------------------------------
+// Two projects were lost. The root cause found in the code: autosave required a
+// customer name, so anything typed before the name existed was never persisted.
+
+describe('draft safety', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 })),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const stored = () => JSON.parse(localStorage.getItem('sowpost.records') ?? '[]');
+
+  it('autosaves notes typed BEFORE the customer name exists', async () => {
+    const { unmount } = render(<App />);
+
+    // Only a note — no customer name anywhere. This used to save nothing at all.
+    fireEvent.change(screen.getByPlaceholderText(/One bullet per line — Arabic\/English ok/), {
+      target: { value: 'Conduit through the attic to the garage' },
+    });
+
+    await waitFor(() => expect(stored()).toHaveLength(1), { timeout: 2000 });
+    expect(stored()[0].notes.layout).toBe('Conduit through the attic to the garage');
+
+    // And it survives a reload.
+    unmount();
+    render(<App />);
+    await waitFor(() =>
+      expect(
+        (screen.getByPlaceholderText(/One bullet per line — Arabic\/English ok/) as HTMLTextAreaElement).value,
+      ).toBe('Conduit through the attic to the garage'),
+    );
+  });
+
+  it('"New post" saves the open draft instead of discarding it', async () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/), { target: { value: 'Rescued Project' } });
+
+    // Click immediately — inside the 500 ms autosave debounce window.
+    fireEvent.click(screen.getByText(/New post/));
+
+    await waitFor(() => expect(stored()).toHaveLength(1));
+    expect(stored()[0].sf.customerName).toBe('Rescued Project');
+    expect(stored()[0].status).toBe('draft');
+  });
+
+  it('"Save as Draft" persists on the spot and says so', async () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/), { target: { value: 'Saved Now' } });
+    fireEvent.click(screen.getByRole('button', { name: /Save as Draft/ }));
+
+    expect(screen.getByText('Saved to Drafts.')).toBeTruthy();
+    expect(stored()).toHaveLength(1);
+    expect(stored()[0].sf.customerName).toBe('Saved Now');
+  });
+
+  it('refuses to save a completely untouched form', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: /Save as Draft/ }));
+    expect(screen.getByText(/Nothing to save yet/)).toBeTruthy();
+    expect(stored()).toHaveLength(0);
+  });
+
+  it('marks a draft as done from its Drafts row, with a confirm step', async () => {
+    const { container } = render(<App />);
+    pasteText(container.querySelector('.paste-zone')!, norca);
+    await waitFor(() => expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy());
+
+    // Start a different project so the row is NOT the record open in Compose.
+    fireEvent.click(screen.getByText(/New post/));
+    fireEvent.click(screen.getByText(/Drafts \(1\)/));
+
+    // First click only arms the confirm — nothing is posted yet.
+    fireEvent.click(screen.getByText(/Mark as done/));
+    expect(screen.getByText(/Send .* to History\?/)).toBeTruthy();
+    expect(stored().every((r: { status: string }) => r.status === 'draft')).toBe(true);
+
+    fireEvent.click(screen.getByText('Yes, mark as done'));
+    await waitFor(() => expect(screen.getByText(/History \(1\)/)).toBeTruthy());
+
+    const posted = stored().find((r: { status: string }) => r.status === 'posted');
+    expect(posted.sf.customerName).toBe('Norca Garcia');
+    // The post text is frozen at this moment, exactly as "Mark as posted" does.
+    expect(posted.finalText).toContain('Norca Garcia');
+    expect(posted.postedAt).toBeTruthy();
+  });
+
+  it('cancelling the row confirm leaves the draft alone', async () => {
+    const { container } = render(<App />);
+    pasteText(container.querySelector('.paste-zone')!, norca);
+    await waitFor(() => expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy());
+    fireEvent.click(screen.getByText(/New post/));
+    fireEvent.click(screen.getByText(/Drafts \(1\)/));
+
+    fireEvent.click(screen.getByText(/Mark as done/));
+    fireEvent.click(screen.getByText('Cancel'));
+
+    expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy();
+    expect(stored().every((r: { status: string }) => r.status === 'draft')).toBe(true);
   });
 });
