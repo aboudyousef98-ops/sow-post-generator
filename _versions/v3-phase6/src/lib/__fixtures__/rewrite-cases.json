@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Sabrina Salinas design note — must keep brands, sizes, question and mention",
+    "input": {
+      "layout": "",
+      "siteSurvey": "",
+      "design": "This project is in Corpus Christi, so we should be using Square D AC disconnects. However, I can see on SF that we're ordering Eaton disconnects instead. Could you please confirm which one are we using @design-leads. The conduit material for the service should be 2\" PVC instead of 2\" EMT. Could you please start specifying the conduit size for the solar as well?",
+      "homeowner": ""
+    },
+    "mustContain": { "design": ["Square D", "Eaton", "2\" PVC", "2\" EMT", "@design-leads", "?"] },
+    "mustBeEmpty": ["layout", "siteSurvey", "homeowner"]
+  },
+  {
+    "name": "Arabic homeowner note → English",
+    "input": { "layout": "", "siteSurvey": "", "design": "", "homeowner": "الجدار لازم ينظف ويتجهز قبل التركيب" },
+    "mustContain": { "homeowner": ["clean", "before installation"] }
+  },
+  {
+    "name": "Typos + units retained",
+    "input": { "layout": "instal on the norht wall, 2 inch pvc, attic run, 1 story", "siteSurvey": "", "design": "", "homeowner": "" },
+    "mustContain": { "layout": ["North", "PVC", "attic run"] },
+    "mustMatch": { "layout": "2(\\\"| inch|-inch)" }
+  },
+  {
+    "name": "Edward Maldonado design note — numbers preserved",
+    "input": { "layout": "", "siteSurvey": "", "design": "several changes made on elevation to meet clearances. 1.5 ft clearance from water hose and water line and 10 inches from batteries. equipment couldnt fit on wall after the fence so batteries there and rest between AC unit and window. also meter to inverter and inverter to MDP shown as SER, SER is attic runs only so changed to THHN Cu, short runs easier for installers", "homeowner": "" },
+    "mustContain": { "design": ["1.5 ft", "10 inch", "SER", "THHN Cu", "MDP"] }
+  }
+]

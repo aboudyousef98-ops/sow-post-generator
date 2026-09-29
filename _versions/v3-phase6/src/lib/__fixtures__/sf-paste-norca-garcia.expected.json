@@ -1,0 +1,23 @@
+{
+  "customerName": "Norca Garcia",
+  "recordTitle": "Norca Garcia | FF | Rooftop Solar",
+  "systemSizeKw": 15.58,
+  "projectStatus": "Install Scheduled",
+  "installScheduledDate": "2026-10-01",
+  "weekday": "Thursday",
+  "latestScheduledVisit": "10/9/2026, 7:45 AM",
+  "siteAddress": "1317 Skylark Rd, Pasadena, TX 77502",
+  "jurisdiction": "Pasadena",
+  "utility": "Centerpoint",
+  "lender": "SOLRITE",
+  "fundingStage": "DOCS SIGNED",
+  "installRegionRaw": "Houston / Beaumont",
+  "region": "HOU",
+  "sfLinks": {
+    "project": "https://dynamicsslr.lightning.force.com/lightning/r/Project__c/a00Nv00000itZBtIAM/view",
+    "site": "https://dynamicsslr.lightning.force.com/lightning/r/Site__c/a0bNv0000059wmfIAA/view",
+    "jurisdiction": "https://dynamicsslr.lightning.force.com/lightning/r/Jurisdiction__c/a3KNv000000Fs0JMAS/view"
+  },
+  "warnings": ["Latest Scheduled Visit (10/09/2026) differs from Install Scheduled Date (10/01/2026) — the post uses Install Scheduled Date."],
+  "source": "text"
+}
