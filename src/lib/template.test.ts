@@ -410,4 +410,48 @@ describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
     expect(text).not.toContain('Installation Date & Day');
     expect(text).toContain('• *Region:* HOU.');
   });
+
+  // Golden test — full post shape with both new bullets populated, values from
+  // the worked example in spec/10-installation-notes.md §4.
+  it('renders the full post with both new bullets populated (spec/10 §4)', () => {
+    const rec = withNotes({
+      walls: 2,
+      orientations: ['North', 'West'],
+      stories: 1,
+      service: 'MPU',
+      batteryLocation: 'garage, left of the door',
+      mainDisconnectLocation: 'exterior south wall',
+      specialCases: 'window to be closed off\nsmall boxes relocated',
+      loadRun: '18 ft through the attic',
+      serviceRun: '2" PVC, 12 ft',
+      solarRun: '1-1/4" PVC on the east wall',
+      batteryRun: '6 ft, back-to-back',
+    });
+    const expected = `Hello Team,
+Kindly find attached the elevation drawing and BOS for Norca Garcia.
+Please take the following notes into consideration:
+• *Installation Date & Day:* Thursday, 10/01/2026.
+• *Region:* HOU.
+• *Jurisdiction:* Pasadena.
+• *Site Address:* 1317 Skylark Rd, Pasadena, TX 77502.
+• *Project Classification:* Level 1 – Standard Installation.
+• *Installation Notes:*
+    ◦ Installation on two walls (North, West).
+    ◦ 1-story house.
+    ◦ This project requires an MPU.
+    ◦ Battery location: garage, left of the door.
+    ◦ Main disconnect location: exterior south wall.
+    ◦ Special cases: window to be closed off; small boxes relocated.
+• *Conduit Raceway:*
+    ◦ Load run: 18 ft through the attic.
+    ◦ Grid/service run: 2" PVC, 12 ft.
+    ◦ Solar run: 1-1/4" PVC on the east wall.
+    ◦ Battery run: 6 ft, back-to-back.
+• *Clearance:* All required clearance requirements have been met.
+• *Site Survey Feedback:* All good.
+• *Design Feedback:* All good.
+• *Homeowner Feedback:* No feedback.
+@Tarek Abu Hseini @Mohammed Azizi @Diego Banegas`;
+    expect(buildPostText(rec, defaultSettings())).toBe(expected);
+  });
 });

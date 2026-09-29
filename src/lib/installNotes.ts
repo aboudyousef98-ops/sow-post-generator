@@ -83,7 +83,7 @@ export function rawTextFor(r: PostRecord, key: PolishKey): string {
 
 /** Drop terminal punctuation so joined clauses read as one sentence. */
 function clause(s: string): string {
-  return s.replace(/[.;,]+$/, '').trim();
+  return s.replace(/[.;,!?…]+$/, '').trim();
 }
 
 /**

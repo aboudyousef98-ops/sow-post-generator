@@ -72,6 +72,14 @@ describe('installNoteLines — labelled free text', () => {
     ).toEqual(['Special cases: window to be closed off; small boxes relocated.']);
   });
 
+  it('strips a trailing question mark so it does not double up with the label period (carried fix 2)', () => {
+    // clause() must strip "?" (not just ".;,") before the label's own "." is
+    // appended, else this would render "Special cases: Is this ok?.".
+    expect(installNoteLines(n({ specialCases: 'Is this ok?' }), off)).toEqual([
+      'Special cases: Is this ok.',
+    ]);
+  });
+
   it('keeps battery and disconnect locations in spec order', () => {
     expect(
       installNoteLines(n({ batteryLocation: 'garage', mainDisconnectLocation: 'south wall' }), off),

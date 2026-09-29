@@ -1,7 +1,7 @@
 // Record factory + tag housekeeping.
 
 import type { PostRecord, Region, Settings } from '../types';
-import { emptyInstallNotes } from './installNotes';
+import { emptyInstallNotes, INSTALL_TEXT_FIELDS } from './installNotes';
 
 export function blankRecord(author: string, settings: Settings): PostRecord {
   const now = new Date().toISOString();
@@ -32,9 +32,19 @@ export function blankRecord(author: string, settings: Settings): PostRecord {
  * lost. Now ANY filled field makes the draft real. `tags` and `level` are
  * excluded because blankRecord() pre-populates them, so counting them would
  * make every empty form a draft.
+ *
+ * Also inspects `installNotes` (carried fix, Phase 7 review): once the guided
+ * Installation Notes UI ships, a draft holding only install-notes content and
+ * no customer name must still autosave — the exact data-loss class this
+ * function exists to prevent. Uses `INSTALL_TEXT_FIELDS` so the list of free-
+ * text boxes can't drift from `installNotes.ts`, and also counts the three
+ * dropdown choices (`walls`, `stories`, `service`) and `storiesOther`, since
+ * choosing a dropdown is real work worth saving. `orientations` entries count
+ * only when non-empty — `blankRecord()`'s `[]` and an untouched `['', '']`
+ * must not count as content.
  */
 export function hasContent(r: PostRecord): boolean {
-  const { sf } = r;
+  const { sf, installNotes: n } = r;
   const filled = [
     sf.customerName,
     sf.installScheduledDate,
@@ -44,8 +54,12 @@ export function hasContent(r: PostRecord): boolean {
     sf.recordTitle,
     r.designerTag,
     ...Object.values(r.notes),
+    ...INSTALL_TEXT_FIELDS.map((f) => n?.[f.field]),
+    n?.storiesOther,
+    ...(n?.orientations ?? []),
   ];
-  return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined;
+  const dropdownChosen = n?.walls !== undefined || n?.stories !== undefined || n?.service !== undefined;
+  return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }
 
 /**
