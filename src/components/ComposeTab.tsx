@@ -202,11 +202,21 @@ export default function ComposeTab({
   };
 
   const appendChip = (key: 'siteSurvey' | 'design' | 'homeowner', phrase: string) => {
-    update((r) => ({
-      ...r,
-      notes: { ...r.notes, [key]: r.notes[key] ? `${r.notes[key].replace(/\s+$/, '')}\n${phrase}` : phrase },
-    }));
+    update((r) => {
+      // A chip click also invalidates that field's stale polished version —
+      // it changes the raw text just like typing does.
+      const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
+      return {
+        ...r,
+        notes: { ...r.notes, [key]: r.notes[key] ? `${r.notes[key].replace(/\s+$/, '')}\n${phrase}` : phrase },
+        polished,
+      };
+    });
   };
+
+  /** Passed to InstallNotesCard so editing a box there clears its stale AI-guard hints too. */
+  const clearDropped = (key: PolishKey) => setDropped((d) => ({ ...d, [key]: undefined }));
+  const clearDrift = (key: PolishKey) => setBulletDrift((d) => ({ ...d, [key]: undefined }));
 
   const polish = useCallback(async () => {
     if (polishState.busy) return;
@@ -522,6 +532,8 @@ export default function ComposeTab({
         dropped={dropped}
         drift={bulletDrift}
         onToggle={togglePolished}
+        onClearDropped={clearDropped}
+        onClearDrift={clearDrift}
       />
 
       <div className="card">

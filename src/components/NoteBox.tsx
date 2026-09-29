@@ -46,7 +46,7 @@ export default function NoteBox({
   const inputId = `note-${polishKey}`;
 
   return (
-    <div className="note-block" data-polish-key={polishKey}>
+    <div className="note-block">
       <div className="note-head">
         <label htmlFor={inputId} className="field" style={{ marginBottom: 0 }}>
           {label}

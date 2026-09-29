@@ -15,18 +15,33 @@ interface Props {
   dropped: Partial<Record<PolishKey, string[]>>;
   drift: Partial<Record<PolishKey, { from: number; to: number }>>;
   onToggle: (key: PolishKey, usePolished: boolean) => void;
+  /** Editing a box clears its stale AI-guard hints, mirroring ComposeTab.setNote. */
+  onClearDropped: (key: PolishKey) => void;
+  onClearDrift: (key: PolishKey) => void;
 }
 
 const RUN_FIELDS = ['loadRun', 'serviceRun', 'solarRun', 'batteryRun'] as const;
 
-export default function InstallNotesCard({ record, settings, update, onKeyDown, dropped, drift, onToggle }: Props) {
+export default function InstallNotesCard({
+  record,
+  settings,
+  update,
+  onKeyDown,
+  dropped,
+  drift,
+  onToggle,
+  onClearDropped,
+  onClearDrift,
+}: Props) {
   const n = record.installNotes ?? emptyInstallNotes();
 
   const setNotes = (patch: Partial<InstallNotes>) =>
     update((r) => ({ ...r, installNotes: { ...(r.installNotes ?? emptyInstallNotes()), ...patch } }));
 
-  /** Editing a box invalidates that box's stale polished version. */
-  const setText = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], key: PolishKey, value: string) =>
+  /** Editing a box invalidates that box's stale polished version and guard hints. */
+  const setText = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], key: PolishKey, value: string) => {
+    onClearDropped(key);
+    onClearDrift(key);
     update((r) => {
       const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
       return {
@@ -35,21 +50,42 @@ export default function InstallNotesCard({ record, settings, update, onKeyDown, 
         polished,
       };
     });
-
-  const appendChip = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], phrase: string) =>
-    setNotes({ [field]: n[field] ? `${n[field].replace(/\s+$/, '')}\n${phrase}` : phrase } as Partial<InstallNotes>);
-
-  /** Reducing the wall count truncates orientations; increasing appends blanks. */
-  const setWalls = (walls: 1 | 2 | 3 | undefined) => {
-    const next = walls ? Array.from({ length: walls }, (_, i) => n.orientations[i] ?? '') : [];
-    setNotes({ walls, orientations: next });
   };
 
-  const setOrientation = (i: number, value: Orientation | '') => {
-    const next = [...n.orientations];
-    next[i] = value;
-    setNotes({ orientations: next });
-  };
+  /** A chip click also invalidates that box's stale polished version — it changes the raw text. */
+  const appendChip = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], key: PolishKey, phrase: string) =>
+    update((r) => {
+      const cur = r.installNotes ?? emptyInstallNotes();
+      const existing = cur[field];
+      const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
+      return {
+        ...r,
+        installNotes: { ...cur, [field]: existing ? `${existing.replace(/\s+$/, '')}\n${phrase}` : phrase },
+        polished,
+      };
+    });
+
+  /**
+   * Reducing the wall count truncates orientations; increasing appends blanks.
+   * Returning to "—" (walls undefined) keeps whatever orientations were chosen
+   * — they're sliced to `walls` everywhere they're read, so nothing leaks into
+   * the post, and re-picking a count doesn't lose prior choices (mirrors
+   * storiesOther's preservation below).
+   */
+  const setWalls = (walls: 1 | 2 | 3 | undefined) =>
+    update((r) => {
+      const cur = r.installNotes ?? emptyInstallNotes();
+      const next = walls ? Array.from({ length: walls }, (_, i) => cur.orientations[i] ?? '') : cur.orientations;
+      return { ...r, installNotes: { ...cur, walls, orientations: next } };
+    });
+
+  const setOrientation = (i: number, value: Orientation | '') =>
+    update((r) => {
+      const cur = r.installNotes ?? emptyInstallNotes();
+      const next = [...cur.orientations];
+      next[i] = value;
+      return { ...r, installNotes: { ...cur, orientations: next } };
+    });
 
   const box = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], rows = 2) => {
     const def = INSTALL_TEXT_FIELDS.find((f) => f.field === field)!;
@@ -63,7 +99,7 @@ export default function InstallNotesCard({ record, settings, update, onKeyDown, 
         onChange={(v) => setText(field, def.key, v)}
         onKeyDown={onKeyDown}
         chips={settings.chips[def.key]}
-        onChip={(phrase) => appendChip(field, phrase)}
+        onChip={(phrase) => appendChip(field, def.key, phrase)}
         polished={record.polished?.[def.key]}
         usePolished={record.usePolished[def.key] !== false}
         onToggle={(use) => onToggle(def.key, use)}
