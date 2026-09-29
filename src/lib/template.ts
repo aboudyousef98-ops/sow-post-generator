@@ -4,28 +4,7 @@ import type { Ahj, NoteKey, PostRecord, Settings } from '../types';
 import { livePosts, matchAhj } from './ahj';
 import { LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
-
-/** Ensure terminal punctuation (06 §1 rendering rules). */
-function punctuate(s: string): string {
-  const t = s.trim();
-  if (!t) return t;
-  return /[.!?…]$/.test(t) ? t : `${t}.`;
-}
-
-/**
- * Split a note into bullet lines — the team writes these as bullet points, one
- * per line (Aboud, 2026-09-28). One source line = one bullet, same order. Any
- * bullet character the writer typed is stripped so it isn't rendered twice.
- */
-function noteLines(text: string): string[] {
-  return text
-    .split('\n')
-    // True bullet glyphs may sit tight against the word; a dash or asterisk must
-    // be followed by a space, so "-20 ft" and "*2 AWG" keep their first character.
-    .map((l) => l.replace(/^\s*(?:[•◦·]\s*|[-*–—]\s+)/, '').trim())
-    .filter(Boolean)
-    .map(punctuate);
-}
+import { effectiveText, noteLines, punctuate } from './noteText';
 
 /**
  * The bullet lines actually used for a note: polished when available+enabled,
