@@ -129,6 +129,8 @@ export type PolishKey =
   | 'design'
   | 'homeowner';
 
+export type RewriteMode = 'polish' | 'rewrite';
+
 export interface PostRecord {
   id: string; // uuid
   status: 'draft' | 'posted';
@@ -143,6 +145,12 @@ export interface PostRecord {
   installNotes?: InstallNotes;
   /** AI results per box; an absent key means "not polished". */
   polished?: Partial<Record<PolishKey, string>>;
+  /**
+   * Which AI mode produced each polished box. The audit trail for the one
+   * real risk of the rewrite mode — text drifting from what the engineer
+   * meant. Additive; schemaVersion stays 1.
+   */
+  polishMode?: Partial<Record<PolishKey, RewriteMode>>;
   /**
    * Per-box "use the polished version?" flags. An ABSENT key means ON — only an
    * explicit `false` (the user clicked "Revert to my draft") turns it off.
