@@ -2443,6 +2443,223 @@ git push origin main
 
 ---
 
+## Task 13: Second AI mode — "هري ابو روي" (full rewrite)
+
+> Added 2026-09-30 mid-execution at Aboud's request. **Executes inside Dispatch F, together with Tasks 9 and 10** — it modifies the same files those tasks create or rewrite, so doing it separately would mean editing them twice. Spec: `../spec/10-installation-notes.md` §11.
+
+**Files:**
+- Modify: `netlify/functions/lib/rewriteSchema.ts` and `netlify/functions/rewrite.mts` (both from Task 9)
+- Modify: `src/lib/api.ts`, `src/components/ComposeTab.tsx`, `src/components/NoteBox.tsx`
+- Test: `netlify/functions/lib/rewriteSchema.test.ts`, `src/App.integration.test.tsx`
+
+**Note:** `RewriteMode` and `PostRecord.polishMode` already exist (added in Task 7), and `NoteBox` already accepts a `mode` prop and renders `🔄` vs `✨`. Both `NoteBox` call sites already pass `mode={record.polishMode?.[key]}` (Task 8). This task only has to set `polishMode` and add the button.
+
+**Interfaces:**
+- Consumes: everything Tasks 9 and 10 produce.
+- Produces: `rewrite(items, mode)`; the second button; `polishMode` actually populated.
+
+- [ ] **Step 1: Add `mode` to the wire schema**
+
+In `netlify/functions/lib/rewriteSchema.ts`, inside the `RewriteRequest` object literal, before `.strict()`:
+
+```ts
+    // Optional and defaulted so a stale client that omits it keeps the old
+    // behaviour instead of failing (spec/10 §11.2).
+    mode: z.enum(['polish', 'rewrite']).optional().default('polish'),
+```
+
+- [ ] **Step 2: Add the schema tests**
+
+In `netlify/functions/lib/rewriteSchema.test.ts`:
+
+```ts
+describe('rewrite mode (spec/10 §11.2)', () => {
+  it('defaults to polish when mode is absent', () => {
+    expect(RewriteRequest.parse(ok).mode).toBe('polish');
+  });
+
+  it('accepts both modes', () => {
+    expect(RewriteRequest.parse({ ...ok, mode: 'rewrite' }).mode).toBe('rewrite');
+    expect(RewriteRequest.parse({ ...ok, mode: 'polish' }).mode).toBe('polish');
+  });
+
+  it('rejects an unknown mode', () => {
+    expect(RewriteRequest.safeParse({ ...ok, mode: 'freestyle' }).success).toBe(false);
+  });
+});
+```
+
+- [ ] **Step 3: Run them to verify they fail**
+
+Run: `npx vitest run netlify/functions/lib/rewriteSchema.test.ts`
+Expected: FAIL — `mode` is not in the schema.
+
+- [ ] **Step 4: Add the second system prompt**
+
+In `netlify/functions/rewrite.mts`, rename the existing constant to `POLISH_SYSTEM_PROMPT`, leaving its text **byte-for-byte unchanged**, and add `REWRITE_SYSTEM_PROMPT` beside it.
+
+`REWRITE_SYSTEM_PROMPT` reuses the polish prompt's `Line rules (most important):` block and its fact-preservation bullets **verbatim**. The only differences, per spec/10 §11.2:
+
+**Delete** these three rules:
+- `If a line is already correct English, return it UNCHANGED, character for character.`
+- `Keep the engineer's own vocabulary and phrasing. Do not upgrade the register, do not make it more formal, do not add connectives like "however", "therefore", "additionally", "please note".`
+- `Keep each bullet short — a single sentence or clause, the way it was written. Do not expand a bullet into several sentences.`
+
+**Replace** the `Your job is a light copy-edit, NOT a rewrite…` sentence with:
+
+```
+Your job is a FULL REWRITE. The input is often rough: broken English, shorthand, half-sentences, missing words, or mixed Arabic and English. Turn each line into one clear, complete, professional sentence that an installation crew can act on.
+
+Rewriting the wording completely is expected and wanted. What must survive untouched is the MEANING and every fact — you may change every word of a line, but you may not change what it says, add anything it does not say, or drop anything it does say.
+```
+
+**Keep unchanged:** every `Line rules` bullet (same number of lines, same order, never merge, never split, never reorder, never turn into a paragraph); the `Preserve every fact, number, unit, size, brand, wire type, conduit type and direction exactly` bullet; the engineering-terms list; `Do not add information, assumptions, recommendations or pleasantries. Do not remove any point.`; the no-headings/no-emoji/no-bullet-characters rule; questions-stay-questions; the empty-string rule; the Arabic translation rule.
+
+**Replace** the worked examples with rewrite-shaped ones:
+
+```
+Examples (input line -> output line):
+"the conduit he go from meter to attic then porch" -> "Conduit routed from the meter through the attic to the porch."
+"i think 2 inch not enough for this run" -> "2\" conduit appears undersized for this run."
+"tag say EMT but must PVC yes?" -> "The solar tag specifies EMT; it should read PVC."
+"HO must know we drill the fence before" -> "The homeowner must be informed before the fence is drilled."
+"All good." -> "All good."
+```
+
+- [ ] **Step 5: Select prompt and temperature by mode**
+
+In the handler, after `RewriteRequest.safeParse` succeeds:
+
+```ts
+  const mode = parsed.data.mode;
+  // A full rewrite needs room to rephrase; the copy-edit must not drift.
+  const temperature = mode === 'rewrite' ? 0.3 : 0.1;
+  const systemPrompt = mode === 'rewrite' ? REWRITE_SYSTEM_PROMPT : POLISH_SYSTEM_PROMPT;
+```
+
+Pass `temperature` and `{ role: 'system', content: systemPrompt }` into `callOpenAiJson`. `max_tokens` stays `900`; the model stays `process.env.OPENAI_MODEL_TEXT || 'gpt-4o-mini'`. Add `mode` to the existing `console.log` — it carries counts and timings only, never note text.
+
+- [ ] **Step 6: Thread the mode through the client**
+
+In `src/lib/api.ts`:
+
+```ts
+export function rewrite(items: PolishItem[], mode: RewriteMode = 'polish'): Promise<RewriteResponse> {
+  return post<RewriteResponse>('rewrite', { items, mode });
+}
+```
+
+In `src/components/ComposeTab.tsx`, widen the busy flag so only the pressed button spins, and rename `polish()` to `runAi(mode)`. It must also record `polishMode` per box:
+
+```ts
+const [polishState, setPolishState] = useState<{
+  busy: false | RewriteMode;
+  ms?: number;
+  error?: string;
+}>({ busy: false });
+
+const runAi = useCallback(async (mode: RewriteMode) => {
+  if (polishState.busy) return;
+  const items = POLISH_KEYS.map((id) => ({ id, text: rawTextFor(record, id) })).filter((i) => i.text.trim());
+  if (!items.length) {
+    toast('Nothing to polish yet — write a note first.');
+    return;
+  }
+  setPolishState({ busy: mode });
+  try {
+    const res = await rewrite(items, mode);
+    const byId = new Map(res.items.map((i) => [i.id, i.text]));
+    const polished: Partial<Record<PolishKey, string>> = {};
+    const use: Partial<Record<PolishKey, boolean>> = {};
+    const modes: Partial<Record<PolishKey, RewriteMode>> = {};
+    const nextDropped: Partial<Record<PolishKey, string[]>> = {};
+    const nextDrift: Partial<Record<PolishKey, { from: number; to: number }>> = {};
+    for (const sent of items) {
+      const out = byId.get(sent.id);
+      if (out === undefined) continue; // model skipped it — that box keeps its raw draft
+      polished[sent.id] = out;
+      use[sent.id] = true;
+      modes[sent.id] = mode;
+      nextDropped[sent.id] = droppedTokens(sent.text, out);
+      nextDrift[sent.id] = bulletCountChange(sent.text, out) ?? undefined;
+    }
+    setDropped(nextDropped);
+    setBulletDrift(nextDrift);
+    update((r) => ({
+      ...r,
+      polished: { ...r.polished, ...polished },
+      usePolished: { ...r.usePolished, ...use },
+      polishMode: { ...r.polishMode, ...modes },
+    }));
+    setPolishState({ busy: false, ms: res.ms });
+  } catch (err) {
+    setPolishState({ busy: false, error: (err as { message?: string })?.message || 'Request failed.' });
+  }
+}, [record, polishState.busy, update, toast]);
+```
+
+`Ctrl+Enter` stays bound to polish only — `noteKeyDown` calls `void runAi('polish')`.
+
+Both guards stay on for both modes. Aboud chose one-bullet-in-one-bullet-out for the rewrite as well, so `bulletCountChange` stays meaningful rather than becoming constant noise.
+
+- [ ] **Step 7: Add the second button**
+
+Beside the existing Polish button in the Feedback card:
+
+```tsx
+<button
+  type="button"
+  className="btn secondary"
+  disabled={polishState.busy !== false || !aiAvailable}
+  onClick={() => void runAi('rewrite')}
+  title="Full rewrite — for rough notes. Keeps one bullet per line and every number, but rewrites the wording completely."
+>
+  {polishState.busy === 'rewrite' ? (
+    <span>
+      <span className="spin">🔄</span> Rewriting…
+    </span>
+  ) : (
+    'هري ابو روي'
+  )}
+</button>
+```
+
+The Polish button's `disabled` becomes `polishState.busy !== false || !aiAvailable`, and its spinner condition becomes `polishState.busy === 'polish'`.
+
+Identifiers, comments and documentation stay English (CLAUDE.md §6); only this one displayed label is Arabic.
+
+- [ ] **Step 8: Integration test**
+
+In `src/App.integration.test.tsx`, mock `fetch` the way the existing AI tests in that file already do — copy their pattern, do not invent one. Note this project has **no** `@testing-library/user-event` and **no** jest-dom matchers: use `fireEvent` and plain `.disabled` checks. Assert:
+- a button with the accessible name `هري ابو روي` renders;
+- pressing it sends `mode: 'rewrite'` in the request body;
+- pressing `✨ Polish with AI` sends `mode: 'polish'`;
+- while one request is in flight, both buttons are disabled.
+
+- [ ] **Step 9: Run the gate and commit**
+
+```bash
+npx vitest run && npx tsc --noEmit && npx eslint src netlify
+```
+
+Commit message body:
+
+```
+feat: second AI mode — full rewrite button beside Polish
+
+Polish is deliberately constrained never to drift from the engineer's wording.
+The new mode is for rough, half-formed or mixed-language notes: it rewrites
+every word but keeps one bullet per line, every fact and every number. Both
+guards stay on for both modes. polishMode records which button produced each
+box, so a reopened draft shows what was machine-rewritten.
+
+Spec: spec/10-installation-notes.md §11
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+```
+
+---
+
 ## Handoff — what a human must do after this plan
 
 1. **Deploy:** `npx netlify deploy --build --prod` from the repo root. Netlify has no git integration; the push in Task 12 deploys nothing.
