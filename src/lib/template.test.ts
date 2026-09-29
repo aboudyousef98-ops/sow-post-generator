@@ -151,7 +151,6 @@ describe('missingRequired', () => {
     rec.sf.siteAddress = ' ';
     expect(missingRequired(rec)).toEqual([
       'Customer name',
-      'Install date',
       'Jurisdiction',
       'Site address',
     ]);
@@ -162,6 +161,20 @@ describe('missingRequired', () => {
     rec.sf.region = 'OTHER';
     rec.sf.installRegionRaw = undefined;
     expect(missingRequired(rec)).toContain('Region text');
+  });
+});
+
+describe('missingRequired (spec/10 §1)', () => {
+  it('does not require an install date', () => {
+    const r = norcaRecord({ sf: { ...norcaRecord().sf, installScheduledDate: '' } });
+    expect(missingRequired(r)).toEqual([]);
+  });
+
+  it('still requires customer, jurisdiction and address', () => {
+    const r = norcaRecord({
+      sf: { ...norcaRecord().sf, customerName: '', jurisdiction: '', siteAddress: '' },
+    });
+    expect(missingRequired(r)).toEqual(['Customer name', 'Jurisdiction', 'Site address']);
   });
 });
 

@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { installWeekday, mergeSfFields, parseSfText } from './parser';
+import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from './parser';
 import { suggestDriversFromText } from './classify';
 import type { SfFields } from '../types';
 
@@ -109,12 +109,34 @@ describe('parseSfText — coordination second paste + merge', () => {
 describe('parseSfText — warnings', () => {
   it('warns on missing date and missing customer', () => {
     const { warnings } = parseSfText('Utility Company\nCenterpoint', '2026-09-26');
-    expect(warnings).toContain('No install date found.');
     expect(warnings).toContain('Customer name missing.');
   });
 
   it('warns when the install date is in the past', () => {
     const { warnings } = parseSfText(norca, '2026-11-15');
     expect(warnings.some((w) => w.includes('in the past'))).toBe(true);
+  });
+});
+
+describe('install date is optional (spec/10 §1)', () => {
+  it('does not warn when the Salesforce paste has no install date', () => {
+    const res = parseSfText('Jane Doe | FF | Project\nJurisdiction\nPasadena', '2026-09-30');
+    expect(res.warnings).not.toContain('No install date found.');
+    expect(res.fields.installScheduledDate).toBeUndefined();
+  });
+
+  it('still warns when a date is present but in the past', () => {
+    const res = parseSfText('Install Scheduled Date\n09/01/2026', '2026-09-30');
+    expect(res.warnings.some((w) => w.includes('is in the past'))).toBe(true);
+  });
+
+  it('still warns when the date text cannot be read', () => {
+    const res = parseSfText('Install Scheduled Date\nnot a date', '2026-09-30');
+    expect(res.warnings.some((w) => w.startsWith('Could not read Install Scheduled Date'))).toBe(true);
+  });
+
+  it('extractedToFields does not warn about a missing date either', () => {
+    const res = extractedToFields({ customerName: 'Jane Doe', confidence: 'high' }, '2026-09-30');
+    expect(res.warnings).not.toContain('No install date found.');
   });
 });

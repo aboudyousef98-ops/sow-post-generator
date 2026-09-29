@@ -90,14 +90,14 @@ export function titleBlockTsv(record: PostRecord): string {
 }
 
 /**
- * Required fields (Aboud, 2026-09-26): the copy buttons and "Mark as posted"
- * stay disabled until these are filled. Notes are NOT required — empty note
- * bullets are simply dropped from the post.
+ * Required fields (Aboud, 2026-09-26; install date dropped 2026-09-30 per
+ * spec/10 §1 — projects are now designed before a date is scheduled). The copy
+ * buttons and "Mark as posted" stay disabled until these are filled. Notes are
+ * NOT required — empty note bullets are simply dropped from the post.
  */
 export function missingRequired(record: PostRecord): string[] {
   const missing: string[] = [];
   if (!record.sf.customerName.trim()) missing.push('Customer name');
-  if (!record.sf.installScheduledDate) missing.push('Install date');
   if (record.sf.region === 'OTHER' && !record.sf.installRegionRaw?.trim()) missing.push('Region text');
   if (!record.sf.jurisdiction?.trim()) missing.push('Jurisdiction');
   if (!record.sf.siteAddress?.trim()) missing.push('Site address');

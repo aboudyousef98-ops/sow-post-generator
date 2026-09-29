@@ -170,7 +170,6 @@ export function parseSfText(input: string, today?: string): ParseResult {
       );
     }
   }
-  if (!fields.installScheduledDate) warnings.push('No install date found.');
   if (fields.installScheduledDate && today && isPast(fields.installScheduledDate, today)) {
     warnings.push(
       `Install Scheduled Date (${isoToUs(fields.installScheduledDate)}) is in the past.`,
@@ -225,7 +224,6 @@ export function extractedToFields(
       );
     }
   }
-  if (!fields.installScheduledDate) warnings.push('No install date found.');
   if (fields.installScheduledDate && today && isPast(fields.installScheduledDate, today)) {
     warnings.push(`Install Scheduled Date (${isoToUs(fields.installScheduledDate)}) is in the past.`);
   }
