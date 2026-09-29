@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportFile, PostRecord } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
-import { defaultSettings, exportFileName, mergeImport, mergeRecords } from './storage';
+import { emptyInstallNotes } from './installNotes';
+import { defaultSettings, exportFileName, mergeImport, mergeRecords, migrateRecord } from './storage';
 
 function rec(id: string, updatedAt: string, customer: string): PostRecord {
   return makeRecord({
@@ -72,5 +73,50 @@ describe('defaults', () => {
     expect(s.regionLead.DFW).toBe('Wesley Bomfim');
     expect(s.defaults.homeowner).toBe('No feedback.');
     expect(s.designers).toHaveLength(10);
+  });
+});
+
+describe('migrateRecord — Phase 7 (spec/10 §2.2)', () => {
+  /** A record as written before Phase 7: free-text layout, four-key polish maps. */
+  const legacy = () =>
+    makeRecord({
+      installNotes: undefined,
+      notes: { layout: 'Attic run\nBack-to-back', siteSurvey: 'survey', design: '', homeowner: '' },
+      polished: { layout: 'Attic run.\nBack-to-back.' } as never,
+      usePolished: { layout: false } as never,
+    });
+
+  it('moves notes.layout into installNotes.other and clears it', () => {
+    const m = migrateRecord(legacy());
+    expect(m.installNotes?.other).toBe('Attic run\nBack-to-back');
+    expect(m.notes.layout).toBe('');
+  });
+
+  it('re-keys the polished text and the revert flag', () => {
+    const m = migrateRecord(legacy());
+    expect(m.polished?.['install.other']).toBe('Attic run.\nBack-to-back.');
+    expect(m.usePolished['install.other']).toBe(false);
+    expect((m.polished as Record<string, unknown>).layout).toBeUndefined();
+    expect((m.usePolished as Record<string, unknown>).layout).toBeUndefined();
+  });
+
+  it('leaves the other notes and every other field alone', () => {
+    const m = migrateRecord(legacy());
+    expect(m.notes.siteSurvey).toBe('survey');
+    expect(m.id).toBe('test-id');
+    expect(m.installNotes?.loadRun).toBe('');
+  });
+
+  it('is a no-op on a record that already has installNotes and no legacy text', () => {
+    const current = makeRecord({ installNotes: { ...emptyInstallNotes(), loadRun: '18 ft' } });
+    expect(migrateRecord(current)).toBe(current);
+  });
+
+  it('never overwrites an existing installNotes.other', () => {
+    const both = makeRecord({
+      installNotes: { ...emptyInstallNotes(), other: 'already here' },
+      notes: { layout: 'old text', siteSurvey: '', design: '', homeowner: '' },
+    });
+    expect(migrateRecord(both).installNotes?.other).toBe('already here');
   });
 });

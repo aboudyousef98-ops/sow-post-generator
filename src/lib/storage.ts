@@ -1,7 +1,8 @@
 // localStorage persistence — spec/02-data-model.md. Keys: sowpost.records,
 // sowpost.settings, sowpost.currentId, sowpost.ahjs. No credentials are ever stored.
 
-import type { Ahj, ExportFile, PostRecord, Settings } from '../types';
+import type { Ahj, ExportFile, InstallNotes, PostRecord, Settings } from '../types';
+import { emptyInstallNotes } from './installNotes';
 
 const KEY_RECORDS = 'sowpost.records';
 const KEY_SETTINGS = 'sowpost.settings';
@@ -59,6 +60,47 @@ export function migrate<T extends { schemaVersion?: number }>(value: T): T {
   return value;
 }
 
+/**
+ * Phase 7 (spec/10 §2.2): the free-text `Installation Layout` note became the
+ * guided Installation Notes section. A record written before Phase 7 carries
+ * its text in `notes.layout` — move it to `installNotes.other` so a reopened
+ * draft shows it under "Anything else", and re-key its polished version.
+ *
+ * Runs on every load AND inside mergeRecords(), so records pulled from the
+ * shared Blobs store or from a JSON import are migrated too.
+ */
+export function migrateRecord(r: PostRecord): PostRecord {
+  const legacyText = r.notes?.layout ?? '';
+  const legacyPolished = (r.polished as Record<string, string> | undefined)?.layout;
+  const legacyUse = (r.usePolished as Record<string, boolean> | undefined)?.layout;
+  if (r.installNotes && !legacyText && legacyPolished === undefined && legacyUse === undefined) {
+    return r; // already migrated — return the same object so callers can cheaply compare
+  }
+
+  const installNotes: InstallNotes = { ...emptyInstallNotes(), ...r.installNotes };
+  if (legacyText && !installNotes.other) installNotes.other = legacyText;
+
+  const polished: Record<string, string> = { ...(r.polished as Record<string, string> | undefined) };
+  if (legacyPolished !== undefined && polished['install.other'] === undefined) {
+    polished['install.other'] = legacyPolished;
+  }
+  delete polished.layout;
+
+  const usePolished: Record<string, boolean> = { ...(r.usePolished as Record<string, boolean>) };
+  if (legacyUse !== undefined && usePolished['install.other'] === undefined) {
+    usePolished['install.other'] = legacyUse;
+  }
+  delete usePolished.layout;
+
+  return {
+    ...r,
+    installNotes,
+    notes: { ...r.notes, layout: '' },
+    polished: Object.keys(polished).length ? (polished as PostRecord['polished']) : undefined,
+    usePolished: usePolished as PostRecord['usePolished'],
+  };
+}
+
 function read<T>(key: string): T | null {
   try {
     const raw = localStorage.getItem(key);
@@ -70,7 +112,7 @@ function read<T>(key: string): T | null {
 
 export function loadRecords(): PostRecord[] {
   const arr = read<PostRecord[]>(KEY_RECORDS);
-  return Array.isArray(arr) ? arr.map((r) => migrate(r)) : [];
+  return Array.isArray(arr) ? arr.map((r) => migrateRecord(migrate(r))) : [];
 }
 
 export function saveRecords(records: PostRecord[]): void {
@@ -78,8 +120,21 @@ export function saveRecords(records: PostRecord[]): void {
 }
 
 export function loadSettings(): Settings {
-  const s = read<Settings>(KEY_SETTINGS);
-  return s ? { ...defaultSettings(), ...migrate(s) } : defaultSettings();
+  const stored = read<Settings>(KEY_SETTINGS);
+  const d = defaultSettings();
+  if (!stored) return d;
+  const s = migrate(stored);
+  return {
+    ...d,
+    ...s,
+    // Per-key, so an edited phrase wins but a newly added key still arrives.
+    defaults: { ...d.defaults, ...s.defaults },
+    // Chips are NOT user-editable yet (the chip editor is Phase 2), so a stored
+    // `chips` can only ever be a stale copy of an older default — taking it
+    // would hide every new suggestion from everyone except a fresh browser
+    // (spec/10 §7.1). When chip editing ships, change this to a per-key merge.
+    chips: d.chips,
+  };
 }
 
 export function saveSettings(settings: Settings): void {
@@ -130,10 +185,10 @@ export function mergeRecords(
     if (!rec?.id) continue;
     const existing = byId.get(rec.id);
     if (!existing) {
-      byId.set(rec.id, migrate(rec));
+      byId.set(rec.id, migrateRecord(migrate(rec)));
       added++;
     } else if (rec.updatedAt > existing.updatedAt) {
-      byId.set(rec.id, migrate(rec));
+      byId.set(rec.id, migrateRecord(migrate(rec)));
       updated++;
     }
   }
