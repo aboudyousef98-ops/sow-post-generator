@@ -1,24 +1,25 @@
 // Canonical post template + clipboard formats — spec/06-output-template.md.
 
-import type { Ahj, NoteKey, PostRecord, Settings } from '../types';
+import type { Ahj, PostRecord, Settings } from '../types';
 import { livePosts, matchAhj } from './ahj';
 import { LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
+import { conduitRunLines, installNoteLines } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
 
-/**
- * The bullet lines actually used for a note: polished when available+enabled,
- * else raw; the default phrase when empty. Empty array = drop the bullet.
- */
-export function effectiveNoteLines(record: PostRecord, key: NoteKey, settings: Settings): string[] {
-  const polished = record.polished?.[key];
-  const usePolished = polished !== undefined && record.usePolished[key];
-  const lines = noteLines(usePolished ? polished : record.notes[key]);
+/** A feedback note's bullet lines: polished when available+enabled, else raw; the default phrase when empty. */
+export function effectiveNoteLines(
+  record: PostRecord,
+  key: 'siteSurvey' | 'design' | 'homeowner',
+  settings: Settings,
+): string[] {
+  const lines = noteLines(effectiveText(record.notes[key], key, record));
   if (lines.length) return lines;
-  if (key === 'layout') return []; // layout has no default phrase; parser/drivers seed it
-  const defaults: Record<Exclude<NoteKey, 'layout'>, string> = settings.defaults
-    ? { siteSurvey: settings.defaults.siteSurvey, design: settings.defaults.design, homeowner: settings.defaults.homeowner }
-    : { siteSurvey: 'All good.', design: 'All good.', homeowner: 'No feedback.' };
+  const defaults = settings.defaults ?? {
+    siteSurvey: 'All good.',
+    design: 'All good.',
+    homeowner: 'No feedback.',
+  };
   return [punctuate(defaults[key])];
 }
 
@@ -116,7 +117,8 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
     { label: 'Jurisdiction', values: one(record.sf.jurisdiction ?? '') },
     { label: 'Site Address', values: one(record.sf.siteAddress ?? '') },
     { label: 'Project Classification', values: [`Level ${record.level} – ${LEVEL_NAMES[record.level]}.`] },
-    { label: 'Installation Layout', values: effectiveNoteLines(record, 'layout', settings) },
+    { label: 'Installation Notes', values: installNoteLines(record.installNotes, record) },
+    { label: 'Conduit Raceway', values: conduitRunLines(record.installNotes, record) },
     { label: 'Clearance', values: ['All required clearance requirements have been met.'] },
     { label: 'Site Survey Feedback', values: effectiveNoteLines(record, 'siteSurvey', settings) },
     { label: 'Design Feedback', values: effectiveNoteLines(record, 'design', settings) },

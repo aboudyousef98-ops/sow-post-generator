@@ -308,19 +308,22 @@ describe('draft safety', () => {
     const { unmount } = render(<App />);
 
     // Only a note — no customer name anywhere. This used to save nothing at all.
-    fireEvent.change(screen.getByPlaceholderText(/One bullet per line — Arabic\/English ok/), {
+    // Uses the Homeowner Feedback box (the old "Installation Layout" free-text
+    // note it originally exercised was replaced by guided installNotes fields
+    // in Phase 7; its placeholder is now unique to this box).
+    fireEvent.change(screen.getByPlaceholderText(/One bullet per line\. Empty → "No feedback\."/), {
       target: { value: 'Conduit through the attic to the garage' },
     });
 
     await waitFor(() => expect(stored()).toHaveLength(1), { timeout: 2000 });
-    expect(stored()[0].notes.layout).toBe('Conduit through the attic to the garage');
+    expect(stored()[0].notes.homeowner).toBe('Conduit through the attic to the garage');
 
     // And it survives a reload.
     unmount();
     render(<App />);
     await waitFor(() =>
       expect(
-        (screen.getByPlaceholderText(/One bullet per line — Arabic\/English ok/) as HTMLTextAreaElement).value,
+        (screen.getByPlaceholderText(/One bullet per line\. Empty → "No feedback\."/) as HTMLTextAreaElement).value,
       ).toBe('Conduit through the attic to the garage'),
     );
   });

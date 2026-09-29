@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
+import { emptyInstallNotes } from './installNotes';
 import { defaultSettings } from './storage';
 import {
   buildPostHtml,
@@ -27,7 +28,6 @@ Please take the following notes into consideration:
 • *Jurisdiction:* Pasadena.
 • *Site Address:* 1317 Skylark Rd, Pasadena, TX 77502.
 • *Project Classification:* Level 1 – Standard Installation.
-• *Installation Layout:* Standard exterior placement, with the equipment installed back-to-back and direct grid, load, and PV routing.
 • *Clearance:* All required clearance requirements have been met.
 • *Site Survey Feedback:* All good.
 • *Design Feedback:* All good.
@@ -51,9 +51,9 @@ describe('buildPostText', () => {
 
   it('adds terminal punctuation to notes', () => {
     const rec = norcaRecord({
-      notes: { layout: 'Attic run', siteSurvey: '', design: '', homeowner: '' },
+      installNotes: { ...emptyInstallNotes(), other: 'Attic run' },
     });
-    expect(buildPostText(rec, defaultSettings())).toContain('*Installation Layout:* Attic run.');
+    expect(buildPostText(rec, defaultSettings())).toContain('*Installation Notes:* Attic run.');
   });
 
   it('OTHER region prints the raw region text', () => {
@@ -97,13 +97,11 @@ describe('buildPostText', () => {
     expect(regionLine(rec)).toBe('HOU');
   });
 
-  it('drops empty bullets entirely (empty layout, missing jurisdiction)', () => {
-    const rec = norcaRecord({
-      notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
-    });
+  it('drops empty bullets entirely (empty installation notes, missing jurisdiction)', () => {
+    const rec = norcaRecord();
     rec.sf.jurisdiction = undefined;
     const text = buildPostText(rec, defaultSettings());
-    expect(text).not.toContain('*Installation Layout:*');
+    expect(text).not.toContain('*Installation Notes:*');
     expect(text).not.toContain('*Jurisdiction:*');
     // Defaults still fill the feedback bullets.
     expect(text).toContain('*Site Survey Feedback:* All good.');
@@ -171,12 +169,12 @@ describe('buildPostHtml', () => {
     expect(html).toContain('<li><strong>Installation Date &amp; Day:</strong> Thursday, 10/01/2026.</li>');
     expect(html).toContain('<li><strong>Site Address:</strong> 1317 Skylark Rd, Pasadena, TX 77502.</li>');
     expect(html).toContain('<p>@Tarek Abu Hseini @Mohammed Azizi @Diego Banegas</p>');
-    expect(html.match(/<li>/g)).toHaveLength(10);
+    expect(html.match(/<li>/g)).toHaveLength(9);
   });
 
   it('escapes HTML in user text', () => {
     const rec = norcaRecord({
-      notes: { layout: 'Run <20 ft & short', siteSurvey: '', design: '', homeowner: '' },
+      installNotes: { ...emptyInstallNotes(), other: 'Run <20 ft & short' },
     });
     expect(buildPostHtml(rec, defaultSettings())).toContain('Run &lt;20 ft &amp; short.');
   });
@@ -262,7 +260,7 @@ describe('multi-line notes render as sub-bullets', () => {
   const multi = () =>
     norcaRecord({
       notes: {
-        layout: 'Standard exterior placement.',
+        layout: '',
         siteSurvey: '',
         design: 'Solar tag should read PVC, not EMT\nElevation shows an expansion unit missing from the one-line',
         homeowner: '',
@@ -270,8 +268,9 @@ describe('multi-line notes render as sub-bullets', () => {
     });
 
   it('keeps a single-line note inline after its label', () => {
-    expect(buildPostText(norcaRecord(), defaultSettings())).toContain(
-      '• *Installation Layout:* Standard exterior placement, with the equipment installed back-to-back and direct grid, load, and PV routing.',
+    const rec = norcaRecord({ installNotes: { ...emptyInstallNotes(), other: 'Standard exterior placement.' } });
+    expect(buildPostText(rec, defaultSettings())).toContain(
+      '• *Installation Notes:* Standard exterior placement.',
     );
   });
 
@@ -351,5 +350,64 @@ describe('AutoCAD title block', () => {
     const rec = norcaRecord();
     rec.sf.siteAddress = undefined;
     expect(titleBlockFields(rec)[1]).toEqual({ label: 'Property Address', value: '' });
+  });
+});
+
+// ---- Installation Notes + Conduit Raceway bullets (Phase 7) ---------------
+
+describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
+  const withNotes = (over = {}) =>
+    norcaRecord({ installNotes: { ...emptyInstallNotes(), ...over } });
+
+  it('a single value renders inline', () => {
+    const text = buildPostText(withNotes({ stories: 1 }), defaultSettings());
+    expect(text).toContain('• *Installation Notes:* 1-story house.');
+  });
+
+  it('several values render as sub-bullets', () => {
+    const text = buildPostText(
+      withNotes({ walls: 2, orientations: ['North', 'West'], stories: 1, service: 'MPU' }),
+      defaultSettings(),
+    );
+    expect(text).toContain('• *Installation Notes:*\n    ◦ Installation on two walls (North, West).');
+    expect(text).toContain('    ◦ 1-story house.');
+    expect(text).toContain('    ◦ This project requires an MPU.');
+  });
+
+  it('Conduit Raceway is its own bullet, after Installation Notes', () => {
+    const text = buildPostText(
+      withNotes({ stories: 1, loadRun: '18 ft through the attic', solarRun: '1-1/4" PVC' }),
+      defaultSettings(),
+    );
+    expect(text.indexOf('*Installation Notes:*')).toBeLessThan(text.indexOf('*Conduit Raceway:*'));
+    expect(text.indexOf('*Conduit Raceway:*')).toBeLessThan(text.indexOf('*Clearance:*'));
+    expect(text).toContain('◦ Load run: 18 ft through the attic.');
+    expect(text).toContain('◦ Solar run: 1-1/4" PVC.');
+  });
+
+  it('both bullets disappear when nothing is filled in', () => {
+    const text = buildPostText(withNotes(), defaultSettings());
+    expect(text).not.toContain('Installation Notes');
+    expect(text).not.toContain('Conduit Raceway');
+    expect(text).not.toContain('Installation Layout');
+  });
+
+  it('Conduit Raceway alone disappears when only Installation Notes is filled', () => {
+    const text = buildPostText(withNotes({ stories: 2 }), defaultSettings());
+    expect(text).toContain('*Installation Notes:*');
+    expect(text).not.toContain('Conduit Raceway');
+  });
+
+  it('the HTML version mirrors the text version and escapes values', () => {
+    const html = buildPostHtml(withNotes({ stories: 1, solarRun: '1-1/4" PVC <east>' }), defaultSettings());
+    expect(html).toContain('<li><strong>Installation Notes:</strong> 1-story house.</li>');
+    expect(html).toContain('<li><strong>Conduit Raceway:</strong> Solar run: 1-1/4" PVC &lt;east&gt;.</li>');
+  });
+
+  it('a post with no install date omits the date bullet entirely', () => {
+    const r = norcaRecord({ sf: { ...norcaRecord().sf, installScheduledDate: '' } });
+    const text = buildPostText(r, defaultSettings());
+    expect(text).not.toContain('Installation Date & Day');
+    expect(text).toContain('• *Region:* HOU.');
   });
 });

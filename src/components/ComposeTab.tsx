@@ -25,8 +25,7 @@ interface Props {
   onOpenAhjBoard: (id: string) => void;
 }
 
-const NOTE_FIELDS: { key: NoteKey; label: string }[] = [
-  { key: 'layout', label: 'Installation Layout' },
+const NOTE_FIELDS: { key: 'siteSurvey' | 'design' | 'homeowner'; label: string }[] = [
   { key: 'siteSurvey', label: 'Site Survey Feedback' },
   { key: 'design', label: 'Design Feedback' },
   { key: 'homeowner', label: 'Homeowner Feedback' },
@@ -226,7 +225,7 @@ export default function ComposeTab({
       update((r) => ({
         ...r,
         polished: res.polished,
-        usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
+        usePolished: {}, // absent means ON for every box
       }));
       setPolishState({ busy: false, ms: res.ms });
     } catch (err) {
@@ -524,9 +523,9 @@ export default function ComposeTab({
                   <button
                     type="button"
                     className="btn link small"
-                    onClick={() => revertNote(key, !record.usePolished[key])}
+                    onClick={() => revertNote(key, !(record.usePolished[key] !== false))}
                   >
-                    {record.usePolished[key] ? 'Revert to my draft' : 'Use polished'}
+                    {record.usePolished[key] !== false ? 'Revert to my draft' : 'Use polished'}
                   </button>
                 )}
               </div>
@@ -542,7 +541,7 @@ export default function ComposeTab({
                       : 'One bullet per line — Arabic/English ok, AI will polish each line separately'
                 }
               />
-              {hasPolished && record.usePolished[key] && (
+              {hasPolished && record.usePolished[key] !== false && (
                 <div className="muted" style={{ marginTop: 3, whiteSpace: 'pre-wrap' }}>
                   ✨ {polished}
                 </div>
