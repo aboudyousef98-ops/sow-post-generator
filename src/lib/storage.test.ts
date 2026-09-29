@@ -1,24 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import type { ExportFile, PostRecord } from '../types';
+import { makeRecord } from './__fixtures__/makeRecord';
 import { defaultSettings, exportFileName, mergeImport, mergeRecords } from './storage';
 
 function rec(id: string, updatedAt: string, customer: string): PostRecord {
-  return {
+  return makeRecord({
     id,
     status: 'posted',
-    author: 'Aboud Yousef',
-    sf: { customerName: customer, installScheduledDate: '2026-10-01', region: 'HOU', source: 'text' },
-    drivers: [],
-    suggestedLevel: 1,
-    level: 1,
-    notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
-    usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
-    tags: [],
-    warnings: [],
-    createdAt: '2026-09-01T00:00:00.000Z',
     updatedAt,
-    schemaVersion: 1,
-  };
+    sf: { customerName: customer, installScheduledDate: '2026-10-01', region: 'HOU', source: 'text' },
+    tags: [],
+  });
 }
 
 const exportFile = (records: PostRecord[]): ExportFile => ({

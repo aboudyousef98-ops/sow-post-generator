@@ -1,6 +1,7 @@
 // Record factory + tag housekeeping.
 
 import type { PostRecord, Region, Settings } from '../types';
+import { emptyInstallNotes } from './installNotes';
 
 export function blankRecord(author: string, settings: Settings): PostRecord {
   const now = new Date().toISOString();
@@ -13,7 +14,8 @@ export function blankRecord(author: string, settings: Settings): PostRecord {
     suggestedLevel: 1,
     level: 1,
     notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
-    usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
+    installNotes: emptyInstallNotes(),
+    usePolished: {},
     tags: autoTags('HOU', settings, []),
     warnings: [],
     createdAt: now,

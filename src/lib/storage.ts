@@ -27,13 +27,6 @@ export function defaultSettings(): Settings {
     ],
     defaults: { siteSurvey: 'All good.', design: 'All good.', homeowner: 'No feedback.' },
     chips: {
-      layout: [
-        'Back-to-back installation.',
-        'Attic run.',
-        '1-story house.',
-        '2-story house.',
-        'Two walls ({orientations}).',
-      ],
       siteSurvey: [
         'Some of the uploaded photos in Salesforce appear to belong to another project.',
         'Please take sufficient measurements of all walls and wide-angle photos of each wall.',

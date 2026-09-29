@@ -48,6 +48,7 @@ export interface SfFields {
 }
 
 export interface Notes {
+  /** @deprecated Phase 7 — migrated into `installNotes.other`. Kept so pre-Phase-7 JSON still parses. */
   layout: string;
   siteSurvey: string;
   design: string;
@@ -70,6 +71,64 @@ export interface Descriptors {
   outsideLimitsReason?: string;
 }
 
+// ---- Installation Notes (Phase 7) ----------------------------------------
+// spec/10-installation-notes.md §2. Replaces the free-text `Installation
+// Layout` note with guided fields. Additive — schemaVersion stays 1.
+
+export type Orientation =
+  | 'North'
+  | 'North-East'
+  | 'East'
+  | 'South-East'
+  | 'South'
+  | 'South-West'
+  | 'West'
+  | 'North-West';
+
+export type ServiceWork = 'MPU' | 'FSU' | 'FTP';
+
+/** The free-text boxes inside InstallNotes, i.e. the ones the AI may polish. */
+export type InstallTextField =
+  | 'batteryLocation'
+  | 'mainDisconnectLocation'
+  | 'loadRun'
+  | 'serviceRun'
+  | 'solarRun'
+  | 'batteryRun'
+  | 'specialCases'
+  | 'other';
+
+export interface InstallNotes {
+  walls?: 1 | 2 | 3;
+  /** One entry per wall; index i is wall i. '' = not chosen yet. */
+  orientations: (Orientation | '')[];
+  stories?: 1 | 2 | 'other';
+  /** Free text, rendered only when `stories === 'other'`. */
+  storiesOther: string;
+  service?: ServiceWork;
+  batteryLocation: string;
+  mainDisconnectLocation: string;
+  // Conduit raceway
+  loadRun: string;
+  serviceRun: string; // "grid/service run"
+  solarRun: string;
+  batteryRun: string;
+  specialCases: string;
+  /** "Anything else" — free-form, rendered with no label. */
+  other: string;
+}
+
+/**
+ * Every free-text box the AI may polish. Dropdown-derived values (walls,
+ * orientation, stories, service) are deliberately NOT here — they can never be
+ * altered by the model.
+ */
+export type PolishKey =
+  | `install.${InstallTextField}`
+  | 'siteSurvey'
+  | 'design'
+  | 'homeowner';
+
 export interface PostRecord {
   id: string; // uuid
   status: 'draft' | 'posted';
@@ -80,8 +139,16 @@ export interface PostRecord {
   suggestedLevel: Level;
   level: Level; // authoritative (user-selected)
   notes: Notes; // raw drafts (never overwritten by AI)
-  polished?: Partial<Notes>; // AI results; undefined field = not polished
-  usePolished: Record<NoteKey, boolean>;
+  /** Guided Installation Notes (Phase 7). Absent on pre-Phase-7 records until `migrateRecord()` seeds it. */
+  installNotes?: InstallNotes;
+  /** AI results per box; an absent key means "not polished". */
+  polished?: Partial<Record<PolishKey, string>>;
+  /**
+   * Per-box "use the polished version?" flags. An ABSENT key means ON — only an
+   * explicit `false` (the user clicked "Revert to my draft") turns it off.
+   * Always test `usePolished[key] !== false`.
+   */
+  usePolished: Partial<Record<PolishKey, boolean>>;
   tags: string[];
   designerTag?: string;
   warnings: string[];
@@ -148,7 +215,7 @@ export interface Settings {
   regionLead: Record<Region, string | null>;
   designers: string[];
   defaults: { siteSurvey: string; design: string; homeowner: string };
-  chips: Record<NoteKey, string[]>;
+  chips: Partial<Record<PolishKey, string[]>>;
   lastAuthor?: string;
   schemaVersion: 1;
 }

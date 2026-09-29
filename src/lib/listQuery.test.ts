@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
+import { emptyInstallNotes } from './installNotes';
 import { applyQuery, authorsIn, defaultQuery } from './listQuery';
 
 function rec(over: {
@@ -30,7 +31,8 @@ function rec(over: {
     suggestedLevel: over.level ?? 1,
     level: over.level ?? 1,
     notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
-    usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
+    installNotes: emptyInstallNotes(),
+    usePolished: {},
     tags: [],
     designerTag: over.designer,
     warnings: [],

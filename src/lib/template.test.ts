@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
+import { makeRecord } from './__fixtures__/makeRecord';
 import { defaultSettings } from './storage';
 import {
   buildPostHtml,
@@ -13,36 +14,7 @@ import {
 } from './template';
 
 function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
-  return {
-    id: 'test-id',
-    status: 'draft',
-    author: 'Aboud Yousef',
-    sf: {
-      customerName: 'Norca Garcia',
-      installScheduledDate: '2026-10-01',
-      region: 'HOU',
-      jurisdiction: 'Pasadena',
-      siteAddress: '1317 Skylark Rd, Pasadena, TX 77502',
-      source: 'text',
-    },
-    drivers: [],
-    suggestedLevel: 1,
-    level: 1,
-    notes: {
-      layout:
-        'Standard exterior placement, with the equipment installed back-to-back and direct grid, load, and PV routing.',
-      siteSurvey: '',
-      design: '',
-      homeowner: '',
-    },
-    usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
-    tags: ['Tarek Abu Hseini', 'Mohammed Azizi', 'Diego Banegas'],
-    warnings: [],
-    createdAt: '2026-09-26T00:00:00.000Z',
-    updatedAt: '2026-09-26T00:00:00.000Z',
-    schemaVersion: 1,
-    ...overrides,
-  };
+  return makeRecord(overrides);
 }
 
 // Expected output — spec/06 §2 revised per Aboud (2026-09-26): bullets instead

@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { readFileSync } from 'node:fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+import { emptyInstallNotes } from './lib/installNotes';
 
 // jsdom rewrites import.meta.url to http://, so resolve from the project cwd.
 const norca = readFileSync('src/lib/__fixtures__/sf-paste-norca-garcia.txt', 'utf8');
@@ -120,7 +121,8 @@ describe('Compose acceptance flow', () => {
       suggestedLevel: 2,
       level: 2,
       notes: { layout: '', siteSurvey: '', design: '', homeowner: '' },
-      usePolished: { layout: true, siteSurvey: true, design: true, homeowner: true },
+      installNotes: emptyInstallNotes(),
+      usePolished: {},
       tags: [],
       warnings: [],
       createdAt: '2026-09-20T00:00:00.000Z',
