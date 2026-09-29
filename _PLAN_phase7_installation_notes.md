@@ -2660,6 +2660,141 @@ Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
 
 ---
 
+## Task 14: Planning window in the post
+
+> Added 2026-09-30 mid-execution at Aboud's request. **Executes first in Dispatch G**, before Tasks 11 and 12, so the checkpoint doc Task 12 writes describes the final post format. Spec: `../spec/10-installation-notes.md` §12.
+
+**Files:**
+- Modify: `src/lib/classify.ts` (`LEVEL_INFO`)
+- Modify: `src/lib/template.ts` (`buildLines`)
+- Test: `src/lib/classify.test.ts`, `src/lib/template.test.ts`
+
+**Interfaces:**
+- Consumes: `LEVEL_INFO`, `LEVEL_NAMES` from `src/lib/classify.ts`.
+- Produces: `Project Classification` as a two-value bullet.
+
+**Authority:** `Project submission notes/SOW Complexity Classification.pdf` (2026), summary table on p.2. Treat its wording the way `LEVEL_NAMES` is already treated — verbatim, never paraphrased.
+
+- [ ] **Step 1: Write the failing tests**
+
+In `src/lib/classify.test.ts`:
+
+```ts
+describe('LEVEL_INFO planning windows match the 2026 standard (spec/10 §12.2)', () => {
+  it('uses the PDF wording character-for-character', () => {
+    expect(LEVEL_INFO[1].window).toBe('1 crew-day');
+    expect(LEVEL_INFO[2].window).toBe('1 to 1.5 crew-days');
+    expect(LEVEL_INFO[3].window).toBe('1.5 to 2 crew-days');
+    expect(LEVEL_INFO[4].window).toBe('Site-specific, minimum 2 days');
+  });
+
+  it('keeps the Level 4 pre-construction control in scope, not in the window', () => {
+    expect(LEVEL_INFO[4].window).not.toMatch(/field verification/i);
+    expect(LEVEL_INFO[4].scope).toMatch(/field verification before scheduling/i);
+  });
+});
+```
+
+Add `LEVEL_INFO` to that file's import list if it is not already there.
+
+In `src/lib/template.test.ts`:
+
+```ts
+describe('planning window in the post (spec/10 §12.1)', () => {
+  it('renders Project Classification as level + planning window sub-bullets', () => {
+    const text = buildPostText(norcaRecord({ level: 3 }), defaultSettings());
+    expect(text).toContain(
+      '• *Project Classification:*\n    ◦ Level 3 – Service Equipment Modification.\n    ◦ Planning window: 1.5 to 2 crew-days.',
+    );
+  });
+
+  it('uses each level’s own window', () => {
+    expect(buildPostText(norcaRecord({ level: 1 }), defaultSettings())).toContain(
+      '◦ Planning window: 1 crew-day.',
+    );
+    expect(buildPostText(norcaRecord({ level: 4 }), defaultSettings())).toContain(
+      '◦ Planning window: Site-specific, minimum 2 days.',
+    );
+  });
+
+  it('the HTML version carries it as a nested list item', () => {
+    const html = buildPostHtml(norcaRecord({ level: 2 }), defaultSettings());
+    expect(html).toContain('<li>Planning window: 1 to 1.5 crew-days.</li>');
+  });
+});
+```
+
+You must also update the existing full-post golden strings in this file (`NORCA_EXPECTED` and the populated golden added earlier) — `Project Classification` is no longer a single inline line. Derive the new expected text from spec §12.1; do not paste actual output.
+
+- [ ] **Step 2: Run them to verify they fail**
+
+Run: `npx vitest run src/lib/classify.test.ts src/lib/template.test.ts`
+Expected: FAIL — windows still use en-dashes, and the post has no planning-window line.
+
+- [ ] **Step 3: Correct `LEVEL_INFO`**
+
+In `src/lib/classify.ts`, set the four `window` values to the PDF wording exactly as asserted above. Move the Level 4 pre-construction clause out of `window` and onto the end of its `scope`:
+
+```ts
+  4: {
+    scope:
+      'Dirt or concrete trenching, difficult MPU/FSU (interior, obstructed, restricted space), obstructed access, or work outside standard limits; field verification before scheduling & material release',
+    window: 'Site-specific, minimum 2 days',
+  },
+```
+
+Update the JSDoc above `LEVEL_INFO` to name the PDF and its page:
+
+```ts
+/**
+ * Governing scope + planning window per level — verbatim from the 2026
+ * standard's summary table (`SOW Complexity Classification.pdf` p.2, and
+ * spec/04 §1). Treated like LEVEL_NAMES: never paraphrased. The window now
+ * prints in the post as well as on screen (spec/10 §12).
+ */
+```
+
+- [ ] **Step 4: Render it in the post**
+
+In `src/lib/template.ts` `buildLines`, replace the `Project Classification` entry:
+
+```ts
+    {
+      label: 'Project Classification',
+      values: [
+        `Level ${record.level} – ${LEVEL_NAMES[record.level]}.`,
+        `Planning window: ${LEVEL_INFO[record.level].window}.`,
+      ],
+    },
+```
+
+Add `LEVEL_INFO` to the existing `import { LEVEL_NAMES } from './classify';`. No change to the rendering rules is needed or permitted — two values means the existing code already emits `◦` sub-bullets in text and a nested `<ul>` in HTML.
+
+- [ ] **Step 5: Run the gate and commit**
+
+```bash
+npx vitest run && npx tsc --noEmit && npx eslint src netlify
+```
+
+Commit message body:
+
+```
+feat: print the planning window in the post
+
+The install crew reading the handoff could not see how many crew-days to
+reserve — only the designer choosing the level could. Project Classification
+is now a two-value bullet. LEVEL_INFO windows corrected to the 2026 standard's
+exact wording (p.2); the Level 4 field-verification clause moves to scope,
+where the PDF puts it, since it is a pre-construction control and not a
+duration.
+
+Spec: spec/10-installation-notes.md §12
+
+Co-Authored-By: Claude Opus 5 (1M context) <noreply@anthropic.com>
+```
+
+---
+
 ## Handoff — what a human must do after this plan
 
 1. **Deploy:** `npx netlify deploy --build --prod` from the repo root. Netlify has no git integration; the push in Task 12 deploys nothing.
