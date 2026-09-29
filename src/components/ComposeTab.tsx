@@ -8,7 +8,9 @@ import { livePosts, matchAhj } from '../lib/ahj';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
 import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
-import type { Ahj, Level, NoteKey, PostRecord, Region, Settings, SfFields } from '../types';
+import type { Ahj, Level, PolishKey, PostRecord, Region, Settings, SfFields } from '../types';
+import InstallNotesCard from './InstallNotesCard';
+import NoteBox from './NoteBox';
 import OutputColumn from './OutputColumn';
 
 interface Props {
@@ -25,10 +27,10 @@ interface Props {
   onOpenAhjBoard: (id: string) => void;
 }
 
-const NOTE_FIELDS: { key: 'siteSurvey' | 'design' | 'homeowner'; label: string }[] = [
-  { key: 'siteSurvey', label: 'Site Survey Feedback' },
-  { key: 'design', label: 'Design Feedback' },
-  { key: 'homeowner', label: 'Homeowner Feedback' },
+const FEEDBACK_FIELDS: { key: PolishKey; label: string; placeholder: string }[] = [
+  { key: 'siteSurvey', label: 'Site Survey Feedback', placeholder: 'One bullet per line. Empty → "All good."' },
+  { key: 'design', label: 'Design Feedback', placeholder: 'One bullet per line. Empty → "All good."' },
+  { key: 'homeowner', label: 'Homeowner Feedback', placeholder: 'One bullet per line. Empty → "No feedback."' },
 ];
 
 export default function ComposeTab({
@@ -49,9 +51,9 @@ export default function ComposeTab({
   const [showRaw, setShowRaw] = useState(false);
   const [polishState, setPolishState] = useState<{ busy: boolean; ms?: number; error?: string }>({ busy: false });
   const [extractState, setExtractState] = useState<{ busy: boolean; error?: string; thumb?: string }>({ busy: false });
-  const [dropped, setDropped] = useState<Partial<Record<NoteKey, string[]>>>({});
+  const [dropped, setDropped] = useState<Partial<Record<PolishKey, string[]>>>({});
   // Set when the AI returned a different number of bullets than we sent it.
-  const [bulletDrift, setBulletDrift] = useState<Partial<Record<NoteKey, { from: number; to: number }>>>({});
+  const [bulletDrift, setBulletDrift] = useState<Partial<Record<PolishKey, { from: number; to: number }>>>({});
   const fileInput = useRef<HTMLInputElement>(null);
 
   // ---- nearest-metro resolution for OTHER regions ------------------------
@@ -189,7 +191,7 @@ export default function ComposeTab({
 
   // ---- notes / polish ----------------------------------------------------
 
-  const setNote = (key: NoteKey, value: string) => {
+  const setNote = (key: 'siteSurvey' | 'design' | 'homeowner', value: string) => {
     setDropped((d) => ({ ...d, [key]: undefined }));
     setBulletDrift((d) => ({ ...d, [key]: undefined }));
     update((r) => {
@@ -199,10 +201,10 @@ export default function ComposeTab({
     });
   };
 
-  const appendChip = (key: NoteKey, phrase: string) => {
+  const appendChip = (key: 'siteSurvey' | 'design' | 'homeowner', phrase: string) => {
     update((r) => ({
       ...r,
-      notes: { ...r.notes, [key]: r.notes[key] ? `${r.notes[key].replace(/\s+$/, '')} ${phrase}` : phrase },
+      notes: { ...r.notes, [key]: r.notes[key] ? `${r.notes[key].replace(/\s+$/, '')}\n${phrase}` : phrase },
     }));
   };
 
@@ -211,13 +213,17 @@ export default function ComposeTab({
     setPolishState({ busy: true });
     try {
       const res = await rewrite(record.notes);
-      const nextDropped: Partial<Record<NoteKey, string[]>> = {};
-      const nextDrift: Partial<Record<NoteKey, { from: number; to: number }>> = {};
-      for (const { key } of NOTE_FIELDS) {
-        if (record.notes[key].trim() && res.polished[key]) {
-          nextDropped[key] = droppedTokens(record.notes[key], res.polished[key]);
+      const nextDropped: Partial<Record<PolishKey, string[]>> = {};
+      const nextDrift: Partial<Record<PolishKey, { from: number; to: number }>> = {};
+      for (const { key } of FEEDBACK_FIELDS) {
+        // FEEDBACK_FIELDS is typed PolishKey (NoteBox's contract), but the AI
+        // payload here is still the old 4-key Notes shape — Task 10 replaces
+        // this call. Narrow locally rather than widen Notes.
+        const k = key as 'siteSurvey' | 'design' | 'homeowner';
+        if (record.notes[k].trim() && res.polished[k]) {
+          nextDropped[key] = droppedTokens(record.notes[k], res.polished[k]);
           // The prompt forbids merging bullets, but the model can still do it.
-          nextDrift[key] = bulletCountChange(record.notes[key], res.polished[key]) ?? undefined;
+          nextDrift[key] = bulletCountChange(record.notes[k], res.polished[k]) ?? undefined;
         }
       }
       setDropped(nextDropped);
@@ -233,7 +239,7 @@ export default function ComposeTab({
     }
   }, [record.notes, polishState.busy, update]);
 
-  const revertNote = (key: NoteKey, usePolished: boolean) => {
+  const togglePolished = (key: PolishKey, usePolished: boolean) => {
     update((r) => ({ ...r, usePolished: { ...r.usePolished, [key]: usePolished } }));
   };
 
@@ -508,71 +514,37 @@ export default function ComposeTab({
         )}
       </div>
 
+      <InstallNotesCard
+        record={record}
+        settings={settings}
+        update={update}
+        onKeyDown={noteKeyDown}
+        dropped={dropped}
+        drift={bulletDrift}
+        onToggle={togglePolished}
+      />
+
       <div className="card">
-        <h3>Notes</h3>
-        {NOTE_FIELDS.map(({ key, label }) => {
-          const polished = record.polished?.[key];
-          const hasPolished = polished !== undefined && record.notes[key].trim() !== '';
-          return (
-            <div className="note-block" key={key}>
-              <div className="note-head">
-                <label className="field" style={{ marginBottom: 0 }}>
-                  {label}
-                </label>
-                {hasPolished && (
-                  <button
-                    type="button"
-                    className="btn link small"
-                    onClick={() => revertNote(key, !(record.usePolished[key] !== false))}
-                  >
-                    {record.usePolished[key] !== false ? 'Revert to my draft' : 'Use polished'}
-                  </button>
-                )}
-              </div>
-              <textarea
-                value={record.notes[key]}
-                onChange={(e) => setNote(key, e.target.value)}
-                onKeyDown={noteKeyDown}
-                placeholder={
-                  key === 'siteSurvey' || key === 'design'
-                    ? 'One bullet per line. Empty → "All good."'
-                    : key === 'homeowner'
-                      ? 'One bullet per line. Empty → "No feedback."'
-                      : 'One bullet per line — Arabic/English ok, AI will polish each line separately'
-                }
-              />
-              {hasPolished && record.usePolished[key] !== false && (
-                <div className="muted" style={{ marginTop: 3, whiteSpace: 'pre-wrap' }}>
-                  ✨ {polished}
-                </div>
-              )}
-              {dropped[key] && dropped[key]!.length > 0 && (
-                <div className="dropped-tokens">
-                  AI output dropped: {dropped[key]!.map((t) => `\`${t}\``).join(', ')} — check before posting
-                </div>
-              )}
-              {bulletDrift[key] && (
-                <div className="dropped-tokens">
-                  AI returned {bulletDrift[key]!.to} bullet{bulletDrift[key]!.to === 1 ? '' : 's'} instead of{' '}
-                  {bulletDrift[key]!.from} — check it before posting, or “Revert to my draft”.
-                </div>
-              )}
-              <div className="chips">
-                {settings.chips[key]?.map((c) => (
-                  <button
-                    type="button"
-                    key={c}
-                    className="chip"
-                    title={c}
-                    onClick={() => appendChip(key, c)}
-                  >
-                    {c.length > 48 ? `${c.slice(0, 48)}…` : c}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        <h3>Feedback</h3>
+        {FEEDBACK_FIELDS.map(({ key, label, placeholder }) => (
+          <NoteBox
+            key={key}
+            label={label}
+            polishKey={key}
+            value={record.notes[key as 'siteSurvey' | 'design' | 'homeowner']}
+            placeholder={placeholder}
+            onChange={(v) => setNote(key as 'siteSurvey' | 'design' | 'homeowner', v)}
+            onKeyDown={noteKeyDown}
+            chips={settings.chips[key]}
+            onChip={(phrase) => appendChip(key as 'siteSurvey' | 'design' | 'homeowner', phrase)}
+            polished={record.polished?.[key]}
+            usePolished={record.usePolished[key] !== false}
+            onToggle={(use) => togglePolished(key, use)}
+            dropped={dropped[key]}
+            drift={bulletDrift[key]}
+            mode={record.polishMode?.[key]}
+          />
+        ))}
 
         <button
           type="button"

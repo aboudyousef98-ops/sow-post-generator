@@ -3,7 +3,6 @@
 // ComposeTab in Phase 7 so Installation Notes and Feedback share one
 // implementation instead of two copies.
 
-import React from 'react';
 import type { PolishKey, RewriteMode } from '../types';
 
 interface Props {
@@ -44,11 +43,12 @@ export default function NoteBox({
   mode,
 }: Props) {
   const hasPolished = polished !== undefined && value.trim() !== '';
+  const inputId = `note-${polishKey}`;
 
   return (
     <div className="note-block" data-polish-key={polishKey}>
       <div className="note-head">
-        <label className="field" style={{ marginBottom: 0 }}>
+        <label htmlFor={inputId} className="field" style={{ marginBottom: 0 }}>
           {label}
         </label>
         {hasPolished && (
@@ -58,6 +58,7 @@ export default function NoteBox({
         )}
       </div>
       <textarea
+        id={inputId}
         value={value}
         rows={rows}
         onChange={(e) => onChange(e.target.value)}
@@ -77,7 +78,7 @@ export default function NoteBox({
       {drift && (
         <div className="dropped-tokens">
           AI returned {drift.to} bullet{drift.to === 1 ? '' : 's'} instead of {drift.from} — check it
-          before posting, or "Revert to my draft".
+          before posting, or “Revert to my draft”.
         </div>
       )}
       {chips && chips.length > 0 && onChip && (
