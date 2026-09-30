@@ -1,8 +1,10 @@
 # Phase 8 — UI redesign from the Claude Design handoff (queued)
 
-> **Not started.** Queued behind Phase 7 by Aboud's decision, 2026-09-30.
-> This file exists so the decisions survive; the full spec and plan get written
-> when Phase 7's branch is finished.
+> **Done, 2026-09-30.** Built across commits `a141ccc`, `bb55aaa`, `be5e4a4`.
+> What shipped, what was decided and what was deliberately left out is in
+> `_CHECKPOINT_phase8_ui.md` — read that, this file is the brief it was built
+> from. The open questions below were answered before building; the answers
+> are recorded in the checkpoint.
 
 ## Source
 
