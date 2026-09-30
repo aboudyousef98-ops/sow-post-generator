@@ -2,7 +2,7 @@
 // Paths are tokenized: /api/<VITE_API_PATH_TOKEN>/<endpoint>. The token is a
 // build-time constant (not a secret — just a non-guessable path segment).
 
-import type { Notes } from '../types';
+import type { PolishKey } from '../types';
 
 const TOKEN = import.meta.env.VITE_API_PATH_TOKEN ?? 'changeme';
 
@@ -36,14 +36,20 @@ async function post<T>(endpoint: 'rewrite' | 'extract' | 'region', body: unknown
   return json as T;
 }
 
+export interface PolishItem {
+  id: PolishKey;
+  text: string;
+}
+
 export interface RewriteResponse {
-  polished: Notes;
+  items: PolishItem[];
   model: string;
   ms: number;
 }
 
-export function rewrite(notes: Notes): Promise<RewriteResponse> {
-  return post<RewriteResponse>('rewrite', notes);
+/** Polish every non-empty free-text box in one call (spec/10 §5). */
+export function rewrite(items: PolishItem[]): Promise<RewriteResponse> {
+  return post<RewriteResponse>('rewrite', { items });
 }
 
 export interface ExtractedFields {

@@ -63,3 +63,15 @@ describe('bulletCountChange', () => {
     expect(bulletCountChange('x', '')).toBeNull();
   });
 });
+
+describe('guards are per box (spec/10 §5)', () => {
+  it('a dropped unit in one box does not flag another', () => {
+    expect(droppedTokens('2" PVC on the east wall', 'PVC on the east wall.')).toEqual(['2"']);
+    expect(droppedTokens('18 ft through the attic', '18 ft through the attic.')).toEqual([]);
+  });
+
+  it('bullet drift is detected per box', () => {
+    expect(bulletCountChange('a\nb\nc', 'a. b. c.')).toEqual({ from: 3, to: 1 });
+    expect(bulletCountChange('a\nb', 'A.\nB.')).toBeNull();
+  });
+});

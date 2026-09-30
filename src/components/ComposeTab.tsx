@@ -8,6 +8,7 @@ import { livePosts, matchAhj } from '../lib/ahj';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
 import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
+import { POLISH_KEYS, rawTextFor } from '../lib/installNotes';
 import type { Ahj, Level, PolishKey, PostRecord, Region, Settings, SfFields } from '../types';
 import InstallNotesCard from './InstallNotesCard';
 import NoteBox from './NoteBox';
@@ -220,34 +221,42 @@ export default function ComposeTab({
 
   const polish = useCallback(async () => {
     if (polishState.busy) return;
+    // Only non-empty free text is sent. Dropdown-derived sentences (walls,
+    // orientation, stories, service) are never transmitted, so the model cannot
+    // alter them (spec/10 §5).
+    const items = POLISH_KEYS.map((id) => ({ id, text: rawTextFor(record, id) })).filter((i) => i.text.trim());
+    if (!items.length) {
+      toast('Nothing to polish yet — write a note first.');
+      return;
+    }
     setPolishState({ busy: true });
     try {
-      const res = await rewrite(record.notes);
+      const res = await rewrite(items);
+      const byId = new Map(res.items.map((i) => [i.id, i.text]));
+      const polished: Partial<Record<PolishKey, string>> = {};
+      const use: Partial<Record<PolishKey, boolean>> = {};
       const nextDropped: Partial<Record<PolishKey, string[]>> = {};
       const nextDrift: Partial<Record<PolishKey, { from: number; to: number }>> = {};
-      for (const { key } of FEEDBACK_FIELDS) {
-        // FEEDBACK_FIELDS is typed PolishKey (NoteBox's contract), but the AI
-        // payload here is still the old 4-key Notes shape — Task 10 replaces
-        // this call. Narrow locally rather than widen Notes.
-        const k = key as 'siteSurvey' | 'design' | 'homeowner';
-        if (record.notes[k].trim() && res.polished[k]) {
-          nextDropped[key] = droppedTokens(record.notes[k], res.polished[k]);
-          // The prompt forbids merging bullets, but the model can still do it.
-          nextDrift[key] = bulletCountChange(record.notes[k], res.polished[k]) ?? undefined;
-        }
+      for (const sent of items) {
+        const out = byId.get(sent.id);
+        if (out === undefined) continue; // model skipped it — that box keeps its raw draft
+        polished[sent.id] = out;
+        use[sent.id] = true;
+        nextDropped[sent.id] = droppedTokens(sent.text, out);
+        nextDrift[sent.id] = bulletCountChange(sent.text, out) ?? undefined;
       }
       setDropped(nextDropped);
       setBulletDrift(nextDrift);
       update((r) => ({
         ...r,
-        polished: res.polished,
-        usePolished: {}, // absent means ON for every box
+        polished: { ...r.polished, ...polished },
+        usePolished: { ...r.usePolished, ...use },
       }));
       setPolishState({ busy: false, ms: res.ms });
     } catch (err) {
       setPolishState({ busy: false, error: (err as { message?: string })?.message || 'Request failed.' });
     }
-  }, [record.notes, polishState.busy, update]);
+  }, [record, polishState.busy, update, toast]);
 
   const togglePolished = (key: PolishKey, usePolished: boolean) => {
     update((r) => ({ ...r, usePolished: { ...r.usePolished, [key]: usePolished } }));

@@ -53,7 +53,9 @@ export default function InstallNotesCard({
   };
 
   /** A chip click also invalidates that box's stale polished version — it changes the raw text. */
-  const appendChip = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], key: PolishKey, phrase: string) =>
+  const appendChip = (field: (typeof INSTALL_TEXT_FIELDS)[number]['field'], key: PolishKey, phrase: string) => {
+    onClearDropped(key);
+    onClearDrift(key);
     update((r) => {
       const cur = r.installNotes ?? emptyInstallNotes();
       const existing = cur[field];
@@ -64,6 +66,7 @@ export default function InstallNotesCard({
         polished,
       };
     });
+  };
 
   /**
    * Reducing the wall count truncates orientations; increasing appends blanks.
