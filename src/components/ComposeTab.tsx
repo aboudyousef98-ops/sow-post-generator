@@ -9,7 +9,7 @@ import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '.
 import { autoTags } from '../lib/record';
 import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
 import { POLISH_KEYS, rawTextFor } from '../lib/installNotes';
-import type { Ahj, Level, PolishKey, PostRecord, Region, Settings, SfFields } from '../types';
+import type { Ahj, Level, PolishKey, PostRecord, Region, RewriteMode, Settings, SfFields } from '../types';
 import InstallNotesCard from './InstallNotesCard';
 import NoteBox from './NoteBox';
 import OutputColumn from './OutputColumn';
@@ -50,7 +50,11 @@ export default function ComposeTab({
   const [manualFields, setManualFields] = useState<Set<string>>(new Set());
   const [rawPairs, setRawPairs] = useState<Record<string, string> | null>(null);
   const [showRaw, setShowRaw] = useState(false);
-  const [polishState, setPolishState] = useState<{ busy: boolean; ms?: number; error?: string }>({ busy: false });
+  const [polishState, setPolishState] = useState<{
+    busy: false | RewriteMode;
+    ms?: number;
+    error?: string;
+  }>({ busy: false });
   const [extractState, setExtractState] = useState<{ busy: boolean; error?: string; thumb?: string }>({ busy: false });
   const [dropped, setDropped] = useState<Partial<Record<PolishKey, string[]>>>({});
   // Set when the AI returned a different number of bullets than we sent it.
@@ -219,44 +223,50 @@ export default function ComposeTab({
   const clearDropped = (key: PolishKey) => setDropped((d) => ({ ...d, [key]: undefined }));
   const clearDrift = (key: PolishKey) => setBulletDrift((d) => ({ ...d, [key]: undefined }));
 
-  const polish = useCallback(async () => {
-    if (polishState.busy) return;
-    // Only non-empty free text is sent. Dropdown-derived sentences (walls,
-    // orientation, stories, service) are never transmitted, so the model cannot
-    // alter them (spec/10 §5).
-    const items = POLISH_KEYS.map((id) => ({ id, text: rawTextFor(record, id) })).filter((i) => i.text.trim());
-    if (!items.length) {
-      toast('Nothing to polish yet — write a note first.');
-      return;
-    }
-    setPolishState({ busy: true });
-    try {
-      const res = await rewrite(items);
-      const byId = new Map(res.items.map((i) => [i.id, i.text]));
-      const polished: Partial<Record<PolishKey, string>> = {};
-      const use: Partial<Record<PolishKey, boolean>> = {};
-      const nextDropped: Partial<Record<PolishKey, string[]>> = {};
-      const nextDrift: Partial<Record<PolishKey, { from: number; to: number }>> = {};
-      for (const sent of items) {
-        const out = byId.get(sent.id);
-        if (out === undefined) continue; // model skipped it — that box keeps its raw draft
-        polished[sent.id] = out;
-        use[sent.id] = true;
-        nextDropped[sent.id] = droppedTokens(sent.text, out);
-        nextDrift[sent.id] = bulletCountChange(sent.text, out) ?? undefined;
+  const runAi = useCallback(
+    async (mode: RewriteMode) => {
+      if (polishState.busy) return;
+      // Only non-empty free text is sent. Dropdown-derived sentences (walls,
+      // orientation, stories, service) are never transmitted, so the model cannot
+      // alter them (spec/10 §5).
+      const items = POLISH_KEYS.map((id) => ({ id, text: rawTextFor(record, id) })).filter((i) => i.text.trim());
+      if (!items.length) {
+        toast('Nothing to polish yet — write a note first.');
+        return;
       }
-      setDropped(nextDropped);
-      setBulletDrift(nextDrift);
-      update((r) => ({
-        ...r,
-        polished: { ...r.polished, ...polished },
-        usePolished: { ...r.usePolished, ...use },
-      }));
-      setPolishState({ busy: false, ms: res.ms });
-    } catch (err) {
-      setPolishState({ busy: false, error: (err as { message?: string })?.message || 'Request failed.' });
-    }
-  }, [record, polishState.busy, update, toast]);
+      setPolishState({ busy: mode });
+      try {
+        const res = await rewrite(items, mode);
+        const byId = new Map(res.items.map((i) => [i.id, i.text]));
+        const polished: Partial<Record<PolishKey, string>> = {};
+        const use: Partial<Record<PolishKey, boolean>> = {};
+        const modes: Partial<Record<PolishKey, RewriteMode>> = {};
+        const nextDropped: Partial<Record<PolishKey, string[]>> = {};
+        const nextDrift: Partial<Record<PolishKey, { from: number; to: number }>> = {};
+        for (const sent of items) {
+          const out = byId.get(sent.id);
+          if (out === undefined) continue; // model skipped it — that box keeps its raw draft
+          polished[sent.id] = out;
+          use[sent.id] = true;
+          modes[sent.id] = mode;
+          nextDropped[sent.id] = droppedTokens(sent.text, out);
+          nextDrift[sent.id] = bulletCountChange(sent.text, out) ?? undefined;
+        }
+        setDropped(nextDropped);
+        setBulletDrift(nextDrift);
+        update((r) => ({
+          ...r,
+          polished: { ...r.polished, ...polished },
+          usePolished: { ...r.usePolished, ...use },
+          polishMode: { ...r.polishMode, ...modes },
+        }));
+        setPolishState({ busy: false, ms: res.ms });
+      } catch (err) {
+        setPolishState({ busy: false, error: (err as { message?: string })?.message || 'Request failed.' });
+      }
+    },
+    [record, polishState.busy, update, toast],
+  );
 
   const togglePolished = (key: PolishKey, usePolished: boolean) => {
     update((r) => ({ ...r, usePolished: { ...r.usePolished, [key]: usePolished } }));
@@ -267,7 +277,7 @@ export default function ComposeTab({
   const noteKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
-      void polish();
+      void runAi('polish');
     }
   };
 
@@ -570,11 +580,11 @@ export default function ComposeTab({
         <button
           type="button"
           className="btn primary"
-          disabled={polishState.busy || !aiAvailable}
-          onClick={() => void polish()}
+          disabled={polishState.busy !== false || !aiAvailable}
+          onClick={() => void runAi('polish')}
           title={aiAvailable ? 'Ctrl+Enter in any note field' : 'AI offline — manual flow still works'}
         >
-          {polishState.busy ? (
+          {polishState.busy === 'polish' ? (
             <span>
               <span className="spin">✨</span> Polishing…
             </span>
@@ -582,7 +592,22 @@ export default function ComposeTab({
             '✨ Polish with AI'
           )}
         </button>
-        {polishState.ms !== undefined && !polishState.busy && (
+        <button
+          type="button"
+          className="btn secondary"
+          disabled={polishState.busy !== false || !aiAvailable}
+          onClick={() => void runAi('rewrite')}
+          title="Full rewrite — for rough notes. Keeps one bullet per line and every number, but rewrites the wording completely."
+        >
+          {polishState.busy === 'rewrite' ? (
+            <span>
+              <span className="spin">🔄</span> Rewriting…
+            </span>
+          ) : (
+            'هري ابو روي'
+          )}
+        </button>
+        {polishState.ms !== undefined && polishState.busy === false && (
           <span className="muted" style={{ marginLeft: 8 }}>
             Polished ✓ {(polishState.ms / 1000).toFixed(1)}s
           </span>
@@ -590,7 +615,7 @@ export default function ComposeTab({
         {polishState.error && (
           <div className="error-inline">
             {polishState.error}{' '}
-            <button type="button" className="btn link small" onClick={() => void polish()}>
+            <button type="button" className="btn link small" onClick={() => void runAi('polish')}>
               Retry
             </button>
           </div>

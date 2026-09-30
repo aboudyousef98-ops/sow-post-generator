@@ -28,6 +28,21 @@ describe('RewriteRequest', () => {
   });
 });
 
+describe('rewrite mode (spec/10 §11.2)', () => {
+  it('defaults to polish when mode is absent', () => {
+    expect(RewriteRequest.parse(ok).mode).toBe('polish');
+  });
+
+  it('accepts both modes', () => {
+    expect(RewriteRequest.parse({ ...ok, mode: 'rewrite' }).mode).toBe('rewrite');
+    expect(RewriteRequest.parse({ ...ok, mode: 'polish' }).mode).toBe('polish');
+  });
+
+  it('rejects an unknown mode', () => {
+    expect(RewriteRequest.safeParse({ ...ok, mode: 'freestyle' }).success).toBe(false);
+  });
+});
+
 describe('RewriteResponse', () => {
   it('accepts a well-formed model reply', () => {
     expect(RewriteResponse.safeParse(ok).success).toBe(true);

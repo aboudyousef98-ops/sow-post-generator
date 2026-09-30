@@ -64,7 +64,7 @@ describe('bulletCountChange', () => {
   });
 });
 
-describe('guards are per box (spec/10 §5)', () => {
+describe('guards compare each box independently', () => {
   it('a dropped unit in one box does not flag another', () => {
     expect(droppedTokens('2" PVC on the east wall', 'PVC on the east wall.')).toEqual(['2"']);
     expect(droppedTokens('18 ft through the attic', '18 ft through the attic.')).toEqual([]);

@@ -4,7 +4,11 @@
 
 import { z } from 'zod';
 
-/** MUST stay in sync with `PolishKey` in src/types.ts. */
+/**
+ * MUST stay in sync with `POLISH_KEYS` in `src/lib/installNotes.ts` — the
+ * "key list stays in sync with the client" test in rewriteSchema.test.ts
+ * fails loudly if the two ever drift apart.
+ */
 export const POLISH_KEYS = [
   'install.batteryLocation',
   'install.mainDisconnectLocation',
@@ -22,7 +26,12 @@ export const POLISH_KEYS = [
 const RequestItem = z.object({ id: z.enum(POLISH_KEYS), text: z.string().max(3000) }).strict();
 
 export const RewriteRequest = z
-  .object({ items: z.array(RequestItem).min(1).max(POLISH_KEYS.length) })
+  .object({
+    items: z.array(RequestItem).min(1).max(POLISH_KEYS.length),
+    // Optional and defaulted so a stale client that omits it keeps the old
+    // behaviour instead of failing (spec/10 §11.2).
+    mode: z.enum(['polish', 'rewrite']).optional().default('polish'),
+  })
   .strict()
   .refine((v) => new Set(v.items.map((i) => i.id)).size === v.items.length, {
     message: 'duplicate id',
