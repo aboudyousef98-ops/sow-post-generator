@@ -9,13 +9,16 @@ import { fetchSharedAhjs, fetchSharedRecords, health, putSharedAhjs, putSharedRe
 import { mergeAhjs } from './lib/ahj';
 import { blankRecord, hasContent } from './lib/record';
 import {
+  clearLiveDraft,
   loadAhjs,
   loadCurrentId,
+  loadLiveDraft,
   loadRecords,
   loadSettings,
   mergeRecords,
   saveAhjs,
   saveCurrentId,
+  saveLiveDraft,
   saveRecords,
   saveSettings,
 } from './lib/storage';
@@ -38,6 +41,14 @@ export default function App() {
     const stored = loadRecords();
     const id = loadCurrentId();
     const found = id ? stored.find((r) => r.id === id && r.status === 'draft') : undefined;
+    // Crash recovery: the live key is written on every keystroke, the draft
+    // list on a 500 ms debounce. After a power cut the live copy is the newer
+    // of the two, and it is the one with the work in it.
+    const live = loadLiveDraft();
+    if (live && live.status === 'draft' && !live.deletedAt) {
+      const onDisk = stored.find((r) => r.id === live.id);
+      if (!onDisk || live.updatedAt > onDisk.updatedAt) return live;
+    }
     return found ?? blankRecord(loadSettings().lastAuthor ?? 'Aboud Yousef', loadSettings());
   });
 
@@ -179,6 +190,18 @@ export default function App() {
     };
   }, []);
 
+  // Another tab of this app wrote to the store. saveRecords() already merges
+  // rather than overwrites, so nothing is lost either way — this just stops
+  // THIS tab showing a stale list until it is reloaded.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== 'sowpost.records') return;
+      setRecordsState(loadRecords());
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, []);
+
   useEffect(() => {
     health()
       .then((h) => setAiStatus(h.ok && h.hasKey ? 'ok' : 'off'))
@@ -196,13 +219,20 @@ export default function App() {
   // ---- record lifecycle --------------------------------------------------
 
   const updateCurrent = useCallback((updater: (r: PostRecord) => PostRecord) => {
-    setCurrent((r) => ({ ...updater(r), updatedAt: new Date().toISOString() }));
+    setCurrent((r) => {
+      const next = { ...updater(r), updatedAt: new Date().toISOString() };
+      // Synchronous, every change, no debounce. This is the copy that survives
+      // a power cut; the draft list behind it is still debounced.
+      if (hasContent(next)) saveLiveDraft(next);
+      return next;
+    });
   }, []);
 
   const newPost = useCallback(() => {
     // Force-save before clearing: the 500 ms autosave may not have fired yet,
     // so "New post" must never be able to discard typed work.
     if (hasContent(currentRef.current)) commitDraft(currentRef.current);
+    clearLiveDraft();
     setCurrent(blankRecord(settings.lastAuthor ?? settings.authors[0], settings));
     saveCurrentId(null);
     setTab('compose');
@@ -414,7 +444,12 @@ export default function App() {
           value={current.author}
           onChange={(e) => updateCurrent((r) => ({ ...r, author: e.target.value }))}
         >
-          {settings.authors.map((a) => (
+          {/* An author who has been removed from the roster would otherwise
+              make this render blank, which reads as "the control is missing". */}
+          {(settings.authors.includes(current.author)
+            ? settings.authors
+            : [current.author, ...settings.authors].filter(Boolean)
+          ).map((a) => (
             <option key={a}>{a}</option>
           ))}
         </select>

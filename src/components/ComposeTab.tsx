@@ -413,7 +413,9 @@ export default function ComposeTab({
             />
           </label>
           <label className="field">
-            Install Scheduled Date * {weekday && <span className="badge">→ {weekday}</span>}
+            {/* No asterisk: the date stopped being required in Phase 7 (spec/10 §1).
+                The marker was left behind and still read as "you must fill this in". */}
+            Install Scheduled Date {weekday && <span className="badge">→ {weekday}</span>}
             {badge('installScheduledDate')}
             <input
               type="date"

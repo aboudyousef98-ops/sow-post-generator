@@ -8,6 +8,8 @@ const KEY_RECORDS = 'sowpost.records';
 const KEY_SETTINGS = 'sowpost.settings';
 const KEY_CURRENT = 'sowpost.currentId';
 const KEY_AHJS = 'sowpost.ahjs';
+/** The Compose record as it is this instant — see saveLiveDraft(). */
+const KEY_LIVE = 'sowpost.live';
 
 export function defaultSettings(): Settings {
   return {
@@ -170,8 +172,47 @@ export function loadRecords(): PostRecord[] {
   return Array.isArray(arr) ? arr.map((r) => migrateRecord(migrate(r))) : [];
 }
 
+/**
+ * Merge-on-write, never overwrite.
+ *
+ * This used to be a plain `setItem` of the in-memory array, which meant any
+ * writer holding a stale array silently deleted everyone else's work — a second
+ * tab, or this tab a moment after a background sync landed. Now the array is
+ * merged over what is actually on disk, newest `updatedAt` per id winning, so
+ * a write can add and update but never remove. Deletes still work: they are
+ * tombstones (`deletedAt`) carrying a newer timestamp, so they win the merge.
+ */
 export function saveRecords(records: PostRecord[]): void {
-  localStorage.setItem(KEY_RECORDS, JSON.stringify(records));
+  const onDisk = read<PostRecord[]>(KEY_RECORDS);
+  const base = Array.isArray(onDisk) ? onDisk : [];
+  const merged = mergeRecords(base, records).records;
+  localStorage.setItem(KEY_RECORDS, JSON.stringify(merged));
+}
+
+/**
+ * The record open in Compose, written synchronously on every single change.
+ *
+ * The draft list is written on a 500 ms debounce, and the unload flush only
+ * covers a tab or window closing — neither survives a power cut or a forced
+ * shutdown. This key does: it is one small synchronous write per keystroke, so
+ * the worst case is losing nothing rather than the last half second. It is
+ * cleared once the record is safely in the draft list.
+ */
+export function saveLiveDraft(record: PostRecord): void {
+  try {
+    localStorage.setItem(KEY_LIVE, JSON.stringify(record));
+  } catch {
+    // Quota or private-mode failure must never break typing.
+  }
+}
+
+export function loadLiveDraft(): PostRecord | null {
+  const r = read<PostRecord>(KEY_LIVE);
+  return r && typeof r === 'object' && 'id' in r ? migrateRecord(migrate(r)) : null;
+}
+
+export function clearLiveDraft(): void {
+  localStorage.removeItem(KEY_LIVE);
 }
 
 export function loadSettings(): Settings {

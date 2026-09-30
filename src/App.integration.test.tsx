@@ -733,3 +733,70 @@ describe('opening another draft never discards what is on screen', () => {
     expect(byName('Second Project')?.notes.design).toBe('still typing this');
   });
 });
+
+// ---- Aboud, 2026-09-30: "the guys are losing their data" -------------------
+// The draft list is written on a 500 ms debounce and flushed on unload. Neither
+// survives a power cut or a forced shutdown, which is how a laptop really dies.
+
+describe('a power cut loses nothing', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 })),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('writes every keystroke to the live key with no debounce', () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), {
+      target: { value: 'AC disconnect must be 200A' },
+    });
+
+    // Read it on the very next statement — no waitFor, no timers.
+    const live = JSON.parse(localStorage.getItem('sowpost.live') ?? 'null');
+    expect(live.notes.design).toBe('AC disconnect must be 200A');
+    // And the debounced list has NOT been written yet, which is the whole point.
+    expect(localStorage.getItem('sowpost.records')).toBeNull();
+  });
+
+  it('restores the work on the next load', () => {
+    const { unmount } = render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Power Cut Project' } });
+    fireEvent.change(screen.getByLabelText(/^Load run/i), { target: { value: '18 ft through the attic' } });
+
+    // Kill it the way a power cut does: no unload event, no flush, and the
+    // debounced draft-list write never happened.
+    const live = localStorage.getItem('sowpost.live');
+    unmount();
+    localStorage.removeItem('sowpost.records');
+    localStorage.setItem('sowpost.live', live ?? '');
+
+    render(<App />);
+    expect((screen.getByLabelText(/Customer name/i) as HTMLInputElement).value).toBe('Power Cut Project');
+    expect((screen.getByLabelText(/^Load run/i) as HTMLTextAreaElement).value).toBe('18 ft through the attic');
+  });
+
+  it('does not resurrect a stale live draft over a newer saved one', async () => {
+    const { unmount } = render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'First text' } });
+    await waitFor(() => expect(localStorage.getItem('sowpost.records')).toBeTruthy(), { timeout: 2000 });
+
+    // The saved list moves on; the live key is left holding the older text.
+    const stale = JSON.parse(localStorage.getItem('sowpost.live') ?? 'null');
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Second text' } });
+    await waitFor(() =>
+      expect(localStorage.getItem('sowpost.records')).toContain('Second text'),
+      { timeout: 2000 },
+    );
+    localStorage.setItem('sowpost.live', JSON.stringify(stale));
+    unmount();
+
+    render(<App />);
+    expect((screen.getByLabelText(/Customer name/i) as HTMLInputElement).value).toBe('Second text');
+  });
+});

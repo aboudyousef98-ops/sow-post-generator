@@ -28,6 +28,7 @@ export const ORIENTATIONS: Orientation[] = [
   'South-West',
   'West',
   'North-West',
+  'Interior - Garage',
 ];
 
 export const SERVICE_WORK: ServiceWork[] = ['MPU', 'FSU', 'FTP'];

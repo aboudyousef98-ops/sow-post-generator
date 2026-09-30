@@ -83,7 +83,9 @@ export type Orientation =
   | 'South'
   | 'South-West'
   | 'West'
-  | 'North-West';
+  | 'North-West'
+  /** Not a compass direction — an interior wall inside the garage (Aboud, 2026-09-30). */
+  | 'Interior - Garage';
 
 export type ServiceWork = 'MPU' | 'FSU' | 'FTP';
 

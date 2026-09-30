@@ -114,6 +114,24 @@ h4 {
   gap: 4px;
   margin-left: 16px;
   height: 100%;
+  /* The tabs are the only thing here allowed to run out of room. Without
+     this they push "Posting as" and the status pill off the right edge on a
+     laptop screen, which is exactly what happened. */
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.topbar nav::-webkit-scrollbar {
+  display: none;
+}
+
+/* Never let the right-hand controls be the thing that shrinks. */
+.topbar .status-pill,
+.topbar .author-pill,
+.topbar .title {
+  flex-shrink: 0;
 }
 
 .topbar nav button {
