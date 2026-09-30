@@ -40,13 +40,17 @@ npm run test
    (Or paste/drag a screenshot — it goes through AI extraction; verify name + date.)
    Paste the Proj. Coordination tab too — the second paste merges in.
 3. Check the warnings strip; fix any field (everything is editable).
-4. Tick the drivers → the suggested level and the Installation Layout seed update automatically.
-   The Project Level select is yours — the hint never blocks.
-5. Write the four notes in your own words (Arabic/English ok), **one bullet per line** →
-   **✨ Polish with AI** (Ctrl+Enter in any note field). The AI edits each line separately and
-   keeps your wording — it will not merge your bullets into a paragraph. Red hints mean either a
-   number/unit went missing or the AI changed the number of bullets — check before posting.
-   "Revert to my draft" is per field.
+4. Pick the **Project Level** yourself — the scope and planning window under the
+   select are there to remind you what each level covers.
+5. Fill in **Installation Notes**: walls + their orientation, stories, and the
+   service equipment are dropdowns; the four conduit runs, special cases and
+   "anything else" are boxes. Everything you put here is exactly what the post
+   prints — empty fields simply disappear. Then write the three **Feedback**
+   boxes in your own words (Arabic/English ok), **one bullet per line** →
+   **✨ Polish with AI** (Ctrl+Enter in any box). The AI only ever sees the
+   free-text boxes — it cannot change a wall count, an orientation or an MPU.
+   Red hints mean a number/unit went missing or the bullet count changed.
+   "Revert to my draft" is per box.
 6. **Copy for Slack** (Ctrl+Shift+C) → paste in the channel → re-type the @mentions → attach the
    elevation PDF + BOS → **✅ Mark as posted**.
 7. **Export JSON** from History regularly — history lives in your browser only.
@@ -73,6 +77,49 @@ PROJECT INFORMATION table needs — Project Name, Property Address, Region, AHJ,
   use the five single Copy buttons — same result.
 - The Region cell is the Salesforce region text only (`Corpus Christi`), without the
   `– Near HOU` tag that the Slack post carries.
+
+## Projects with no install date (2026-09-30)
+
+A project with no scheduled install date is fine now. There is no warning, and
+Copy for Slack / Mark as posted / Mark as done all work without one — the
+"Installation Date & Day" line just does not appear in the post. Add the date
+later and the line comes back.
+
+## Installation Notes (2026-09-30)
+
+The old free-text "Installation Layout" box is now a guided section. Anything
+you had written in it on an existing draft has moved to **Anything else** at the
+bottom of Installation Notes — nothing was lost.
+
+The post now carries two bullets instead of one: **Installation Notes** (walls,
+stories, service equipment, battery and main-disconnect locations, special
+cases) and **Conduit Raceway** (load / grid-service / solar / battery runs).
+Either disappears entirely when you leave it empty.
+
+**Project Classification** now prints the planning window under the level, so
+the crew reading the post can see how many crew-days to reserve:
+
+```
+• *Project Classification:*
+    ◦ Level 3 – Service Equipment Modification.
+    ◦ Planning window: 1.5 to 2 crew-days.
+```
+
+## The second AI button — هري ابو روي (2026-09-30)
+
+Beside **✨ Polish with AI** there is a second button. Both send only the
+free-text boxes, and both keep one bullet per line and every number, unit and
+brand exactly as you wrote it.
+
+- **✨ Polish with AI** — a light copy-edit. A line that is already correct comes
+  back unchanged. Use it when your English is fine and you want it tidy.
+- **هري ابو روي** — a full rewrite. Use it when the note is rough, half-formed,
+  or mixed Arabic and English. It will change every word of a line to make it
+  read professionally; it still cannot change what the line says.
+
+A box polished by the rewrite button is marked 🔄 in its preview instead of ✨,
+so you can see which text the machine reworded. "Revert to my draft" works the
+same for both.
 
 ## Screenshots
 
