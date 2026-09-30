@@ -800,3 +800,77 @@ describe('a power cut loses nothing', () => {
     expect((screen.getByLabelText(/Customer name/i) as HTMLInputElement).value).toBe('Second text');
   });
 });
+
+// ---- Aboud, 2026-09-30: edit the post by hand, and always get back ---------
+
+describe('manual edit of the post', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 })),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const preview = () => (document.querySelector('.preview') as HTMLElement)?.textContent ?? '';
+
+  it('typed text replaces the generated post, and the form stops driving it', async () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
+    expect(preview()).toContain('Norca Garcia');
+
+    fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
+    fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'I typed this myself.' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => expect(preview()).toContain('I typed this myself.'));
+    // The form no longer reaches the post.
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Someone Else' } });
+    expect(preview()).toContain('I typed this myself.');
+    expect(preview()).not.toContain('Someone Else');
+    expect(screen.getByText(/the form no longer changes it/i)).toBeTruthy();
+  });
+
+  it('Cancel leaves the generated post alone', () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
+    fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
+    fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'throw this away' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(preview()).toContain('Norca Garcia');
+    expect(preview()).not.toContain('throw this away');
+  });
+
+  it('"Revert to generated" always gets the real post back', async () => {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
+    fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
+    fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'hand written' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(preview()).toContain('hand written'));
+
+    fireEvent.click(screen.getByRole('button', { name: /Revert to generated/i }));
+
+    await waitFor(() => expect(preview()).toContain('Norca Garcia'));
+    expect(preview()).not.toContain('hand written');
+    expect(screen.queryByText(/the form no longer changes it/i)).toBeNull();
+  });
+
+  it('survives a reload, like everything else on the record', async () => {
+    const { unmount } = render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
+    fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
+    fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'survives the reload' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(localStorage.getItem('sowpost.live')).toContain('survives the reload'));
+    unmount();
+
+    render(<App />);
+    await waitFor(() => expect(preview()).toContain('survives the reload'));
+  });
+});

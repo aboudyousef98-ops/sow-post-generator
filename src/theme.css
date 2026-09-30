@@ -1814,3 +1814,64 @@ table.list tr.row:hover {
 .settings-stack > label.field {
   margin-bottom: 0;
 }
+
+/* The two AI buttons sit under the three feedback boxes — where you are once
+   the notes are written (Aboud, 2026-09-30, overriding the design, which puts
+   a single "Polish all with AI" in the section header). */
+.ai-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.ai-actions .muted {
+  font-size: 12px;
+}
+
+/* ---- Manual edit of the post (Aboud, 2026-09-30) ------------------------- */
+
+.preview-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.preview-head-actions .muted {
+  font-size: 12px;
+}
+
+.manual-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px 16px;
+  background: var(--dyn-warn-bg);
+  border-bottom: 1px solid var(--dyn-yellow);
+  font-size: 12.5px;
+  color: var(--dyn-ink);
+}
+
+.manual-banner .btn.link {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.preview-editor {
+  width: 100%;
+  border: 0;
+  border-radius: 0;
+  margin: 0;
+  padding: 14px 16px;
+  font-family: inherit;
+  font-size: 13.5px;
+  line-height: 1.55;
+  resize: vertical;
+}
+
+.preview-editor:focus {
+  outline: 2px solid var(--dyn-teal);
+  outline-offset: -2px;
+}

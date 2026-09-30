@@ -132,23 +132,32 @@ describe('installNoteLines — polish selection', () => {
 });
 
 describe('conduitRunLines (spec/10 §3.2)', () => {
-  it('labels the four runs in order', () => {
+  // Order fixed by Aboud, 2026-09-30: grid/service, load, solar, battery.
+  it('labels the four runs in the order the crew runs them', () => {
     expect(
       conduitRunLines(
         n({ loadRun: '18 ft through the attic', serviceRun: '2" PVC, 12 ft', solarRun: 'east wall', batteryRun: '6 ft' }),
         off,
       ),
     ).toEqual([
-      'Load run: 18 ft through the attic.',
-      'Grid/service run: 2" PVC, 12 ft.',
-      'Solar run: east wall.',
-      'Battery run: 6 ft.',
+      { label: 'Grid/service run', text: '2" PVC, 12 ft.', sub: [] },
+      { label: 'Load run', text: '18 ft through the attic.', sub: [] },
+      { label: 'Solar run', text: 'east wall.', sub: [] },
+      { label: 'Battery run', text: '6 ft.', sub: [] },
     ]);
   });
 
   it('drops the empty runs and yields nothing when all four are empty', () => {
-    expect(conduitRunLines(n({ solarRun: 'east wall' }), off)).toEqual(['Solar run: east wall.']);
+    expect(conduitRunLines(n({ solarRun: 'east wall' }), off)).toEqual([
+      { label: 'Solar run', text: 'east wall.', sub: [] },
+    ]);
     expect(conduitRunLines(n(), off)).toEqual([]);
+  });
+
+  it('a run written as several lines keeps them as its own points', () => {
+    expect(conduitRunLines(n({ loadRun: '2" PVC from the meter\ntwo 90° bends' }), off)).toEqual([
+      { label: 'Load run', text: '', sub: ['2" PVC from the meter.', 'Two 90° bends.'] },
+    ]);
   });
 });
 

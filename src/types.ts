@@ -89,6 +89,13 @@ export type Orientation =
 
 export type ServiceWork = 'MPU' | 'FSU' | 'FTP';
 
+/**
+ * One value under a post bullet. A plain string is a single sub-bullet; the
+ * object form carries its own points beneath it, which is how a conduit run
+ * holding several facts renders (spec/10 §3.2).
+ */
+export type PostValue = string | { label?: string; text: string; sub: string[] };
+
 /** The free-text boxes inside InstallNotes, i.e. the ones the AI may polish. */
 export type InstallTextField =
   | 'batteryLocation'
@@ -169,6 +176,17 @@ export interface PostRecord {
    * automatically un-approves (and switching back restores the approval).
    */
   ahjApprovedId?: string;
+  /**
+   * The post, typed by hand in the preview (Aboud, 2026-09-30).
+   *
+   * Set only by the preview's "Edit" button. While it is set it REPLACES the
+   * generated post everywhere — preview, both clipboards, and what gets frozen
+   * at Mark as posted — and the form stops driving the text. That is
+   * deliberate: silently regenerating over someone's manual wording would lose
+   * work, so detaching is announced in the UI and undone with "Revert to
+   * generated", which clears this field.
+   */
+  manualText?: string;
   finalText?: string; // frozen at "Mark as posted"
   /** Rich-clipboard version frozen alongside finalText, so later AHJ board edits never change what History copies. */
   finalHtml?: string;

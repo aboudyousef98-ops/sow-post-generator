@@ -11,6 +11,7 @@ import type {
   Orientation,
   PolishKey,
   PostRecord,
+  PostValue,
   ServiceWork,
 } from '../types';
 import { effectiveText, noteLines, punctuate, stripBullet, type PolishState } from './noteText';
@@ -97,6 +98,28 @@ function labelled(label: string, raw: string, key: PolishKey, p: PolishState): s
   return parts.length ? [`${label}: ${parts.join('; ')}.`] : [];
 }
 
+/** Sub-points read as sentences of their own, so they start with a capital. */
+function capitalize(t: string): string {
+  return t ? t[0].toUpperCase() + t.slice(1) : t;
+}
+
+/**
+ * A conduit run, as one sub-bullet (spec/10 §3.2, revised by Aboud 2026-09-30).
+ *
+ * One line reads inline — `Load run: 18 ft through the attic.` Several lines
+ * become their own points UNDER the run's label instead of being joined with
+ * "; ", because a run carrying three separate facts was unreadable as one
+ * sentence. The Installation Notes labelled boxes still join; only runs nest.
+ */
+function labelledRun(label: string, raw: string, key: PolishKey, p: PolishState): PostValue[] {
+  const parts = effectiveText(raw, key, p).split('\n').map(stripBullet).map(clause).filter(Boolean);
+  if (!parts.length) return [];
+  // The label is kept separate from the text so the rich clipboard can
+  // underline it (Aboud, 2026-09-30).
+  if (parts.length === 1) return [{ label, text: `${parts[0]}.`, sub: [] }];
+  return [{ label, text: '', sub: parts.map((x) => punctuate(capitalize(x))) }];
+}
+
 const field = (f: InstallTextField) => INSTALL_TEXT_FIELDS.find((x) => x.field === f)!;
 
 /** The `Installation Notes` bullet's sub-bullets, in the order spec/10 §3.1 fixes. */
@@ -128,11 +151,13 @@ export function installNoteLines(n: InstallNotes | undefined, p: PolishState): s
 }
 
 /** The `Conduit Raceway` bullet's sub-bullets. All four empty -> bullet dropped. */
-export function conduitRunLines(n: InstallNotes | undefined, p: PolishState): string[] {
+export function conduitRunLines(n: InstallNotes | undefined, p: PolishState): PostValue[] {
   if (!n) return [];
-  const runs: InstallTextField[] = ['loadRun', 'serviceRun', 'solarRun', 'batteryRun'];
+  // Order fixed by Aboud, 2026-09-30: grid/service first, then load, solar,
+  // battery — the order the crew actually runs them on site.
+  const runs: InstallTextField[] = ['serviceRun', 'loadRun', 'solarRun', 'batteryRun'];
   return runs.flatMap((f) => {
     const def = field(f);
-    return labelled(def.label, n[f], def.key, p);
+    return labelledRun(def.label, n[f], def.key, p);
   });
 }

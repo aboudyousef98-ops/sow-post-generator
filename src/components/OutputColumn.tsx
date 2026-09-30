@@ -16,6 +16,7 @@ interface Props {
   record: PostRecord;
   settings: Settings;
   ahjs?: Ahj[];
+  update: (updater: (r: PostRecord) => PostRecord) => void;
   onMarkPosted: () => void;
   onNewPost: () => void;
   onSaveDraft: () => void;
@@ -28,9 +29,15 @@ interface Check {
   action?: string;
 }
 
-export default function OutputColumn({ record, settings, ahjs, onMarkPosted, toast }: Props) {
+export default function OutputColumn({ record, settings, ahjs, update, onMarkPosted, toast }: Props) {
   const text = buildPostText(record, settings, ahjs);
   const html = buildPostHtml(record, settings, ahjs);
+
+  // Hand-editing the post (Aboud, 2026-09-30). `draft` holds the text while it
+  // is being typed; it is only written to the record on Save, so Cancel really
+  // does leave everything alone.
+  const [editing, setEditing] = useState<string | null>(null);
+  const manual = !!record.manualText?.trim();
 
   const missing = missingRequired(record);
   const ready = missing.length === 0;
@@ -183,10 +190,66 @@ export default function OutputColumn({ record, settings, ahjs, onMarkPosted, toa
       <div className="card preview-card">
         <div className="preview-head">
           <span className="section-label">Slack preview</span>
-          <span className="muted">Updates as you type</span>
+          {editing === null ? (
+            <span className="preview-head-actions">
+              <span className="muted">{manual ? 'Edited by hand' : 'Updates as you type'}</span>
+              <button type="button" className="btn link small" onClick={() => setEditing(text)}>
+                {manual ? 'Edit again' : 'Manual edit'}
+              </button>
+            </span>
+          ) : (
+            <span className="preview-head-actions">
+              <button
+                type="button"
+                className="btn small primary"
+                onClick={() => {
+                  const next = editing;
+                  update((r) => ({ ...r, manualText: next.trim() ? next : undefined }));
+                  setEditing(null);
+                  toast(next.trim() ? 'Post saved as you typed it.' : 'Back to the generated post.');
+                }}
+              >
+                Save
+              </button>
+              <button type="button" className="btn small secondary" onClick={() => setEditing(null)}>
+                Cancel
+              </button>
+            </span>
+          )}
         </div>
-        {/* buildPostHtml escapes all user text — safe to render. */}
-        <div className="preview" dangerouslySetInnerHTML={{ __html: html }} />
+
+        {/* The one thing a manual edit must never do is lose the generated
+            post silently, so say so and keep the way back one click away. */}
+        {manual && editing === null && (
+          <div className="manual-banner">
+            <span>
+              This post was edited by hand — the form no longer changes it.
+            </span>
+            <button
+              type="button"
+              className="btn link small"
+              onClick={() => {
+                update((r) => ({ ...r, manualText: undefined }));
+                toast('Reverted to the generated post.');
+              }}
+            >
+              Revert to generated
+            </button>
+          </div>
+        )}
+
+        {editing === null ? (
+          // buildPostHtml escapes all user text — safe to render.
+          <div className="preview" dangerouslySetInnerHTML={{ __html: html }} />
+        ) : (
+          <textarea
+            className="preview-editor"
+            value={editing}
+            aria-label="Post text"
+            onChange={(e) => setEditing(e.target.value)}
+            rows={18}
+          />
+        )}
       </div>
     </aside>
   );

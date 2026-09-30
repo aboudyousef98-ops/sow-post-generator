@@ -1,6 +1,6 @@
 // Canonical post template + clipboard formats — spec/06-output-template.md.
 
-import type { Ahj, PostRecord, Settings } from '../types';
+import type { Ahj, PostRecord, PostValue, Settings } from '../types';
 import { livePosts, matchAhj } from './ahj';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
@@ -98,9 +98,29 @@ export function finalTags(record: PostRecord): string[] {
 
 interface PostLines {
   intro: string[];
-  /** One entry per bullet. `values` holds one string per sub-bullet; a single value renders inline. */
-  items: { label: string; values: string[] }[];
+  /** One entry per bullet. `values` holds one entry per sub-bullet; a single value renders inline. */
+  items: { label: string; values: PostValue[] }[];
   tags: string[];
+}
+
+/**
+ * A value as plain text. Slack mrkdwn has no underline, so the label that the
+ * rich clipboard underlines is simply written out here.
+ */
+function valueText(v: PostValue): string {
+  if (typeof v === 'string') return v;
+  return v.label ? (v.text ? `${v.label}: ${v.text}` : `${v.label}:`) : v.text;
+}
+
+/** The same value for the rich clipboard, where the label IS underlined. */
+function valueHtml(v: PostValue): string {
+  if (typeof v === 'string') return esc(v);
+  if (!v.label) return esc(v.text);
+  return `<u>${esc(v.label)}:</u>${v.text ? ` ${esc(v.text)}` : ''}`;
+}
+
+function valueSub(v: PostValue): string[] {
+  return typeof v === 'string' ? [] : v.sub;
 }
 
 /** A fixed one-line value: dropped from the post when blank. */
@@ -157,12 +177,23 @@ export function ahjSection(record: PostRecord, ahjs: Ahj[] | undefined): { name:
 
 /** Slack mrkdwn version (also the plain-text clipboard fallback). Bulleted list. */
 export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj[]): string {
+  // Typed by hand in the preview: it replaces the generated post outright.
+  if (record.manualText?.trim()) return record.manualText;
+
   const { intro, items, tags } = buildLines(record, settings);
   const lines = [...intro];
   for (const it of items) {
-    // One value stays inline; several become indented sub-bullets under the label.
-    if (it.values.length === 1) lines.push(`• *${it.label}:* ${it.values[0]}`);
-    else lines.push(`• *${it.label}:*`, ...it.values.map((v) => `    ◦ ${v}`));
+    // One value stays inline; several become indented sub-bullets under the
+    // label, and a value with its own points gets a third level beneath it.
+    if (it.values.length === 1 && !valueSub(it.values[0]).length) {
+      lines.push(`• *${it.label}:* ${valueText(it.values[0])}`);
+    } else {
+      lines.push(`• *${it.label}:*`);
+      for (const v of it.values) {
+        lines.push(`    ◦ ${valueText(v)}`);
+        lines.push(...valueSub(v).map((sv) => `        ▪ ${sv}`));
+      }
+    }
   }
   const ahj = ahjSection(record, ahjs);
   if (ahj) {
@@ -179,17 +210,80 @@ function esc(s: string): string {
 }
 
 /** Rich-text clipboard version: <p> lines, <strong> labels, <ul> bullets, tags plain. */
+/**
+ * Turn the plain-text post back into the rich clipboard form.
+ *
+ * Only used for a manually edited post: the generated one is built from
+ * structure, but a hand-typed one is just text, and pasting it into Slack
+ * without the bold labels and nesting would be a downgrade. Reads the same
+ * glyphs buildPostText writes — • for a bullet, ◦ for a sub-bullet, ▪ for a
+ * point under that — and `*Label:*` for the bold label.
+ */
+export function textToHtml(text: string): string {
+  const out: string[] = [];
+  // One entry per open <ul>. `nested` records whether that list was opened
+  // INSIDE the <li> above it, because that list has to close with `</ul></li>`
+  // while a top-level one closes with just `</ul>`.
+  const open: { nested: boolean }[] = [];
+
+  const closeOne = () => {
+    const lvl = open.pop();
+    out.push(lvl?.nested ? '</ul></li>' : '</ul>');
+  };
+  const closeTo = (n: number) => {
+    while (open.length > n) closeOne();
+  };
+  const openTo = (n: number) => {
+    while (open.length < n) {
+      // Re-open the previous item so the new list sits inside it.
+      const last = out[out.length - 1];
+      const nested = open.length >= 1 && !!last && last.endsWith('</li>');
+      if (nested) out[out.length - 1] = last.slice(0, -'</li>'.length);
+      out.push('<ul>');
+      open.push({ nested });
+    }
+  };
+
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) continue;
+    const level = line.startsWith('▪') ? 3 : line.startsWith('◦') ? 2 : line.startsWith('•') ? 1 : 0;
+    if (level === 0) {
+      closeTo(0);
+      out.push(`<p>${esc(line)}</p>`);
+      continue;
+    }
+    if (level < open.length) closeTo(level);
+    openTo(level);
+    const body = line.slice(1).trim();
+    const bold = body.match(/^\*(.+?):\*\s*(.*)$/);
+    out.push(
+      bold
+        ? `<li><strong>${esc(bold[1])}:</strong>${bold[2] ? ` ${esc(bold[2])}` : ''}</li>`
+        : `<li>${esc(body)}</li>`,
+    );
+  }
+  closeTo(0);
+  return out.join('');
+}
+
 export function buildPostHtml(record: PostRecord, settings: Settings, ahjs?: Ahj[]): string {
+  if (record.manualText?.trim()) return textToHtml(record.manualText);
+
   const { intro, items, tags } = buildLines(record, settings);
+  const li = (v: PostValue) =>
+    valueSub(v).length
+      ? `<li>${valueHtml(v)}<ul>${valueSub(v)
+          .map((sv) => `<li>${esc(sv)}</li>`)
+          .join('')}</ul></li>`
+      : `<li>${valueHtml(v)}</li>`;
   const parts = [
     ...intro.map((l) => `<p>${esc(l)}</p>`),
     '<ul>',
     ...items.map((it) =>
-      it.values.length === 1
-        ? `<li><strong>${esc(it.label)}:</strong> ${esc(it.values[0])}</li>`
-        : `<li><strong>${esc(it.label)}:</strong><ul>${it.values
-            .map((v) => `<li>${esc(v)}</li>`)
-            .join('')}</ul></li>`,
+      it.values.length === 1 && !valueSub(it.values[0]).length
+        ? `<li><strong>${esc(it.label)}:</strong> ${valueHtml(it.values[0])}</li>`
+        : `<li><strong>${esc(it.label)}:</strong><ul>${it.values.map(li).join('')}</ul></li>`,
     ),
     '</ul>',
   ];

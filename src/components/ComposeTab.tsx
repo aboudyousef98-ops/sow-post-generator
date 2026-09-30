@@ -604,44 +604,7 @@ export default function ComposeTab({
       />
 
       <div className="card">
-        <div className="section-head">
-          <h3>Feedback</h3>
-          <div className="section-head-actions">
-            {polishState.ms !== undefined && polishState.busy === false && (
-              <span className="muted">Polished ✓ {(polishState.ms / 1000).toFixed(1)}s</span>
-            )}
-            <button
-              type="button"
-              className="btn primary"
-              disabled={polishState.busy !== false || !aiAvailable}
-              onClick={() => void runAi('polish')}
-              title={aiAvailable ? 'Ctrl+Enter in any note field' : 'AI offline — manual flow still works'}
-            >
-              {polishState.busy === 'polish' ? (
-                <span>
-                  <span className="spin">✨</span> Polishing…
-                </span>
-              ) : (
-                '✨ Polish with AI'
-              )}
-            </button>
-            <button
-              type="button"
-              className="btn secondary"
-              disabled={polishState.busy !== false || !aiAvailable}
-              onClick={() => void runAi('rewrite')}
-              title="Full rewrite — for rough notes. Keeps one bullet per line and every number, but rewrites the wording completely."
-            >
-              {polishState.busy === 'rewrite' ? (
-                <span>
-                  <span className="spin">🦜</span> Rewriting…
-                </span>
-              ) : (
-                '🦜 هري ابو روي'
-              )}
-            </button>
-          </div>
-        </div>
+        <h3>Feedback</h3>
         {FEEDBACK_FIELDS.map(({ key, label, placeholder }) => (
           <NoteBox
             key={key}
@@ -662,6 +625,41 @@ export default function ComposeTab({
           />
         ))}
 
+        <div className="ai-actions">
+          <button
+            type="button"
+            className="btn primary"
+            disabled={polishState.busy !== false || !aiAvailable}
+            onClick={() => void runAi('polish')}
+            title={aiAvailable ? 'Ctrl+Enter in any note field' : 'AI offline — manual flow still works'}
+          >
+            {polishState.busy === 'polish' ? (
+              <span>
+                <span className="spin">✨</span> Polishing…
+              </span>
+            ) : (
+              '✨ Polish with AI'
+            )}
+          </button>
+          <button
+            type="button"
+            className="btn secondary"
+            disabled={polishState.busy !== false || !aiAvailable}
+            onClick={() => void runAi('rewrite')}
+            title="Full rewrite — for rough notes. Keeps one bullet per line and every number, but rewrites the wording completely."
+          >
+            {polishState.busy === 'rewrite' ? (
+              <span>
+                <span className="spin">🦜</span> Rewriting…
+              </span>
+            ) : (
+              '🦜 هري ابو روي'
+            )}
+          </button>
+          {polishState.ms !== undefined && polishState.busy === false && (
+            <span className="muted">Polished ✓ {(polishState.ms / 1000).toFixed(1)}s</span>
+          )}
+        </div>
         {polishState.error && (
           <div className="error-inline">
             {polishState.error}{' '}
@@ -725,6 +723,7 @@ export default function ComposeTab({
           record={record}
           settings={settings}
           ahjs={ahjs}
+          update={update}
           onMarkPosted={onMarkPosted}
           onNewPost={onNewPost}
           onSaveDraft={onSaveDraft}

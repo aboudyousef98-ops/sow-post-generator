@@ -405,7 +405,7 @@ describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
   it('the HTML version mirrors the text version and escapes values', () => {
     const html = buildPostHtml(withNotes({ stories: 1, solarRun: '1-1/4" PVC <east>' }), defaultSettings());
     expect(html).toContain('<li><strong>Installation Notes:</strong> 1-story house.</li>');
-    expect(html).toContain('<li><strong>Conduit Raceway:</strong> Solar run: 1-1/4" PVC &lt;east&gt;.</li>');
+    expect(html).toContain('<li><strong>Conduit Raceway:</strong> <u>Solar run:</u> 1-1/4" PVC &lt;east&gt;.</li>');
   });
 
   it('a post with no install date omits the date bullet entirely', () => {
@@ -449,8 +449,8 @@ Please take the following notes into consideration:
     ◦ Main disconnect location: exterior south wall.
     ◦ Special cases: window to be closed off; small boxes relocated.
 • *Conduit Raceway:*
-    ◦ Load run: 18 ft through the attic.
     ◦ Grid/service run: 2" PVC, 12 ft.
+    ◦ Load run: 18 ft through the attic.
     ◦ Solar run: 1-1/4" PVC on the east wall.
     ◦ Battery run: 6 ft, back-to-back.
 • *Clearance:* All required clearance requirements have been met.
@@ -482,5 +482,76 @@ describe('planning window in the post (spec/10 §12.1)', () => {
   it('the HTML version carries it as a nested list item', () => {
     const html = buildPostHtml(norcaRecord({ level: 2 }), defaultSettings());
     expect(html).toContain('<li>Planning window: 1 to 1.5 crew-days.</li>');
+  });
+});
+
+// ---- Aboud, 2026-09-30 -----------------------------------------------------
+
+describe('a conduit run with several points renders them as sub-points', () => {
+  const withRuns = (over: Partial<PostRecord['installNotes']>) =>
+    norcaRecord({ installNotes: { ...emptyInstallNotes(), ...over } });
+
+  it('a one-line run still reads inline beside its label', () => {
+    const text = buildPostText(
+      withRuns({ loadRun: '18 ft through the attic', solarRun: 'attic run to the inverter' }),
+      defaultSettings(),
+    );
+    expect(text).toContain('    ◦ Load run: 18 ft through the attic.');
+    expect(text).toContain('    ◦ Solar run: attic run to the inverter.');
+  });
+
+  it('several lines become a third level under the run label', () => {
+    const text = buildPostText(
+      withRuns({ serviceRun: '2" PVC from the meter to the MPU\n12 ft, two 90° bends\nexpansion unit at the wall' }),
+      defaultSettings(),
+    );
+    expect(text).toContain(
+      '    ◦ Grid/service run:\n        ▪ 2" PVC from the meter to the MPU.\n        ▪ 12 ft, two 90° bends.\n        ▪ Expansion unit at the wall.',
+    );
+    // The old "join with ; " form must be gone for runs.
+    expect(text).not.toContain('2" PVC from the meter to the MPU; 12 ft');
+  });
+
+  it('the rich clipboard nests a real list', () => {
+    const html = buildPostHtml(withRuns({ solarRun: 'Attic run to the inverter\n1-1/4" PVC' }), defaultSettings());
+    expect(html).toContain(
+      '<li><strong>Conduit Raceway:</strong><ul><li><u>Solar run:</u><ul>' +
+        '<li>Attic run to the inverter.</li><li>1-1/4" PVC.</li></ul></li></ul></li>',
+    );
+  });
+});
+
+describe('a manually edited post replaces the generated one', () => {
+  it('buildPostText returns the manual text verbatim', () => {
+    const rec = norcaRecord({ manualText: 'Hello Team,\nI typed this myself.' });
+    expect(buildPostText(rec, defaultSettings())).toBe('Hello Team,\nI typed this myself.');
+  });
+
+  it('changing a field no longer changes the post', () => {
+    const rec = norcaRecord({ manualText: 'Fixed text.' });
+    rec.sf.customerName = 'Someone Else Entirely';
+    expect(buildPostText(rec, defaultSettings())).toBe('Fixed text.');
+  });
+
+  it('the rich clipboard keeps the bold labels and the nesting', () => {
+    const rec = norcaRecord({
+      manualText: 'Hello Team,\n• *Region:* HOU.\n• *Conduit Raceway:*\n    ◦ Load run:\n        ▪ 18 ft.\n@Someone',
+    });
+    const html = buildPostHtml(rec, defaultSettings());
+    expect(html).toContain('<p>Hello Team,</p>');
+    expect(html).toContain('<li><strong>Region:</strong> HOU.</li>');
+    expect(html).toContain('<li><strong>Conduit Raceway:</strong><ul><li>Load run:<ul><li>18 ft.</li></ul></li></ul></li>');
+    expect(html).toContain('<p>@Someone</p>');
+  });
+
+  it('escapes HTML typed by hand', () => {
+    const rec = norcaRecord({ manualText: 'Run <20 ft & short' });
+    expect(buildPostHtml(rec, defaultSettings())).toContain('Run &lt;20 ft &amp; short');
+  });
+
+  it('an empty manual string is treated as "not manually edited"', () => {
+    const rec = norcaRecord({ manualText: '' });
+    expect(buildPostText(rec, defaultSettings())).toContain('Hello Team,');
+    expect(buildPostText(rec, defaultSettings())).toContain('Norca Garcia');
   });
 });
