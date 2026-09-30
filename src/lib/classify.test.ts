@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { layoutSeed, LEVEL_NAMES, suggestDriversFromText, suggestLevel } from './classify';
+import { layoutSeed, LEVEL_INFO, LEVEL_NAMES, suggestDriversFromText, suggestLevel } from './classify';
 import type { DriverId } from '../types';
 
 const set = (...ids: DriverId[]) => new Set<DriverId>(ids);
@@ -81,5 +81,19 @@ describe('suggestDriversFromText — keyword table', () => {
     expect(suggestDriversFromText('integration with existing PV array')).toContain(
       'existing_system_integration',
     );
+  });
+});
+
+describe('LEVEL_INFO planning windows match the 2026 standard (spec/10 §12.2)', () => {
+  it('uses the PDF wording character-for-character', () => {
+    expect(LEVEL_INFO[1].window).toBe('1 crew-day');
+    expect(LEVEL_INFO[2].window).toBe('1 to 1.5 crew-days');
+    expect(LEVEL_INFO[3].window).toBe('1.5 to 2 crew-days');
+    expect(LEVEL_INFO[4].window).toBe('Site-specific, minimum 2 days');
+  });
+
+  it('keeps the Level 4 pre-construction control in scope, not in the window', () => {
+    expect(LEVEL_INFO[4].window).not.toMatch(/field verification/i);
+    expect(LEVEL_INFO[4].scope).toMatch(/field verification before scheduling/i);
   });
 });

@@ -2,7 +2,7 @@
 
 import type { Ahj, PostRecord, Settings } from '../types';
 import { livePosts, matchAhj } from './ahj';
-import { LEVEL_NAMES } from './classify';
+import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
 import { conduitRunLines, installNoteLines } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
@@ -116,7 +116,13 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
     { label: 'Region', values: one(regionLine(record)) },
     { label: 'Jurisdiction', values: one(record.sf.jurisdiction ?? '') },
     { label: 'Site Address', values: one(record.sf.siteAddress ?? '') },
-    { label: 'Project Classification', values: [`Level ${record.level} – ${LEVEL_NAMES[record.level]}.`] },
+    {
+      label: 'Project Classification',
+      values: [
+        `Level ${record.level} – ${LEVEL_NAMES[record.level]}.`,
+        `Planning window: ${LEVEL_INFO[record.level].window}.`,
+      ],
+    },
     { label: 'Installation Notes', values: installNoteLines(record.installNotes, record) },
     { label: 'Conduit Raceway', values: conduitRunLines(record.installNotes, record) },
     { label: 'Clearance', values: ['All required clearance requirements have been met.'] },

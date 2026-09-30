@@ -10,7 +10,12 @@ export const LEVEL_NAMES: Record<Level, string> = {
   4: 'Major Electrical & Civil Construction',
 };
 
-/** Governing scope + planning window per level — verbatim from the 2026 standard's table (spec/04 §1). */
+/**
+ * Governing scope + planning window per level — verbatim from the 2026
+ * standard's summary table (`SOW Complexity Classification.pdf` p.2, and
+ * spec/04 §1). Treated like LEVEL_NAMES: never paraphrased. The window now
+ * prints in the post as well as on screen (spec/10 §12).
+ */
 export const LEVEL_INFO: Record<Level, { scope: string; window: string }> = {
   1: {
     scope: 'Back-to-back, or standard exterior placement with direct grid, load and PV routes',
@@ -19,16 +24,18 @@ export const LEVEL_INFO: Record<Level, { scope: string; window: string }> = {
   2: {
     scope:
       'Spread equipment, attic run, runs up to 25 ft with additional bends, generator connection, existing PV/system integration',
-    window: '1–1.5 crew-days',
+    window: '1 to 1.5 crew-days',
   },
   3: {
     scope: 'MPU, FSU, FTP, relocation ≤ 20 ft, or a short manual trench with controlled access',
-    window: '1.5–2 crew-days',
+    window: '1.5 to 2 crew-days',
   },
   4: {
+    // The field-verification clause is a pre-construction control (PDF p.6),
+    // not a duration — it belongs in scope, never in the printed window.
     scope:
-      'Dirt or concrete trenching, difficult MPU/FSU (interior, obstructed, restricted space), obstructed access, or work outside standard limits',
-    window: 'Site-specific, minimum 2 days; field verification before scheduling & material release',
+      'Dirt or concrete trenching, difficult MPU/FSU (interior, obstructed, restricted space), obstructed access, or work outside standard limits; field verification before scheduling & material release',
+    window: 'Site-specific, minimum 2 days',
   },
 };
 

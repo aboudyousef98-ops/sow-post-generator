@@ -65,7 +65,10 @@ describe('Compose acceptance flow', () => {
     // planning-window helper text follows the selection.
     fireEvent.change(screen.getByLabelText(/Project Level/), { target: { value: '3' } });
     expect(screen.getByText(/MPU, FSU, FTP, relocation ≤ 20 ft/)).toBeTruthy();
-    expect(screen.getByText(/1\.5–2 crew-days/)).toBeTruthy();
+    // Wording per the 2026 standard's own table, "1.5 to 2" not "1.5–2" (spec/10 §12.2).
+    // Two hits: the helper text under the select, and the post itself, which
+    // now prints the planning window as well (spec/10 §12.1).
+    expect(screen.getAllByText(/1\.5 to 2 crew-days/)).toHaveLength(2);
 
     // Preview contains the canonical lines.
     const preview = container.querySelector('.preview')!;

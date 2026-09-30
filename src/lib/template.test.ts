@@ -27,7 +27,9 @@ Please take the following notes into consideration:
 • *Region:* HOU.
 • *Jurisdiction:* Pasadena.
 • *Site Address:* 1317 Skylark Rd, Pasadena, TX 77502.
-• *Project Classification:* Level 1 – Standard Installation.
+• *Project Classification:*
+    ◦ Level 1 – Standard Installation.
+    ◦ Planning window: 1 crew-day.
 • *Clearance:* All required clearance requirements have been met.
 • *Site Survey Feedback:* All good.
 • *Design Feedback:* All good.
@@ -169,7 +171,9 @@ describe('buildPostHtml', () => {
     expect(html).toContain('<li><strong>Installation Date &amp; Day:</strong> Thursday, 10/01/2026.</li>');
     expect(html).toContain('<li><strong>Site Address:</strong> 1317 Skylark Rd, Pasadena, TX 77502.</li>');
     expect(html).toContain('<p>@Tarek Abu Hseini @Mohammed Azizi @Diego Banegas</p>');
-    expect(html.match(/<li>/g)).toHaveLength(9);
+    // 8 single-value bullets + Project Classification, which is now a parent
+    // <li> wrapping two nested ones (level, planning window) — spec/10 §12.1.
+    expect(html.match(/<li>/g)).toHaveLength(11);
   });
 
   it('escapes HTML in user text', () => {
@@ -434,7 +438,9 @@ Please take the following notes into consideration:
 • *Region:* HOU.
 • *Jurisdiction:* Pasadena.
 • *Site Address:* 1317 Skylark Rd, Pasadena, TX 77502.
-• *Project Classification:* Level 1 – Standard Installation.
+• *Project Classification:*
+    ◦ Level 1 – Standard Installation.
+    ◦ Planning window: 1 crew-day.
 • *Installation Notes:*
     ◦ Installation on two walls (North, West).
     ◦ 1-story house.
@@ -453,5 +459,28 @@ Please take the following notes into consideration:
 • *Homeowner Feedback:* No feedback.
 @Tarek Abu Hseini @Mohammed Azizi @Diego Banegas`;
     expect(buildPostText(rec, defaultSettings())).toBe(expected);
+  });
+});
+
+describe('planning window in the post (spec/10 §12.1)', () => {
+  it('renders Project Classification as level + planning window sub-bullets', () => {
+    const text = buildPostText(norcaRecord({ level: 3 }), defaultSettings());
+    expect(text).toContain(
+      '• *Project Classification:*\n    ◦ Level 3 – Service Equipment Modification.\n    ◦ Planning window: 1.5 to 2 crew-days.',
+    );
+  });
+
+  it('uses each level’s own window', () => {
+    expect(buildPostText(norcaRecord({ level: 1 }), defaultSettings())).toContain(
+      '◦ Planning window: 1 crew-day.',
+    );
+    expect(buildPostText(norcaRecord({ level: 4 }), defaultSettings())).toContain(
+      '◦ Planning window: Site-specific, minimum 2 days.',
+    );
+  });
+
+  it('the HTML version carries it as a nested list item', () => {
+    const html = buildPostHtml(norcaRecord({ level: 2 }), defaultSettings());
+    expect(html).toContain('<li>Planning window: 1 to 1.5 crew-days.</li>');
   });
 });
