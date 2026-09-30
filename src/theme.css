@@ -199,8 +199,13 @@ h4 {
   background: var(--dyn-muted);
 }
 
-/* "Posting as" moved out of the Source card and into the header. */
+/* "Posting as" moved out of the Source card and into the header.
+   width:auto is load-bearing: the shared form rule below sets
+   `select { width: 100% }`, which made this 1644px wide and — once it was
+   also flex-shrink:0 — pushed the whole tab strip out of the bar. */
 .author-pill {
+  width: auto;
+  max-width: 190px;
   border: 0;
   border-radius: var(--radius-pill);
   padding: 4px 10px;
@@ -1478,6 +1483,9 @@ table.list tr.row:hover {
 }
 
 .pill-select {
+  /* Same trap as .author-pill: the shared `select { width: 100% }` rule would
+     make each of these fill the filter row on its own. */
+  width: auto;
   border: 1.5px solid var(--dyn-border);
   border-radius: var(--radius-pill);
   padding: 5px 10px;
@@ -1487,6 +1495,7 @@ table.list tr.row:hover {
   color: var(--dyn-navy);
   cursor: pointer;
   max-width: 100%;
+  margin: 0;
 }
 
 .pill-button {
@@ -1758,4 +1767,50 @@ table.list tr.row:hover {
   .ahj-sidebar {
     flex-basis: 100%;
   }
+}
+
+/* Two-up free-text boxes in Installation Notes / Conduit raceway. One per row
+   made the Compose form about twice as tall as it needed to be. */
+.note-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px 16px;
+  align-items: start;
+}
+
+/* Section heading with actions on the right — the Feedback header carries the
+   two AI buttons there, as the design does. */
+.section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.section-head h3 {
+  margin: 0;
+}
+
+.section-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.section-head-actions .muted {
+  font-size: 12px;
+}
+
+/* Two related fields sharing one cell of the settings grid. */
+.settings-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.settings-stack > label.field {
+  margin-bottom: 0;
 }

@@ -157,7 +157,7 @@ describe('AhjTab', () => {
     addAhj('Houston');
     postRequirement('Combined PDF only.');
     // Houston is now selected; search should jump back to Corpus Christi.
-    fireEvent.change(screen.getByPlaceholderText(/Search AHJ names/), { target: { value: 'square d' } });
+    fireEvent.change(screen.getByPlaceholderText(/Search AHJs and posts/), { target: { value: 'square d' } });
     expect(screen.getByText(/1 result for/)).toBeTruthy();
     fireEvent.click(screen.getByText('Square D', { selector: 'mark' }));
     expect(screen.getByText('Requirements board').parentElement?.textContent).toContain('Corpus Christi');

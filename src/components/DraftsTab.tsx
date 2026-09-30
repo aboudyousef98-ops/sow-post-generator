@@ -135,7 +135,14 @@ export default function DraftsTab({ drafts, onOpen, onDuplicate, onDelete, onMar
                         {r.text}
                       </span>
                     </td>
-                    <td className="nowrap cell-meta">{new Date(d.updatedAt).toLocaleString()}</td>
+                    <td className="nowrap cell-meta">
+                      {new Date(d.updatedAt).toLocaleString(undefined, {
+                        month: 'short',
+                        day: 'numeric',
+                        hour: 'numeric',
+                        minute: '2-digit',
+                      })}
+                    </td>
                     <td onClick={(e) => e.stopPropagation()} className="nowrap">
                       {confirmId === d.id ? (
                         <div className="row-actions">

@@ -330,9 +330,12 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
               type="text"
               ref={pickerInput}
               value={pickerQuery}
-              onChange={(e) => setPickerQuery(e.target.value)}
-              placeholder="Search AHJs…"
-              aria-label="Search AHJs"
+              onChange={(e) => {
+                setPickerQuery(e.target.value);
+                setGlobalQuery(e.target.value);
+              }}
+              placeholder="Search AHJs and posts…"
+              aria-label="Search AHJs and posts"
             />
           </div>
           <div className="sort-toggle ahj-sidebar-sort">
@@ -362,22 +365,21 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
               );
             })}
             {pickerItems.length === 0 && (
-              <div className="muted" style={{ padding: '12px 14px' }}>No AHJ matches “{pickerQuery}”.</div>
+              <div className="muted" style={{ padding: '12px 14px' }}>
+                {pickerQuery.trim()
+                  ? `No AHJ matches “${pickerQuery.trim()}”.`
+                  : 'No AHJs yet. Add one to start a requirements board.'}
+              </div>
             )}
           </div>
         </div>
 
         <div className="ahj-board">
 
+      {showSearch && (
       <div className="card">
-        <h3>Search all AHJs</h3>
-        <input
-          type="text"
-          value={globalQuery}
-          onChange={(e) => setGlobalQuery(e.target.value)}
-          placeholder="Search AHJ names, aliases and every post — e.g. square d"
-        />
-        {showSearch && (
+        <h3>Posts matching “{globalQuery.trim()}”</h3>
+        {(
           <>
             <div className="muted" style={{ margin: '10px 0 8px' }}>
               {searchHits.length
@@ -423,7 +425,7 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
           </>
         )}
       </div>
-
+      )}
 
       {sel ? (
         <>

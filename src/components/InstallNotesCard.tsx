@@ -191,14 +191,20 @@ export default function InstallNotesCard({
         </label>
       </div>
 
-      {box('batteryLocation', 1)}
-      {box('mainDisconnectLocation', 1)}
+      {/* Two-up from here down (Phase 8, Option A). One box per row made the
+          form roughly twice as tall as it needed to be. */}
+      <div className="note-grid">
+        {box('batteryLocation', 1)}
+        {box('mainDisconnectLocation', 1)}
+      </div>
 
       <div className="install-subhead">Conduit raceway</div>
-      {RUN_FIELDS.map((f) => box(f, 2))}
+      <div className="note-grid">{RUN_FIELDS.map((f) => box(f, 2))}</div>
 
-      {box('specialCases', 3)}
-      {box('other', 3)}
+      <div className="note-grid">
+        {box('specialCases', 3)}
+        {box('other', 3)}
+      </div>
     </div>
   );
 }
