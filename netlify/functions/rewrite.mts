@@ -1,37 +1,20 @@
 // POST /api/<token>/rewrite — polish the four notes (spec/05 §B, spec/07).
 // STRICT policy: grammar/clarity only; every fact, number, unit and brand kept.
 
-import { z } from 'zod';
 import { guardRequest, jsonResponse, readGuardConfig, readJsonBody } from './lib/guard';
 import { callOpenAiJson, OpenAiError } from './lib/openai';
-
-const noteField = z.string().max(3000);
-const RequestSchema = z
-  .object({
-    layout: noteField,
-    siteSurvey: noteField,
-    design: noteField,
-    homeowner: noteField,
-  })
-  .strict();
-
-const ResponseSchema = z
-  .object({
-    layout: z.string(),
-    siteSurvey: z.string(),
-    design: z.string(),
-    homeowner: z.string(),
-  })
-  .strict();
+import { REWRITE_JSON_SCHEMA, RewriteRequest, RewriteResponse } from './lib/rewriteSchema';
 
 // System prompt — spec/05-ai-prompts.md §B, revised per Aboud (2026-09-28):
 // the team writes these notes as BULLET POINTS, one per line. The old prompt
 // ordered prose and merged the bullets into a paragraph. This one is a
 // line-preserving, minimal-edit copy-edit: same lines, same order, same words
 // wherever they were already correct.
-const SYSTEM_PROMPT = `You are a copy editor for a solar installation design team. You will receive up to four short notes written by an engineer for a Slack handoff post to the installation crew. Each note is written as BULLET POINTS, one bullet per line.
+const SYSTEM_PROMPT = `You are a copy editor for a solar installation design team. You will receive a JSON object with an "items" array. Each item has an "id" and a "text" — a short note written by an engineer for a Slack handoff post to the installation crew. Each "text" is written as BULLET POINTS, one bullet per line.
 
-Your job is a light copy-edit, NOT a rewrite. Stay as close to the engineer's own wording as possible.
+Return one item for EVERY item you were given, with the SAME "id", in the SAME order. Never add an item, never drop an item, never merge two items, never invent an id.
+
+Your job is a light copy-edit, NOT a rewrite. Stay as close to the engineer's own wording as possible. The line rules below apply to each item's "text" independently.
 
 Line rules (most important):
 - Treat every line as a separate bullet. Return exactly the same number of lines, in exactly the same order, separated by "\\n".
@@ -62,18 +45,6 @@ Example of a whole note (2 lines in, 2 lines out — NOT merged into a paragraph
 IN:  "tag wrong on sheet PV-2\\nmissing expansion unit in one line"
 OUT: "Tag wrong on sheet PV-2.\\nMissing expansion unit in the one-line."`;
 
-const JSON_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    layout: { type: 'string' },
-    siteSurvey: { type: 'string' },
-    design: { type: 'string' },
-    homeowner: { type: 'string' },
-  },
-  required: ['layout', 'siteSurvey', 'design', 'homeowner'],
-};
-
 export default async (req: Request): Promise<Response> => {
   const started = Date.now();
   const cfg = readGuardConfig(process.env);
@@ -84,7 +55,7 @@ export default async (req: Request): Promise<Response> => {
 
   const body = await readJsonBody(req);
   if (body === 'too-large') return jsonResponse(413, { error: 'payload too large' }, cors);
-  const parsed = RequestSchema.safeParse(body);
+  const parsed = RewriteRequest.safeParse(body);
   if (!parsed.success) return jsonResponse(400, { error: 'bad payload' }, cors);
 
   const apiKey = process.env.OPENAI_API_KEY;
@@ -96,7 +67,7 @@ export default async (req: Request): Promise<Response> => {
       apiKey,
       model,
       schemaName: 'polished_notes',
-      schema: JSON_SCHEMA,
+      schema: REWRITE_JSON_SCHEMA,
       // Low temperature + generous ceiling: bulleted notes are longer than the
       // old one-paragraph output, and a truncated response fails the schema.
       temperature: 0.1,
@@ -106,12 +77,12 @@ export default async (req: Request): Promise<Response> => {
         { role: 'user', content: JSON.stringify(parsed.data) },
       ],
     });
-    const polished = ResponseSchema.safeParse(raw);
+    const polished = RewriteResponse.safeParse(raw);
     // Non-conforming JSON → 502 so the UI keeps the raw drafts untouched (07).
     if (!polished.success)
       return jsonResponse(502, { error: 'AI returned unexpected shape', openai: 'schema mismatch' }, cors);
-    console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: 'rewrite', ms: Date.now() - started, model }));
-    return jsonResponse(200, { polished: polished.data, model, ms: Date.now() - started }, cors);
+    console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: 'rewrite', ms: Date.now() - started, model, items: parsed.data.items.length }));
+    return jsonResponse(200, { items: polished.data.items, model, ms: Date.now() - started }, cors);
   } catch (err) {
     const msg = err instanceof OpenAiError ? err.openaiMessage : 'AI request failed';
     return jsonResponse(502, { error: 'AI request failed', openai: msg.slice(0, 500) }, cors);
