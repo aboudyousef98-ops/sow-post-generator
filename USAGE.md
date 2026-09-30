@@ -59,9 +59,9 @@ npm run test
 
 - Your work is written to **Drafts automatically** as soon as you fill in *any* field — you no
   longer need a customer name first. It is also flushed when you close or switch away from the tab.
-- **💾 Save as Draft** (next to Mark as posted) saves on the spot if you want the confirmation.
+- **💾 Save** (top right, next to + New post) saves on the spot if you want the confirmation.
 - **New post** saves whatever is open before clearing the form — it cannot discard your work.
-- In the **Drafts** tab each row has **✅ Mark as done**, which freezes the post and sends it to
+- In the **Drafts** tab each row has **Mark as posted**, which freezes the post and sends it to
   History without opening it first. It asks once to confirm, and the toast has an **Undo**.
   The button is disabled until the required fields (customer, date, jurisdiction, address) are in.
 
@@ -81,7 +81,7 @@ PROJECT INFORMATION table needs — Project Name, Property Address, Region, AHJ,
 ## Projects with no install date (2026-09-30)
 
 A project with no scheduled install date is fine now. There is no warning, and
-Copy for Slack / Mark as posted / Mark as done all work without one — the
+Copy for Slack and Mark as posted both work without one — the
 "Installation Date & Day" line just does not appear in the post. Add the date
 later and the line comes back.
 
@@ -105,7 +105,7 @@ the crew reading the post can see how many crew-days to reserve:
     ◦ Planning window: 1.5 to 2 crew-days.
 ```
 
-## The second AI button — هري ابو روي (2026-09-30)
+## The second AI button — 🦜 هري ابو روي (2026-09-30)
 
 Beside **✨ Polish with AI** there is a second button. Both send only the
 free-text boxes, and both keep one bullet per line and every number, unit and
@@ -113,11 +113,11 @@ brand exactly as you wrote it.
 
 - **✨ Polish with AI** — a light copy-edit. A line that is already correct comes
   back unchanged. Use it when your English is fine and you want it tidy.
-- **هري ابو روي** — a full rewrite. Use it when the note is rough, half-formed,
+- **🦜 هري ابو روي** — a full rewrite. Use it when the note is rough, half-formed,
   or mixed Arabic and English. It will change every word of a line to make it
   read professionally; it still cannot change what the line says.
 
-A box polished by the rewrite button is marked 🔄 in its preview instead of ✨,
+A box polished by the rewrite button is marked 🦜 in its preview instead of ✨,
 so you can see which text the machine reworded. "Revert to my draft" works the
 same for both.
 
@@ -142,3 +142,22 @@ deploy._
 - Pasted `@Name` text does not become a live Slack mention — re-type `@` after pasting
   (direct Slack posting is Phase 3).
 - Chips editor arrives in Phase 2.
+
+## The 2026-09-30 redesign — what moved
+
+Same app, new layout. Nothing about the post itself changed.
+
+- **The tabs are in the navy bar now**, with the draft count beside "Drafts".
+  "Posting as" is the pill at the top right, next to the Synced / AI dots.
+- **Compose is two columns.** The form is on the left; on the right, a
+  **readiness card** and a **live Slack preview** that follow you down the page.
+  The readiness card replaces the old red "Required before copying" line — it
+  ticks off what is done and tells you what is not, with the fix beside it.
+- **Copy for Slack** and **Mark as posted** live in that readiness card.
+  Copy plain text and the AutoCAD title block are behind its **···** button.
+- **💾 Save** and **+ New post** are at the top right of Compose.
+- **The Project Level is four cards** instead of a dropdown. Same four levels.
+- **Drafts has a Readiness column**, so you can see at a glance which projects
+  are ready to post without opening them.
+- **The AHJ tab lists every board down the left**, instead of hiding them in a
+  dropdown. One search box there covers both AHJ names and every post.

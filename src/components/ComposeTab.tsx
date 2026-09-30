@@ -634,10 +634,10 @@ export default function ComposeTab({
             >
               {polishState.busy === 'rewrite' ? (
                 <span>
-                  <span className="spin">🔄</span> Rewriting…
+                  <span className="spin">🦜</span> Rewriting…
                 </span>
               ) : (
-                'هري ابو روي'
+                '🦜 هري ابو روي'
               )}
             </button>
           </div>

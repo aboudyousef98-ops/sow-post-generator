@@ -499,7 +499,7 @@ describe('the two AI modes', () => {
     await renderWithNote();
 
     const polish = screen.getByRole('button', { name: /Polish with AI/i }) as HTMLButtonElement;
-    const rewriteBtn = screen.getByRole('button', { name: 'هري ابو روي' }) as HTMLButtonElement;
+    const rewriteBtn = screen.getByRole('button', { name: /هري ابو روي/ }) as HTMLButtonElement;
     expect(polish.disabled).toBe(false);
     expect(rewriteBtn.disabled).toBe(false);
   });
@@ -507,7 +507,7 @@ describe('the two AI modes', () => {
   it("the rewrite button sends mode 'rewrite' and Polish sends mode 'polish'", async () => {
     await renderWithNote();
 
-    fireEvent.click(screen.getByRole('button', { name: 'هري ابو روي' }));
+    fireEvent.click(screen.getByRole('button', { name: /هري ابو روي/ }));
     await waitFor(() => expect(sent.length).toBe(1));
     expect(sent[0].mode).toBe('rewrite');
     expect(sent[0].items).toEqual([{ id: 'install.loadRun', text: 'the run go thru attic' }]);
@@ -521,7 +521,7 @@ describe('the two AI modes', () => {
     hold = true;
     await renderWithNote();
 
-    fireEvent.click(screen.getByRole('button', { name: 'هري ابو روي' }));
+    fireEvent.click(screen.getByRole('button', { name: /هري ابو روي/ }));
     await waitFor(() => expect(sent.length).toBe(1));
 
     // Mid-flight: the pressed button shows its spinner, both are locked out.
@@ -531,7 +531,7 @@ describe('the two AI modes', () => {
     expect(polish.disabled).toBe(true);
 
     release?.();
-    await waitFor(() => expect(screen.getByRole('button', { name: 'هري ابو روي' })).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /هري ابو روي/ })).toBeTruthy());
     expect((screen.getByRole('button', { name: /Polish with AI/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 });

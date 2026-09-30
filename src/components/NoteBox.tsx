@@ -67,7 +67,7 @@ export default function NoteBox({
       />
       {hasPolished && usePolished && (
         <div className="muted" style={{ marginTop: 3, whiteSpace: 'pre-wrap' }}>
-          {mode === 'rewrite' ? '🔄' : '✨'} {polished}
+          {mode === 'rewrite' ? '🦜' : '✨'} {polished}
         </div>
       )}
       {dropped && dropped.length > 0 && (
