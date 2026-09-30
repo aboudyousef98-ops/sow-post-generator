@@ -440,3 +440,92 @@ describe('Installation Notes UI', () => {
     expect((screen.getByRole('button', { name: /Mark as posted/i }) as HTMLButtonElement).disabled).toBe(false);
   });
 });
+
+// ---- Phase 7: the two AI modes (spec/10 §11) -------------------------------
+
+describe('the two AI modes', () => {
+  // Every /rewrite body the app sent, in order.
+  let sent: { items: { id: string; text: string }[]; mode?: string }[];
+  // When true, /rewrite hangs until `release()` — lets a test read the UI
+  // while a request is still in flight.
+  let hold: boolean;
+  let release: (() => void) | null;
+
+  beforeEach(() => {
+    localStorage.clear();
+    sent = [];
+    hold = false;
+    release = null;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/rewrite')) {
+          const body = JSON.parse(String(init?.body)) as { items: { id: string; text: string }[]; mode?: string };
+          sent.push(body);
+          if (hold) await new Promise<void>((resolve) => (release = resolve));
+          return new Response(
+            JSON.stringify({
+              items: body.items.map((i) => ({ id: i.id, text: `${i.text} edited.` })),
+              model: 'gpt-4o-mini',
+              ms: 12,
+            }),
+            { status: 200 },
+          );
+        }
+        // hasKey: true — both AI buttons need aiAvailable.
+        return new Response(JSON.stringify({ ok: true, hasKey: true }), { status: 200 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  async function renderWithNote() {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('AI available')).toBeTruthy());
+    fireEvent.change(screen.getByLabelText(/^Load run/i), { target: { value: 'the run go thru attic' } });
+  }
+
+  it('renders both AI buttons once a key is present', async () => {
+    await renderWithNote();
+
+    const polish = screen.getByRole('button', { name: /Polish with AI/i }) as HTMLButtonElement;
+    const rewriteBtn = screen.getByRole('button', { name: 'هري ابو روي' }) as HTMLButtonElement;
+    expect(polish.disabled).toBe(false);
+    expect(rewriteBtn.disabled).toBe(false);
+  });
+
+  it("the rewrite button sends mode 'rewrite' and Polish sends mode 'polish'", async () => {
+    await renderWithNote();
+
+    fireEvent.click(screen.getByRole('button', { name: 'هري ابو روي' }));
+    await waitFor(() => expect(sent.length).toBe(1));
+    expect(sent[0].mode).toBe('rewrite');
+    expect(sent[0].items).toEqual([{ id: 'install.loadRun', text: 'the run go thru attic' }]);
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+    await waitFor(() => expect(sent.length).toBe(2));
+    expect(sent[1].mode).toBe('polish');
+  });
+
+  it('disables both buttons while one request is in flight', async () => {
+    hold = true;
+    await renderWithNote();
+
+    fireEvent.click(screen.getByRole('button', { name: 'هري ابو روي' }));
+    await waitFor(() => expect(sent.length).toBe(1));
+
+    // Mid-flight: the pressed button shows its spinner, both are locked out.
+    const rewriteBtn = screen.getByRole('button', { name: /Rewriting/i }) as HTMLButtonElement;
+    const polish = screen.getByRole('button', { name: /Polish with AI/i }) as HTMLButtonElement;
+    expect(rewriteBtn.disabled).toBe(true);
+    expect(polish.disabled).toBe(true);
+
+    release?.();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'هري ابو روي' })).toBeTruthy());
+    expect((screen.getByRole('button', { name: /Polish with AI/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
