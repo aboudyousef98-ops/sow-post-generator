@@ -40,7 +40,7 @@ describe('Compose acceptance flow', () => {
     const { container, unmount } = render(<App />);
 
     // Opening the app shows Compose immediately — no prompt of any kind.
-    expect(screen.getByText('Preview')).toBeTruthy();
+    expect(screen.getByText('Slack preview')).toBeTruthy();
     expect(container.querySelector('input[type="password"]')).toBeNull();
 
     // Paste the Norca Garcia SF text.
@@ -63,7 +63,7 @@ describe('Compose acceptance flow', () => {
 
     // Pick Level 3 directly (simple flow — no driver checklist); the scope /
     // planning-window helper text follows the selection.
-    fireEvent.change(screen.getByLabelText(/Project Level/), { target: { value: '3' } });
+    fireEvent.click(screen.getByRole('button', { name: /Level 3/ }));
     expect(screen.getByText(/MPU, FSU, FTP, relocation ≤ 20 ft/)).toBeTruthy();
     // Wording per the 2026 standard's own table, "1.5 to 2" not "1.5–2" (spec/10 §12.2).
     // Two hits: the helper text under the select, and the post itself, which
@@ -93,7 +93,7 @@ describe('Compose acceptance flow', () => {
     expect(customer2.value).toBe('Norca Garcia');
 
     // Mark as posted → moves to History; Compose resets.
-    fireEvent.click(screen.getByText('✅ Mark as posted'));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as posted' }));
     // Toast names the project, so the same button on a Drafts row is unambiguous.
     expect(screen.getByText('Marked as posted — Norca Garcia.')).toBeTruthy();
     const records = JSON.parse(localStorage.getItem('sowpost.records') ?? '[]');
@@ -102,7 +102,7 @@ describe('Compose acceptance flow', () => {
     expect(records[0].finalText).toContain('Level 3 – Service Equipment Modification.');
 
     // History tab shows it.
-    fireEvent.click(screen.getByText(/History \(1\)/));
+    fireEvent.click(screen.getByRole('button', { name: /^History/ }));
     expect(screen.getByText('Norca Garcia')).toBeTruthy();
     second.unmount();
   });
@@ -151,8 +151,8 @@ describe('Compose acceptance flow', () => {
       }),
     );
     render(<App />);
-    await waitFor(() => expect(screen.getByText('Team synced')).toBeTruthy());
-    fireEvent.click(screen.getByText(/History \(1\)/));
+    await waitFor(() => expect(screen.getByTitle('Team synced')).toBeTruthy());
+    fireEvent.click(screen.getByRole('button', { name: /^History/ }));
     expect(screen.getByText('Team Customer')).toBeTruthy();
     // And it landed in the localStorage cache too.
     const cached = JSON.parse(localStorage.getItem('sowpost.records') ?? '[]');
@@ -162,7 +162,7 @@ describe('Compose acceptance flow', () => {
   it('offline text flow works end-to-end without AI (health fails)', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new Error('offline'))));
     const { container } = render(<App />);
-    await waitFor(() => expect(screen.getByText('AI offline')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTitle('AI offline')).toBeTruthy());
     pasteText(container.querySelector('.paste-zone')!, norca);
     const customer = screen.getByLabelText(/Customer name/) as HTMLInputElement;
     await waitFor(() => expect(customer.value).toBe('Norca Garcia'));
@@ -277,9 +277,9 @@ describe('AHJ requirements in Compose', () => {
 
     // Name the draft so autosave stores it, then leave and come back.
     fireEvent.change(screen.getByLabelText(/Customer name/), { target: { value: 'Approval Keeper' } });
-    await waitFor(() => expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy());
     fireEvent.click(screen.getByText(/New post/));
-    fireEvent.click(screen.getByText(/Drafts \(1\)/));
+    fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
     fireEvent.click(screen.getByText('Approval Keeper'));
 
     await waitFor(() => expect(screen.getByText(/AHJ requirements on file — Corpus Christi/)).toBeTruthy());
@@ -346,7 +346,7 @@ describe('draft safety', () => {
   it('"Save as Draft" persists on the spot and says so', async () => {
     render(<App />);
     fireEvent.change(screen.getByLabelText(/Customer name/), { target: { value: 'Saved Now' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save as Draft/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
 
     expect(screen.getByText('Saved to Drafts.')).toBeTruthy();
     expect(stored()).toHaveLength(1);
@@ -355,7 +355,7 @@ describe('draft safety', () => {
 
   it('refuses to save a completely untouched form', () => {
     render(<App />);
-    fireEvent.click(screen.getByRole('button', { name: /Save as Draft/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Save/ }));
     expect(screen.getByText(/Nothing to save yet/)).toBeTruthy();
     expect(stored()).toHaveLength(0);
   });
@@ -363,11 +363,11 @@ describe('draft safety', () => {
   it('marks a draft as done from its Drafts row, with a confirm step', async () => {
     const { container } = render(<App />);
     pasteText(container.querySelector('.paste-zone')!, norca);
-    await waitFor(() => expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy());
 
     // Start a different project so the row is NOT the record open in Compose.
     fireEvent.click(screen.getByText(/New post/));
-    fireEvent.click(screen.getByText(/Drafts \(1\)/));
+    fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
 
     // First click only arms the confirm — nothing is posted yet.
     fireEvent.click(screen.getByText(/Mark as done/));
@@ -375,7 +375,7 @@ describe('draft safety', () => {
     expect(stored().every((r: { status: string }) => r.status === 'draft')).toBe(true);
 
     fireEvent.click(screen.getByText('Yes, mark as done'));
-    await waitFor(() => expect(screen.getByText(/History \(1\)/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^History/ })).toBeTruthy());
 
     const posted = stored().find((r: { status: string }) => r.status === 'posted');
     expect(posted.sf.customerName).toBe('Norca Garcia');
@@ -387,14 +387,14 @@ describe('draft safety', () => {
   it('cancelling the row confirm leaves the draft alone', async () => {
     const { container } = render(<App />);
     pasteText(container.querySelector('.paste-zone')!, norca);
-    await waitFor(() => expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy());
+    await waitFor(() => expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy());
     fireEvent.click(screen.getByText(/New post/));
-    fireEvent.click(screen.getByText(/Drafts \(1\)/));
+    fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
 
     fireEvent.click(screen.getByText(/Mark as done/));
     fireEvent.click(screen.getByText('Cancel'));
 
-    expect(screen.getByText(/Drafts \(1\)/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy();
     expect(stored().every((r: { status: string }) => r.status === 'draft')).toBe(true);
   });
 });
@@ -491,7 +491,7 @@ describe('the two AI modes', () => {
 
   async function renderWithNote() {
     render(<App />);
-    await waitFor(() => expect(screen.getByText('AI available')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTitle('AI available')).toBeTruthy());
     fireEvent.change(screen.getByLabelText(/^Load run/i), { target: { value: 'the run go thru attic' } });
   }
 
@@ -575,7 +575,7 @@ describe('the AI can never quietly delete or overwrite a note', () => {
 
   async function ready() {
     render(<App />);
-    await waitFor(() => expect(screen.getByText('AI available')).toBeTruthy());
+    await waitFor(() => expect(screen.getByTitle('AI available')).toBeTruthy());
   }
 
   const preview = () => (document.querySelector('.preview') as HTMLElement).textContent ?? '';
@@ -713,7 +713,7 @@ describe('opening another draft never discards what is on screen', () => {
     fireEvent.change(screen.getByLabelText(/Design Feedback/i), {
       target: { value: 'AC disconnect must be 200A' },
     });
-    fireEvent.click(screen.getByText(/Drafts \(/));
+    fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
     fireEvent.click(screen.getByText('First Project'));
 
     await waitFor(() => expect(byName('Second Project')?.notes.design).toBe('AC disconnect must be 200A'));
@@ -723,7 +723,7 @@ describe('opening another draft never discards what is on screen', () => {
     await twoDrafts();
 
     fireEvent.change(screen.getByLabelText(/Design Feedback/i), { target: { value: 'still typing this' } });
-    fireEvent.click(screen.getByText(/Drafts \(/));
+    fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
     fireEvent.click(screen.getByText('Second Project'));
 
     // It used to reload the stale stored copy and wipe the box on screen.

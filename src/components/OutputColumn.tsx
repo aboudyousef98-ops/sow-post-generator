@@ -1,4 +1,13 @@
-import { useCallback, useEffect } from 'react';
+// The Compose right-hand column (Phase 8, Option A): a readiness card above a
+// live Slack preview, both sticky beside the form.
+//
+// The readiness card replaces the old red "Required before copying: …" line.
+// Same source of truth — missingRequired() — shown as a tick-list so you can
+// see what is done as well as what is not, with the action beside the gap.
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { matchAhj } from '../lib/ahj';
+import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import type { Ahj, PostRecord, Settings } from '../types';
 import TitleBlockCard from './TitleBlockCard';
@@ -13,20 +22,32 @@ interface Props {
   toast: (text: string) => void;
 }
 
-export default function OutputColumn({
-  record,
-  settings,
-  ahjs,
-  onMarkPosted,
-  onNewPost,
-  onSaveDraft,
-  toast,
-}: Props) {
+interface Check {
+  label: string;
+  done: boolean;
+  action?: string;
+}
+
+export default function OutputColumn({ record, settings, ahjs, onMarkPosted, toast }: Props) {
   const text = buildPostText(record, settings, ahjs);
   const html = buildPostHtml(record, settings, ahjs);
 
   const missing = missingRequired(record);
   const ready = missing.length === 0;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [titleBlockOpen, setTitleBlockOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  // Click anywhere else to dismiss the ··· menu.
+  useEffect(() => {
+    if (!menuOpen) return;
+    const onDown = (e: MouseEvent) => {
+      if (!menuRef.current?.contains(e.target as Node)) setMenuOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [menuOpen]);
 
   const copyForSlack = useCallback(async () => {
     if (missingRequired(record).length) return; // also blocks the Ctrl+Shift+C shortcut
@@ -60,15 +81,50 @@ export default function OutputColumn({
     return () => window.removeEventListener('keydown', onKey);
   }, [copyForSlack]);
 
+  const ahjMatch = matchAhj(record.sf.jurisdiction, ahjs ?? []);
+  const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
+  const checks: Check[] = [
+    { label: 'Customer name', done: !missing.includes('Customer name'), action: 'Fill in' },
+    { label: 'Jurisdiction', done: !missing.includes('Jurisdiction'), action: 'Fill in' },
+    { label: 'Site address', done: !missing.includes('Site address'), action: 'Fill in' },
+    { label: `Level ${record.level} chosen · ${LEVEL_NAMES[record.level]}`, done: true },
+    {
+      label: ahjMatch
+        ? ahjApproved
+          ? `${ahjMatch.ahj.name} requirements appended`
+          : `${ahjMatch.ahj.name} requirements reviewed, not appended`
+        : 'No AHJ board on file',
+      done: true,
+    },
+  ];
+  if (missing.includes('Region text')) {
+    checks.splice(3, 0, { label: 'Region text', done: false, action: 'Fill in' });
+  }
+
   return (
-    <div>
-      <div className="card">
-        <h3>Preview</h3>
-        {/* buildPostHtml escapes all user text — safe to render. */}
-        <div className="preview" dangerouslySetInnerHTML={{ __html: html }} />
-      </div>
-      <div className="card">
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+    <aside className="compose-aside">
+      <div className="card readiness">
+        <div className="readiness-head">
+          <span className={`readiness-mark ${ready ? 'ok' : 'warn'}`}>{ready ? '✓' : missing.length}</span>
+          <div>
+            <div className="readiness-title">{ready ? 'Ready to post' : `${missing.length} ${missing.length === 1 ? 'thing' : 'things'} before posting`}</div>
+            <div className="readiness-sub">
+              {ready ? 'Every required field is filled' : `Missing: ${missing.join(', ')}`}
+            </div>
+          </div>
+        </div>
+
+        <ul className="readiness-checks">
+          {checks.map((c) => (
+            <li key={c.label} className={c.done ? 'done' : 'todo'}>
+              <span className="check-ring">{c.done ? '✓' : ''}</span>
+              <span className="check-label">{c.label}</span>
+              {!c.done && c.action && <span className="check-action">{c.action}</span>}
+            </li>
+          ))}
+        </ul>
+
+        <div className="readiness-actions">
           <button
             type="button"
             className="btn primary"
@@ -78,35 +134,60 @@ export default function OutputColumn({
           >
             Copy for Slack
           </button>
-          <button type="button" className="btn secondary" disabled={!ready} onClick={() => void copyPlain()}>
-            Copy plain text
-          </button>
           <button type="button" className="btn secondary" disabled={!ready} onClick={onMarkPosted}>
-            ✅ Mark as posted
+            Mark as posted
           </button>
-          <button
-            type="button"
-            className="btn secondary"
-            onClick={onSaveDraft}
-            title="Save this project to Drafts right now"
-          >
-            💾 Save as Draft
-          </button>
-          <button type="button" className="btn secondary" onClick={onNewPost}>
-            New post
-          </button>
-        </div>
-        {!ready && (
-          <div className="error-inline" style={{ marginTop: 6 }}>
-            Required before copying: {missing.join(', ')}.
+          <div className="more-menu" ref={menuRef}>
+            <button
+              type="button"
+              className="btn secondary more-btn"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+              aria-label="More actions"
+              title="Copy plain text · AutoCAD title block"
+              onClick={() => setMenuOpen((v) => !v)}
+            >
+              ···
+            </button>
+            {menuOpen && (
+              <div className="more-panel" role="menu">
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={!ready}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    void copyPlain();
+                  }}
+                >
+                  Copy plain text
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setTitleBlockOpen((v) => !v);
+                  }}
+                >
+                  AutoCAD title block
+                </button>
+              </div>
+            )}
           </div>
-        )}
-        <div className="muted" style={{ marginTop: 6, fontSize: 12 }}>
-          Your work is saved to Drafts automatically as you type — “Save as Draft” just saves it this second.
         </div>
       </div>
 
-      <TitleBlockCard record={record} toast={toast} />
-    </div>
+      {titleBlockOpen && <TitleBlockCard record={record} toast={toast} />}
+
+      <div className="card preview-card">
+        <div className="preview-head">
+          <span className="section-label">Slack preview</span>
+          <span className="muted">Updates as you type</span>
+        </div>
+        {/* buildPostHtml escapes all user text — safe to render. */}
+        <div className="preview" dangerouslySetInnerHTML={{ __html: html }} />
+      </div>
+    </aside>
   );
 }

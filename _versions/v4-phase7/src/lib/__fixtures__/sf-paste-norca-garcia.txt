@@ -1,0 +1,31 @@
+Fulfillment
+Norca Garcia | FF | Rooftop Solar
+
+* 
+* 
+* 
+* 
+
+System Size (KW)
+15.58
+Project Status
+Install Scheduled
+Project
+[Norca Garcia](https://dynamicsslr.lightning.force.com/lightning/r/Project__c/a00Nv00000itZBtIAM/view)
+Install Scheduled Date
+10/1/2026
+Installed
+Site
+[1317 Skylark Rd, Pasadena, TX 77502](https://dynamicsslr.lightning.force.com/lightning/r/Site__c/a0bNv0000059wmfIAA/view)
+Jurisdiction
+[Pasadena](https://dynamicsslr.lightning.force.com/lightning/r/Jurisdiction__c/a3KNv000000Fs0JMAS/view)
+Utility Company
+[Centerpoint](https://dynamicsslr.lightning.force.com/lightning/r/Utility_Company__c/a0e6O00000KtBMvQAN/view)
+Lender
+SOLRITE
+Funding Stage
+DOCS SIGNED
+Install Region
+Houston / Beaumont
+Latest Scheduled Visit
+10/9/2026, 7:45 AM

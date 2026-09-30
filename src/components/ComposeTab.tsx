@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { extract, MAX_NOTE_CHARS, regionLookup, rewrite } from '../lib/api';
-import { LEVEL_INFO } from '../lib/classify';
+import { LEVEL_INFO, LEVEL_NAMES } from '../lib/classify';
 import { todayIso } from '../lib/dates';
 import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
@@ -324,17 +324,26 @@ export default function ComposeTab({
   const weekday = installWeekday(record.sf.installScheduledDate || undefined);
 
   return (
-    <div className="compose-grid">
+    <>
+      <div className="compose-head">
+        <h1>{record.sf.customerName.trim() || 'New post'}</h1>
+        {/* The design replaces the Save button with this line. Aboud kept both
+            (2026-09-30): the line explains the autosave, the button is the
+            reassurance he asked for after two projects were lost. */}
+        <span className="saved-line">Draft · saved automatically</span>
+        <span className="spacer" style={{ flex: 1 }} />
+        <button type="button" className="btn secondary" onClick={onSaveDraft} title="Save this project to Drafts right now">
+          💾 Save
+        </button>
+        <button type="button" className="btn secondary" onClick={onNewPost}>
+          + New post
+        </button>
+      </div>
+
+      <div className="compose-grid">
+        <div className="compose-form">
       <div className="card">
         <h3>Source</h3>
-        <label className="field">
-          Posting as
-          <select value={record.author} onChange={(e) => update((r) => ({ ...r, author: e.target.value }))}>
-            {settings.authors.map((a) => (
-              <option key={a}>{a}</option>
-            ))}
-          </select>
-        </label>
 
         <div className="paste-split">
           <div className="paste-zone" tabIndex={0} onPaste={onPaste}>
@@ -525,28 +534,33 @@ export default function ComposeTab({
               }
             />
           </label>
-          <label className="field">
-            Project Level
-            <select
-              value={record.level}
-              onChange={(e) =>
-                update((r) => {
-                  const level = Number(e.target.value) as Level;
-                  return { ...r, level, suggestedLevel: level };
-                })
-              }
-            >
-              <option value={1}>Level 1 – Standard Installation</option>
-              <option value={2}>Level 2 – Extended Routing & Integration</option>
-              <option value={3}>Level 3 – Service Equipment Modification</option>
-              <option value={4}>Level 4 – Major Electrical & Civil Construction</option>
-            </select>
-            <span className="level-info">
-              <b>Scope:</b> {LEVEL_INFO[record.level].scope}
-              <br />
+          {/* Classification — four colour-coded cards instead of a <select>
+              (Phase 8, Option A). The dot colours are the 2026 standard's own
+              grading. Still chosen by hand; nothing infers a level. */}
+          <div className="classification" role="group" aria-label="Project Level">
+            <div className="section-label">Classification</div>
+            <div className="level-cards">
+              {([1, 2, 3, 4] as Level[]).map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  className={`level-card ${record.level === n ? 'chosen' : ''}`}
+                  aria-pressed={record.level === n}
+                  onClick={() => update((r) => ({ ...r, level: n, suggestedLevel: n }))}
+                >
+                  <span className="level-card-top">
+                    <span className={`level-dot l${n}`} />
+                    <span className="level-n">Level {n}</span>
+                  </span>
+                  <span className="level-name">{LEVEL_NAMES[n]}</span>
+                </button>
+              ))}
+            </div>
+            <div className="level-info">
+              <b>Scope:</b> {LEVEL_INFO[record.level].scope} <span className="level-sep">·</span>{' '}
               <b>Planning window:</b> {LEVEL_INFO[record.level].window}
-            </span>
-          </label>
+            </div>
+          </div>
         </div>
         {(record.sf.scheduledWorkItems || record.sf.coordinatorNotes) && (
           <details style={{ marginTop: 4 }}>
@@ -701,15 +715,18 @@ export default function ComposeTab({
         </div>
       </div>
 
-      <OutputColumn
-        record={record}
-        settings={settings}
-        ahjs={ahjs}
-        onMarkPosted={onMarkPosted}
-        onNewPost={onNewPost}
-        onSaveDraft={onSaveDraft}
-        toast={toast}
-      />
-    </div>
+        </div>
+
+        <OutputColumn
+          record={record}
+          settings={settings}
+          ahjs={ahjs}
+          onMarkPosted={onMarkPosted}
+          onNewPost={onNewPost}
+          onSaveDraft={onSaveDraft}
+          toast={toast}
+        />
+      </div>
+    </>
   );
 }

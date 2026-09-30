@@ -369,28 +369,55 @@ export default function App() {
         <nav>
           {(
             [
-              ['compose', 'Compose'],
-              ['drafts', `Drafts (${allDrafts.length})`],
-              ['history', `History (${history.length})`],
-              ['ahj', 'AHJ Requirements'],
-              ['settings', '⚙ Settings'],
-            ] as [Tab, string][]
-          ).map(([key, label]) => (
+              ['compose', 'Compose', 0],
+              ['drafts', 'Drafts', allDrafts.length],
+              ['history', 'History', history.length],
+              ['ahj', 'AHJ Requirements', 0],
+              ['settings', 'Settings', 0],
+            ] as [Tab, string, number][]
+          ).map(([key, label, count]) => (
             <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
               {label}
+              {count > 0 && <span className="tab-badge">{count}</span>}
             </button>
           ))}
         </nav>
         <span className="spacer" />
-        <span
-          className={`ai-pill ${syncStatus === 'synced' ? 'ok' : 'off'}`}
-          title="Shared team history via Netlify. 'Local only' = changes stay in this browser until the connection returns."
+        {/* One pill, a dot per service (spec/11 — Option A). The full wording
+            stays on each item's title, which is also what the tests read. */}
+        <span className="status-pill">
+          <span
+            className={`status-item ${syncStatus === 'synced' ? 'ok' : 'off'}`}
+            title={
+              syncStatus === 'checking'
+                ? 'Sync…'
+                : syncStatus === 'synced'
+                  ? 'Team synced'
+                  : 'Local only'
+            }
+          >
+            <span className="status-dot" />
+            Synced
+          </span>
+          <span
+            className={`status-item ${aiStatus === 'ok' ? 'ok' : 'off'}`}
+            title={aiStatus === 'checking' ? 'AI…' : aiStatus === 'ok' ? 'AI available' : 'AI offline'}
+          >
+            <span className="status-dot" />
+            AI
+          </span>
+        </span>
+        <select
+          className="author-pill"
+          title="Posting as"
+          aria-label="Posting as"
+          value={current.author}
+          onChange={(e) => updateCurrent((r) => ({ ...r, author: e.target.value }))}
         >
-          {syncStatus === 'checking' ? 'Sync…' : syncStatus === 'synced' ? 'Team synced' : 'Local only'}
-        </span>
-        <span className={`ai-pill ${aiStatus === 'ok' ? 'ok' : 'off'}`}>
-          {aiStatus === 'checking' ? 'AI…' : aiStatus === 'ok' ? 'AI available' : 'AI offline'}
-        </span>
+          {settings.authors.map((a) => (
+            <option key={a}>{a}</option>
+          ))}
+        </select>
       </header>
 
       <main className="page">
