@@ -56,3 +56,18 @@ describe('effectiveText', () => {
     expect(effectiveText(raw, 'design', { usePolished: {} })).toBe('my draft');
   });
 });
+
+describe('noteLines — a line with nothing to say', () => {
+  it('drops a line that is only punctuation, so the post never shows a bare "-."', () => {
+    expect(noteLines('-')).toEqual([]);
+    expect(noteLines('*')).toEqual([]);
+    expect(noteLines('...')).toEqual([]);
+    expect(noteLines('real line\n-\nanother line')).toEqual(['real line.', 'another line.']);
+  });
+
+  it('keeps a line that carries a number or a letter, however short', () => {
+    expect(noteLines('200A')).toEqual(['200A.']);
+    expect(noteLines('-20 ft drop')).toEqual(['-20 ft drop.']);
+    expect(noteLines('2" PVC')).toEqual(['2" PVC.']);
+  });
+});

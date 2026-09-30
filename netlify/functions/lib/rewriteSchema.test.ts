@@ -61,3 +61,13 @@ describe('key list stays in sync with the client', () => {
     expect([...POLISH_KEYS]).toEqual(client.POLISH_KEYS);
   });
 });
+
+describe('the per-box character ceiling stays in sync with the client', () => {
+  it('matches MAX_NOTE_CHARS in src/lib/api.ts', async () => {
+    const { MAX_NOTE_CHARS } = await import('../../../src/lib/api');
+    const atLimit = { items: [{ id: 'design', text: 'x'.repeat(MAX_NOTE_CHARS) }] };
+    const overLimit = { items: [{ id: 'design', text: 'x'.repeat(MAX_NOTE_CHARS + 1) }] };
+    expect(RewriteRequest.safeParse(atLimit).success).toBe(true);
+    expect(RewriteRequest.safeParse(overLimit).success).toBe(false);
+  });
+});

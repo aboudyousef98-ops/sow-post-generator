@@ -120,3 +120,38 @@ describe('migrateRecord — Phase 7 (spec/10 §2.2)', () => {
     expect(migrateRecord(both).installNotes?.other).toBe('already here');
   });
 });
+
+describe('migrateRecord — malformed records never reach the UI', () => {
+  // These shapes arrive from the shared team store or a hand-edited export
+  // file. Before this guard each one white-screened the app, and the bad
+  // record was already cached in localStorage, so the reload crashed too.
+  it('fills a missing notes object', () => {
+    const broken = { ...makeRecord(), notes: undefined } as unknown as PostRecord;
+    const m = migrateRecord(broken);
+    expect(m.notes).toEqual({ layout: '', siteSurvey: '', design: '', homeowner: '' });
+  });
+
+  it('fills missing sf sub-fields rather than letting .trim() throw', () => {
+    const broken = { ...makeRecord(), sf: { region: 'HOU', source: 'text' } } as unknown as PostRecord;
+    const m = migrateRecord(broken);
+    expect(m.sf.customerName).toBe('');
+    expect(() => m.sf.customerName.trim()).not.toThrow();
+  });
+
+  it('fills a missing sf object entirely', () => {
+    const broken = { ...makeRecord(), sf: undefined } as unknown as PostRecord;
+    expect(migrateRecord(broken).sf.customerName).toBe('');
+  });
+
+  it('clamps a level outside 1..4, which has no LEVEL_INFO entry', () => {
+    expect(migrateRecord({ ...makeRecord(), level: 7 } as unknown as PostRecord).level).toBe(4);
+    expect(migrateRecord({ ...makeRecord(), level: 0 } as unknown as PostRecord).level).toBe(1);
+    expect(migrateRecord({ ...makeRecord(), level: undefined } as unknown as PostRecord).level).toBe(1);
+    expect(migrateRecord({ ...makeRecord(), level: 3 } as PostRecord).level).toBe(3);
+  });
+
+  it('leaves a healthy record untouched, and still returns it by identity', () => {
+    const good = migrateRecord(makeRecord());
+    expect(migrateRecord(good)).toBe(good);
+  });
+})

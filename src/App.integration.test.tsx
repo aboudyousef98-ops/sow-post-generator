@@ -453,12 +453,15 @@ describe('the two AI modes', () => {
   // while a request is still in flight.
   let hold: boolean;
   let release: (() => void) | null;
+  // What the model "returns" for one item. Default: a light edit.
+  let reply: (item: { id: string; text: string }) => { id: string; text: string };
 
   beforeEach(() => {
     localStorage.clear();
     sent = [];
     hold = false;
     release = null;
+    reply = (i) => ({ id: i.id, text: `${i.text} edited.` });
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string, init?: RequestInit) => {
@@ -468,7 +471,7 @@ describe('the two AI modes', () => {
           if (hold) await new Promise<void>((resolve) => (release = resolve));
           return new Response(
             JSON.stringify({
-              items: body.items.map((i) => ({ id: i.id, text: `${i.text} edited.` })),
+              items: body.items.map((i) => reply(i)),
               model: 'gpt-4o-mini',
               ms: 12,
             }),
@@ -530,5 +533,203 @@ describe('the two AI modes', () => {
     release?.();
     await waitFor(() => expect(screen.getByRole('button', { name: 'هري ابو روي' })).toBeTruthy());
     expect((screen.getByRole('button', { name: /Polish with AI/i }) as HTMLButtonElement).disabled).toBe(false);
+  });
+});
+
+// ---- Review findings, 2026-09-30 — AI results must never silently replace ---
+// ---- or erase what the engineer actually wrote -----------------------------
+
+describe('the AI can never quietly delete or overwrite a note', () => {
+  let sent: { items: { id: string; text: string }[]; mode?: string }[];
+  let hold: boolean;
+  let release: (() => void) | null;
+  let reply: (item: { id: string; text: string }) => { id: string; text: string };
+
+  beforeEach(() => {
+    localStorage.clear();
+    sent = [];
+    hold = false;
+    release = null;
+    reply = (i) => ({ id: i.id, text: `${i.text} edited.` });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string, init?: RequestInit) => {
+        if (String(url).includes('/rewrite')) {
+          const body = JSON.parse(String(init?.body)) as { items: { id: string; text: string }[]; mode?: string };
+          sent.push(body);
+          if (hold) await new Promise<void>((resolve) => (release = resolve));
+          return new Response(
+            JSON.stringify({ items: body.items.map((i) => reply(i)), model: 'gpt-4o-mini', ms: 12 }),
+            { status: 200 },
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, hasKey: true }), { status: 200 });
+      }),
+    );
+  });
+
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  async function ready() {
+    render(<App />);
+    await waitFor(() => expect(screen.getByText('AI available')).toBeTruthy());
+  }
+
+  const preview = () => (document.querySelector('.preview') as HTMLElement).textContent ?? '';
+
+  // The server prompt tells the model to return "" for an empty note. A model
+  // that misapplies that rule to a SHORT note used to blank the box silently:
+  // effectiveText treats "" as a valid polished value, and both guards bail on
+  // an empty polished string, so nothing warned.
+  it('an empty string back from the model leaves the raw draft in the post', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), {
+      target: { value: 'AC disconnect rating must be 200A' },
+    });
+    reply = (i) => ({ id: i.id, text: '' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+    await waitFor(() => expect(sent.length).toBe(1));
+
+    await waitFor(() => expect(preview()).toContain('200A'));
+    expect(preview()).not.toContain('Design Feedback:* All good.');
+  });
+
+  it('a whitespace-only reply is treated the same way', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText(/^Load run/i), { target: { value: '18 ft through the attic' } });
+    reply = (i) => ({ id: i.id, text: '   \n  ' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+    await waitFor(() => expect(sent.length).toBe(1));
+
+    await waitFor(() => expect(preview()).toContain('18 ft through the attic'));
+  });
+
+  // Editing a box while its polish is in flight: the reply is keyed by id only,
+  // so it used to land on top of text the user had already replaced — the
+  // textarea showed the new text while the post carried the polished old one.
+  it('a result for text the user has already replaced is discarded', async () => {
+    hold = true;
+    await ready();
+    const box = screen.getByLabelText(/Design Feedback/i);
+    fireEvent.change(box, { target: { value: 'ORIGINAL LINE' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+    await waitFor(() => expect(sent.length).toBe(1));
+
+    fireEvent.change(box, { target: { value: 'COMPLETELY DIFFERENT LINE' } });
+    release?.();
+
+    await waitFor(() => expect((box as HTMLTextAreaElement).value).toBe('COMPLETELY DIFFERENT LINE'));
+    expect(preview()).toContain('COMPLETELY DIFFERENT LINE');
+    expect(preview()).not.toContain('ORIGINAL LINE');
+  });
+
+  it('a result for a box the user did NOT touch still applies', async () => {
+    hold = true;
+    await ready();
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), { target: { value: 'design note' } });
+    fireEvent.change(screen.getByLabelText(/Homeowner Feedback/i), { target: { value: 'homeowner note' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+    await waitFor(() => expect(sent.length).toBe(1));
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), { target: { value: 'design note CHANGED' } });
+    release?.();
+
+    await waitFor(() => expect(preview()).toContain('homeowner note edited.'));
+    expect(preview()).toContain('design note CHANGED');
+  });
+
+  // A box longer than the server's 3000-char ceiling used to be sent anyway and
+  // come back as a raw "bad payload".
+  it('a note over the 3000-character limit is refused before it is sent', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), { target: { value: 'x'.repeat(3500) } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+
+    await waitFor(() => expect(screen.getByText(/too long for the AI/i)).toBeTruthy());
+    expect(sent.length).toBe(0);
+  });
+
+  // AI guard hints are component state; they used to survive a record switch
+  // and sit under the empty boxes of a brand-new post.
+  it('guard warnings do not follow you to the next project', async () => {
+    await ready();
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), {
+      target: { value: 'run is 2" PVC\nsecond line' },
+    });
+    reply = (i) => ({ id: i.id, text: 'merged into one line' });
+
+    fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
+    await waitFor(() => expect(document.querySelector('.bullet-drift, .dropped-tokens')).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: /New post/i }));
+
+    await waitFor(() => expect(document.querySelector('.bullet-drift')).toBeNull());
+    expect(document.querySelector('.dropped-tokens')).toBeNull();
+  });
+});
+
+// ---- Review finding, 2026-09-30 --------------------------------------------
+// newPost force-saves the open form before clearing it. Opening a draft did
+// not, and switching records cancels the pending 500 ms autosave — so the last
+// thing typed was dropped.
+
+describe('opening another draft never discards what is on screen', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 })),
+    );
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const stored = () => JSON.parse(localStorage.getItem('sowpost.records') ?? '[]') as { sf: { customerName: string }; notes: { design: string } }[];
+  const byName = (name: string) => stored().find((r) => r.sf.customerName === name);
+
+  /** Two saved drafts, then Compose holding the second one. */
+  async function twoDrafts() {
+    render(<App />);
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'First Project' } });
+    await waitFor(() => expect(byName('First Project')).toBeTruthy(), { timeout: 2000 });
+    fireEvent.click(screen.getByRole('button', { name: /New post/i }));
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Second Project' } });
+    await waitFor(() => expect(byName('Second Project')).toBeTruthy(), { timeout: 2000 });
+  }
+
+  it('flushes the open form when a Drafts row is opened inside the debounce window', async () => {
+    await twoDrafts();
+
+    // Type, then switch immediately — well inside the 500 ms autosave debounce.
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), {
+      target: { value: 'AC disconnect must be 200A' },
+    });
+    fireEvent.click(screen.getByText(/Drafts \(/));
+    fireEvent.click(screen.getByText('First Project'));
+
+    await waitFor(() => expect(byName('Second Project')?.notes.design).toBe('AC disconnect must be 200A'));
+  });
+
+  it('re-opening the draft that is already open keeps the unsaved keystrokes on screen', async () => {
+    await twoDrafts();
+
+    fireEvent.change(screen.getByLabelText(/Design Feedback/i), { target: { value: 'still typing this' } });
+    fireEvent.click(screen.getByText(/Drafts \(/));
+    fireEvent.click(screen.getByText('Second Project'));
+
+    // It used to reload the stale stored copy and wipe the box on screen.
+    await waitFor(() =>
+      expect((screen.getByLabelText(/Design Feedback/i) as HTMLTextAreaElement).value).toBe('still typing this'),
+    );
+    expect(byName('Second Project')?.notes.design).toBe('still typing this');
   });
 });

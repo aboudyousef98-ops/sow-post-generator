@@ -97,3 +97,28 @@ describe('authorsIn', () => {
     expect(authorsIn(records)).toEqual(['Aboud Yousef', 'Mohammad Refai', 'Omar Rajab']);
   });
 });
+
+describe('applyQuery — Installation Notes are searchable', () => {
+  // Before Phase 7 this text lived in notes.layout and was searchable; moving
+  // it into installNotes must not take it out of search.
+  const withInstall = [
+    rec({ id: 'x', customer: 'Norca Garcia' }),
+    rec({ id: 'y', customer: 'Patrick Lingwall' }),
+  ];
+  withInstall[1].installNotes = {
+    ...emptyInstallNotes(),
+    other: 'Back-to-back installation.',
+    loadRun: '18 ft through the attic',
+    orientations: ['North', 'West'],
+  };
+
+  it('finds a record by the text in a conduit run', () => {
+    expect(applyQuery(withInstall, { ...defaultQuery('updated'), text: 'attic' }).map((r) => r.id)).toEqual(['y']);
+  });
+
+  it('finds a record by the text in "Anything else"', () => {
+    expect(applyQuery(withInstall, { ...defaultQuery('updated'), text: 'back-to-back' }).map((r) => r.id)).toEqual([
+      'y',
+    ]);
+  });
+});

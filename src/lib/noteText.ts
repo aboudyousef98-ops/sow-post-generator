@@ -25,7 +25,16 @@ export function stripBullet(line: string): string {
  * per line (Aboud, 2026-09-28). One source line = one bullet, same order.
  */
 export function noteLines(text: string): string[] {
-  return text.split('\n').map(stripBullet).filter(Boolean).map(punctuate);
+  return text
+    .split('\n')
+    .map(stripBullet)
+    .filter(Boolean)
+    // A line with no letter and no digit says nothing — a stray "-" or "..."
+    // would otherwise reach Slack as a bullet reading "-.". The labelled
+    // install boxes already drop these via clause(); this keeps both paths
+    // in agreement.
+    .filter((l) => /[\p{L}\p{N}]/u.test(l))
+    .map(punctuate);
 }
 
 /** The `polished` + `usePolished` pair. `PostRecord` satisfies this structurally. */

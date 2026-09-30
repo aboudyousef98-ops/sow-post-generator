@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { extract, regionLookup, rewrite } from '../lib/api';
+import { extract, MAX_NOTE_CHARS, regionLookup, rewrite } from '../lib/api';
 import { LEVEL_INFO } from '../lib/classify';
 import { todayIso } from '../lib/dates';
 import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
@@ -60,6 +60,24 @@ export default function ComposeTab({
   // Set when the AI returned a different number of bullets than we sent it.
   const [bulletDrift, setBulletDrift] = useState<Partial<Record<PolishKey, { from: number; to: number }>>>({});
   const fileInput = useRef<HTMLInputElement>(null);
+  // The record as it is RIGHT NOW, for code that resumes after an await and
+  // must not act on the version it closed over (see runAi).
+  const recordRef = useRef(record);
+  recordRef.current = record;
+
+  // Everything below is per-project scratch state, not part of the record.
+  // Switching project — opening a draft, or New post — must leave none of it
+  // behind: AI guard hints under boxes that no longer hold that text, the
+  // previous paste's raw panel, or a stale "manually edited" set.
+  useEffect(() => {
+    setDropped({});
+    setBulletDrift({});
+    setRawPairs(null);
+    setShowRaw(false);
+    setManualFields(new Set());
+    setPolishState({ busy: false });
+    setExtractState({ busy: false });
+  }, [record.id]);
 
   // ---- nearest-metro resolution for OTHER regions ------------------------
 
@@ -234,6 +252,13 @@ export default function ComposeTab({
         toast('Nothing to polish yet — write a note first.');
         return;
       }
+      // The server rejects anything over 3000 characters per box with a bare
+      // "bad payload"; say which box, in words, before spending the request.
+      const tooLong = items.find((i) => i.text.length > MAX_NOTE_CHARS);
+      if (tooLong) {
+        toast(`That note is too long for the AI (${tooLong.text.length} of ${MAX_NOTE_CHARS} characters) — shorten it first.`);
+        return;
+      }
       setPolishState({ busy: mode });
       try {
         const res = await rewrite(items, mode);
@@ -246,6 +271,13 @@ export default function ComposeTab({
         for (const sent of items) {
           const out = byId.get(sent.id);
           if (out === undefined) continue; // model skipped it — that box keeps its raw draft
+          // An empty answer is not an edit. Both guards ignore a blank polished
+          // string, so storing it would silently erase the engineer's note from
+          // the post while the textarea still showed it.
+          if (!out.trim()) continue;
+          // The user can type while the request is in flight. The reply is keyed
+          // by id alone, so without this it would land on text they replaced.
+          if (rawTextFor(recordRef.current, sent.id) !== sent.text) continue;
           polished[sent.id] = out;
           use[sent.id] = true;
           modes[sent.id] = mode;

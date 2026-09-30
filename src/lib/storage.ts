@@ -81,12 +81,36 @@ export function migrate<T extends { schemaVersion?: number }>(value: T): T {
  * Runs on every load AND inside mergeRecords(), so records pulled from the
  * shared Blobs store or from a JSON import are migrated too.
  */
+/**
+ * Every shape the UI dereferences without guarding first. A record from the
+ * shared team store or a hand-edited export file can be missing any of them;
+ * `records.mts` only validates `id` + `updatedAt`. When one was missing the app
+ * white-screened — and because the bad record had already been cached, the
+ * reload crashed too, so the only way out was clearing localStorage by hand.
+ */
+function isWellFormed(r: PostRecord): boolean {
+  return (
+    !!r.notes &&
+    !!r.sf &&
+    typeof r.sf.customerName === 'string' &&
+    typeof r.level === 'number' &&
+    r.level >= 1 &&
+    r.level <= 4
+  );
+}
+
+/** Levels outside 1..4 have no LEVEL_NAMES / LEVEL_INFO entry — clamp, never index blindly. */
+function clampLevel(level: unknown): PostRecord['level'] {
+  const n = typeof level === 'number' && Number.isFinite(level) ? Math.round(level) : 1;
+  return Math.min(4, Math.max(1, n)) as PostRecord['level'];
+}
+
 export function migrateRecord(r: PostRecord): PostRecord {
   const legacyText = r.notes?.layout ?? '';
   const legacyPolished = (r.polished as Record<string, string> | undefined)?.layout;
   const legacyUse = (r.usePolished as Record<string, boolean> | undefined)?.layout;
-  if (r.installNotes && !legacyText && legacyPolished === undefined && legacyUse === undefined) {
-    return r; // already migrated — return the same object so callers can cheaply compare
+  if (r.installNotes && !legacyText && legacyPolished === undefined && legacyUse === undefined && isWellFormed(r)) {
+    return r; // already migrated and sound — same object, so callers can cheaply compare
   }
 
   const installNotes: InstallNotes = { ...emptyInstallNotes(), ...r.installNotes };
@@ -104,10 +128,29 @@ export function migrateRecord(r: PostRecord): PostRecord {
   }
   delete usePolished.layout;
 
+  // Spread first, then guarantee the fields the UI dereferences — a stored
+  // record can be missing any of them (see isWellFormed above).
+  const storedSf = (r.sf ?? {}) as Partial<PostRecord['sf']>;
+  const storedNotes = (r.notes ?? {}) as Partial<PostRecord['notes']>;
+
   return {
     ...r,
+    level: clampLevel(r.level),
+    sf: {
+      ...storedSf,
+      customerName: storedSf.customerName ?? '',
+      installScheduledDate: storedSf.installScheduledDate ?? '',
+      region: storedSf.region ?? 'HOU',
+      source: storedSf.source ?? 'manual',
+    },
     installNotes,
-    notes: { ...r.notes, layout: '' },
+    notes: {
+      ...storedNotes,
+      siteSurvey: storedNotes.siteSurvey ?? '',
+      design: storedNotes.design ?? '',
+      homeowner: storedNotes.homeowner ?? '',
+      layout: '',
+    },
     polished: Object.keys(polished).length ? (polished as PostRecord['polished']) : undefined,
     usePolished: usePolished as PostRecord['usePolished'],
   };

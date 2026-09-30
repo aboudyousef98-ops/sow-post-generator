@@ -48,6 +48,14 @@ export interface RewriteResponse {
 }
 
 /**
+ * Per-box character ceiling the server enforces — `RequestItem` in
+ * `netlify/functions/lib/rewriteSchema.ts`. Kept here so the UI can refuse an
+ * over-long note in words instead of surfacing a bare "bad payload"; a test in
+ * `rewriteSchema.test.ts` fails if the two numbers drift apart.
+ */
+export const MAX_NOTE_CHARS = 3000;
+
+/**
  * Polish (or rewrite) every non-empty free-text box in one call
  * (spec/10 §5, §11). `mode` defaults to 'polish' — the light copy-edit;
  * 'rewrite' is the full rewrite for rough/mixed-language notes.

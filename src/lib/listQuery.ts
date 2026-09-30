@@ -47,6 +47,9 @@ function searchableText(r: PostRecord, by: SearchBy): string {
         r.author,
         r.designerTag,
         ...Object.values(r.notes),
+        // Installation Notes too — before Phase 7 this text lived in
+        // notes.layout and was searchable; moving it must not lose that.
+        ...Object.values(r.installNotes ?? {}).map((v) => (Array.isArray(v) ? v.join(' ') : String(v ?? ''))),
         r.finalText,
       ]
         .filter(Boolean)

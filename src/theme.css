@@ -952,3 +952,25 @@ table.list tr.row:hover {
   color: var(--dyn-navy);
   margin: 14px 0 6px;
 }
+
+/* ErrorBoundary fallback — see components/ErrorBoundary.tsx */
+.crash-screen {
+  max-width: 640px;
+  margin: 64px auto;
+  padding: 0 24px;
+}
+.crash-detail {
+  background: #f6f8f8;
+  border: 1px solid #eef1f2;
+  border-radius: 8px;
+  padding: 12px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: #3b3b3b;
+}
+.crash-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}

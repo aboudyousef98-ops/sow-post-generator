@@ -277,18 +277,29 @@ export default function App() {
 
   const openDraft = useCallback(
     (id: string) => {
-      const rec = recordsRef.current.find((r) => r.id === id);
+      // Same rule as newPost: replacing `current` cancels the pending 500 ms
+      // autosave, so flush first or the last keystrokes are gone.
+      const open = currentRef.current;
+      if (hasContent(open)) commitDraft(open);
+      // Re-opening the draft already in Compose: use the in-memory copy. The
+      // commit above has not reached recordsRef yet, and the stored copy is
+      // the stale one we just replaced.
+      const rec = open.id === id ? open : recordsRef.current.find((r) => r.id === id);
       if (!rec) return;
       setCurrent(rec);
       saveCurrentId(id);
       setTab('compose');
     },
-    [],
+    [commitDraft],
   );
 
   const duplicateDraft = useCallback(
     (id: string) => {
-      const rec = recordsRef.current.find((r) => r.id === id);
+      // Duplicating the draft that is open in Compose must copy what is on
+      // screen, not the last autosaved version of it.
+      const open = currentRef.current;
+      if (open.id === id && hasContent(open)) commitDraft(open);
+      const rec = open.id === id ? open : recordsRef.current.find((r) => r.id === id);
       if (!rec) return;
       const now = new Date().toISOString();
       const copy: PostRecord = {
@@ -304,7 +315,7 @@ export default function App() {
       setRecords([...recordsRef.current, copy]);
       toast('Draft duplicated.');
     },
-    [setRecords, toast],
+    [setRecords, toast, commitDraft],
   );
 
   // Delete = tombstone (deletedAt) so the deletion syncs to every browser
