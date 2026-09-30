@@ -28,9 +28,19 @@ export function defaultSettings(): Settings {
     ],
     defaults: { siteSurvey: 'All good.', design: 'All good.', homeowner: 'No feedback.' },
     chips: {
+      // Installation Notes — spec/10 §7. The 1-story / 2-story / two-walls
+      // chips are gone: those are dropdowns now.
+      'install.other': ['Back-to-back installation.', 'Attic run.'],
+      'install.specialCases': [
+        'Window to be closed off.',
+        'Small junction boxes to be relocated.',
+        'Existing equipment to be moved.',
+      ],
       siteSurvey: [
         'Some of the uploaded photos in Salesforce appear to belong to another project.',
-        'Please take sufficient measurements of all walls and wide-angle photos of each wall.',
+        'Please take sufficient measurements of all walls.',
+        'Please provide the wall height.',
+        'Please add a wide-angle photo of each wall.',
       ],
       design: [
         'The conduit material for the service path should be 2" PVC instead of 2" EMT.',
@@ -42,6 +52,8 @@ export function defaultSettings(): Settings {
         'The elevation drawing shows an expansion unit; this is not reflected in the one-line diagram.',
         'The wiring between the meter and inverter, and between the inverter and MDP, was changed from SER to THHN Cu because SER is used for attic runs only.',
         'The BOS covers both scenarios, with calculations provided for 1-1/4" PVC and 2" PVC.',
+        'Please review the one-line diagram against the elevation.',
+        'The one-line diagram is missing the {component}.',
       ],
       homeowner: [
         'The installation wall must be cleaned and prepared before installation.',
