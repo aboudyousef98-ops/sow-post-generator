@@ -84,20 +84,20 @@ export default function HistoryTab({ history, settings, records, setRecords, set
   }
 
   return (
-    <div className="card">
-      <h3>History</h3>
-      <p className="muted">
-        History is shared with the whole team ("Team synced" pill in the top bar). Export JSON is
-        still available as an occasional offline backup.
-      </p>
-      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10, flexWrap: 'wrap' }}>
-        <button type="button" className="btn secondary small" onClick={() => downloadExport(settings, records, ahjs)}>
+    <div className="list-page">
+      <div className="list-head">
+        <h1>History</h1>
+        <span className="muted">
+          {history.length === 0 ? 'nothing posted yet' : `${history.length} posted · shared with the team`}
+        </span>
+        <span style={{ flex: 1 }} />
+        <button type="button" className="btn secondary" onClick={() => downloadExport(settings, records, ahjs)}>
           Export JSON
         </button>
-        <button type="button" className="btn secondary small" onClick={() => importInput.current?.click()}>
+        <button type="button" className="btn secondary" onClick={() => importInput.current?.click()}>
           Import JSON
         </button>
-        <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <label className="muted import-settings">
           <input
             type="checkbox"
             checked={importSettingsToo}
@@ -117,47 +117,64 @@ export default function HistoryTab({ history, settings, records, setRecords, set
           }}
         />
       </div>
+
       {history.length === 0 ? (
-        <p className="muted">Nothing posted yet.</p>
+        <div className="card">
+          <p className="muted" style={{ margin: 0 }}>
+            Nothing posted yet. History is shared with the whole team — the Synced dot in the top bar
+            shows whether this browser has reached the team store.
+          </p>
+        </div>
       ) : (
-        <>
-        <ListControls
-          query={query}
-          onChange={setQuery}
-          authors={authorsIn(history)}
-          sortOptions={['posted', 'installDate', 'customer', 'level', 'region', 'author']}
-          count={shown.length}
-          total={history.length}
-        />
-        <table className="list">
-          <thead>
-            <tr>
-              <th>Posted at</th>
-              <th>Author</th>
-              <th>Customer</th>
-              <th>Install date</th>
-              <th>Region</th>
-              <th>Level</th>
-              <th>Drivers</th>
-            </tr>
-          </thead>
-          <tbody>
-            {shown.map((r) => (
-              <tr key={r.id} className="row" onClick={() => setOpenId(r.id)}>
-                <td>{r.postedAt ? new Date(r.postedAt).toLocaleString() : '—'}</td>
-                <td>{r.author}</td>
-                <td>{r.sf.customerName}</td>
-                <td>{r.sf.installScheduledDate ? isoToUs(r.sf.installScheduledDate) : '—'}</td>
-                <td>{r.sf.region}</td>
-                <td>
-                  <span className={`level-badge l${r.level}`}>L{r.level}</span>
-                </td>
-                <td className="muted">{r.drivers.join(', ') || '—'}</td>
+        <div className="card list-card">
+          <ListControls
+            query={query}
+            onChange={setQuery}
+            authors={authorsIn(history)}
+            sortOptions={['posted', 'installDate', 'customer', 'level', 'region', 'author']}
+            count={shown.length}
+            total={history.length}
+          />
+          <table className="list">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Install</th>
+                <th>Region</th>
+                <th>Level</th>
+                <th>Drivers</th>
+                <th>Posted</th>
+                <th></th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-        </>
+            </thead>
+            <tbody>
+              {shown.map((r) => (
+                <tr key={r.id} className="row" onClick={() => setOpenId(r.id)}>
+                  <td>
+                    <div className="cell-name">{r.sf.customerName || <span className="muted">Untitled</span>}</div>
+                    <div className="cell-meta">by {r.author}</div>
+                  </td>
+                  <td className="nowrap">
+                    {r.sf.installScheduledDate ? isoToUs(r.sf.installScheduledDate) : '—'}
+                  </td>
+                  <td className="nowrap">{r.sf.region}</td>
+                  <td>
+                    <span className={`level-badge l${r.level}`}>L{r.level}</span>
+                  </td>
+                  <td className="cell-meta">{r.drivers.join(', ') || '—'}</td>
+                  <td className="nowrap cell-meta">
+                    {r.postedAt ? new Date(r.postedAt).toLocaleDateString() : '—'}
+                  </td>
+                  <td className="nowrap" onClick={(e) => e.stopPropagation()}>
+                    <button type="button" className="btn small secondary" onClick={() => void copy(r, true)}>
+                      Copy again
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -26,6 +26,10 @@ function Harness({ initial = [] as Ahj[] }: { initial?: Ahj[] }) {
   );
 }
 
+/** The right-hand board pane. Aliases also appear in the sidebar list now
+ *  (Phase 8), so alias-chip assertions have to say which pane they mean. */
+const board = () => document.querySelector('.ahj-board') as HTMLElement;
+
 const addAhj = (name: string, aliases = '') => {
   fireEvent.click(screen.getByText('+ Add AHJ'));
   fireEvent.change(screen.getByPlaceholderText('e.g. Corpus Christi'), { target: { value: name } });
@@ -46,7 +50,7 @@ describe('AhjTab', () => {
     addAhj('Corpus Christi', 'City of Corpus Christi');
     // Board opens for the new AHJ.
     expect(screen.getByText('Requirements board')).toBeTruthy();
-    expect(screen.getByText('City of Corpus Christi')).toBeTruthy(); // alias chip
+    expect(within(board()).getByText('City of Corpus Christi')).toBeTruthy(); // alias chip
 
     postRequirement('Use Square D for the AC Disconnect.');
     expect(screen.getByText('Use Square D for the AC Disconnect.')).toBeTruthy();
@@ -141,9 +145,9 @@ describe('AhjTab', () => {
     render(<Harness />);
     addAhj('Plano', 'City of Plano\nplano\nCITY OF PLANO');
     // Only the one real alias survives as a chip.
-    expect(screen.getAllByText('City of Plano')).toHaveLength(1);
-    expect(screen.queryByText('plano')).toBeNull();
-    expect(screen.queryByText('CITY OF PLANO')).toBeNull();
+    expect(within(board()).getAllByText('City of Plano')).toHaveLength(1);
+    expect(within(board()).queryByText('plano')).toBeNull();
+    expect(within(board()).queryByText('CITY OF PLANO')).toBeNull();
   });
 
   it('global search finds post text and opens the board', () => {

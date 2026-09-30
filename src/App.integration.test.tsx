@@ -370,11 +370,11 @@ describe('draft safety', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
 
     // First click only arms the confirm — nothing is posted yet.
-    fireEvent.click(screen.getByText(/Mark as done/));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as posted' }));
     expect(screen.getByText(/Send .* to History\?/)).toBeTruthy();
     expect(stored().every((r: { status: string }) => r.status === 'draft')).toBe(true);
 
-    fireEvent.click(screen.getByText('Yes, mark as done'));
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, mark as posted' }));
     await waitFor(() => expect(screen.getByRole('button', { name: /^History/ })).toBeTruthy());
 
     const posted = stored().find((r: { status: string }) => r.status === 'posted');
@@ -391,7 +391,7 @@ describe('draft safety', () => {
     fireEvent.click(screen.getByText(/New post/));
     fireEvent.click(screen.getByRole('button', { name: /^Drafts/ }));
 
-    fireEvent.click(screen.getByText(/Mark as done/));
+    fireEvent.click(screen.getByRole('button', { name: 'Mark as posted' }));
     fireEvent.click(screen.getByText('Cancel'));
 
     expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy();

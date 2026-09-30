@@ -1419,3 +1419,343 @@ table.list tr.row:hover {
 .level-sep {
   color: var(--dyn-dash);
 }
+
+/* ---- Drafts / History list screens (Phase 8, Option A) ------------------- */
+
+.list-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.list-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+
+.list-head h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--dyn-ink);
+}
+
+.list-head .muted {
+  font-size: 12px;
+}
+
+.import-settings {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+}
+
+/* The card wraps the filter row AND the table edge to edge. */
+.list-card {
+  padding: 0;
+  overflow: visible;
+}
+
+.list-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--dyn-line);
+  flex-wrap: wrap;
+}
+
+.list-controls .search-input {
+  flex: 1 1 220px;
+  border: 1.5px solid var(--dyn-border);
+  border-radius: var(--radius-pill);
+  padding: 6px 14px;
+  background: var(--dyn-surface);
+  font-size: 13px;
+  min-width: 0;
+}
+
+.pill-select {
+  border: 1.5px solid var(--dyn-border);
+  border-radius: var(--radius-pill);
+  padding: 5px 10px;
+  background: var(--dyn-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dyn-navy);
+  cursor: pointer;
+  max-width: 100%;
+}
+
+.pill-button {
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.list-count {
+  font-size: 12px;
+  margin-left: auto;
+}
+
+.list-card .list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.list-card .list th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--dyn-muted);
+  border-bottom: 1px solid var(--dyn-line);
+}
+
+.list-card .list th:first-child,
+.list-card .list td:first-child {
+  padding-left: 16px;
+}
+
+.list-card .list th:last-child,
+.list-card .list td:last-child {
+  padding-right: 16px;
+  text-align: right;
+}
+
+.list-card .list td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #f2f4f5;
+  vertical-align: middle;
+}
+
+.list-card .list tr.row:hover {
+  background: rgba(5, 190, 192, 0.05);
+}
+
+.cell-name {
+  font-weight: 600;
+  color: var(--dyn-ink);
+}
+
+.cell-meta {
+  font-size: 12px;
+  color: var(--dyn-muted);
+  margin-top: 2px;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+/* Readiness column — three states, from missingRequired(). */
+.readiness-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.readiness-cell-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.readiness-cell.ready {
+  color: #0a8c8e;
+}
+
+.readiness-cell.ready .readiness-cell-dot {
+  background: var(--dyn-teal);
+}
+
+.readiness-cell.nearly,
+.readiness-cell.missing {
+  color: #b3621a;
+}
+
+.readiness-cell.nearly .readiness-cell-dot,
+.readiness-cell.missing .readiness-cell-dot {
+  background: var(--dyn-orange);
+}
+
+.more-panel button.danger {
+  color: var(--dyn-danger);
+}
+
+/* ---- Settings: label/description on the left, controls on the right ------ */
+
+.settings-page {
+  max-width: 820px;
+  margin: 0 auto;
+}
+
+.settings-page h1 {
+  margin: 0 0 14px;
+  font-size: 20px;
+  color: var(--dyn-ink);
+}
+
+.settings-card {
+  padding: 0;
+}
+
+.settings-section {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+  gap: 16px 24px;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--dyn-line);
+}
+
+.settings-card > .settings-section:last-child {
+  border-bottom: 0;
+}
+
+@media (max-width: 720px) {
+  .settings-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-label p {
+  font-size: 12.5px;
+  color: var(--dyn-muted);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+.settings-body > :last-child {
+  margin-bottom: 0;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px 16px;
+}
+
+.settings-grid > label.field {
+  margin-bottom: 0;
+}
+
+/* ---- AHJ Requirements: list pane + board (Phase 8, Option A) ------------- */
+
+.ahj-page {
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.ahj-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.ahj-sidebar {
+  flex: 0 1 260px;
+  min-width: 220px;
+  padding: 0;
+  overflow: hidden;
+  align-self: stretch;
+}
+
+.ahj-sidebar-search {
+  padding: 12px 12px 8px;
+}
+
+.ahj-sidebar-search input {
+  width: 100%;
+  border: 1.5px solid var(--dyn-border);
+  border-radius: var(--radius-pill);
+  padding: 6px 12px;
+  background: var(--dyn-surface);
+  font-size: 13px;
+  margin: 0;
+}
+
+.ahj-sidebar-sort {
+  margin: 0 12px 8px;
+}
+
+.ahj-sidebar-list {
+  display: flex;
+  flex-direction: column;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.ahj-sidebar-item {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  border: 0;
+  border-left: 3px solid transparent;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+}
+
+.ahj-sidebar-item:hover {
+  background: rgba(5, 190, 192, 0.07);
+}
+
+.ahj-sidebar-item.selected {
+  border-left-color: var(--dyn-teal);
+  background: rgba(5, 190, 192, 0.1);
+}
+
+.ahj-sidebar-name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.ahj-sidebar-name .cell-meta {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 11.5px;
+  margin-top: 0;
+}
+
+.ahj-sidebar-count {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: var(--dyn-text);
+  background: rgba(4, 61, 79, 0.06);
+  border-radius: var(--radius-pill);
+  padding: 1px 8px;
+  flex-shrink: 0;
+}
+
+.ahj-board {
+  flex: 1 1 420px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.ahj-board > .card {
+  margin-bottom: 12px;
+}
+
+@media (max-width: 760px) {
+  .ahj-sidebar {
+    flex-basis: 100%;
+  }
+}

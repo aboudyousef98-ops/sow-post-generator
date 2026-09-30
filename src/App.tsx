@@ -487,6 +487,7 @@ export default function App() {
         )}
         {tab === 'drafts' && (
           <DraftsTab
+            onNewPost={newPost}
             drafts={allDrafts}
             onOpen={openDraft}
             onDuplicate={duplicateDraft}

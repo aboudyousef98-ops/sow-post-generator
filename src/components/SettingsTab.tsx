@@ -55,9 +55,15 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
   const patch = (p: Partial<Settings>) => setSettings({ ...settings, ...p });
 
   return (
-    <div style={{ maxWidth: 720 }}>
-      <div className="card">
-        <h3>Rosters</h3>
+    <div className="settings-page">
+      <h1>Settings</h1>
+      <div className="card settings-card">
+      <section className="settings-section">
+        <div className="settings-label">
+          <div className="section-label">Rosters</div>
+          <p>Who can post, who always gets tagged, and who leads each region.</p>
+        </div>
+        <div className="settings-body settings-grid">
         <LinesEditor label="Authors (Posting as)" values={settings.authors} onChange={(v) => patch({ authors: v })} />
         <LinesEditor label="Fixed tags" values={settings.fixedTags} onChange={(v) => patch({ fixedTags: v })} />
         <LinesEditor label="Designers / installers" values={settings.designers} onChange={(v) => patch({ designers: v })} />
@@ -73,10 +79,16 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
             />
           </label>
         ))}
-      </div>
+        </div>
+      </section>
 
-      <div className="card">
-        <h3>Default phrases</h3>
+      <section className="settings-section">
+        <div className="settings-label">
+          <div className="section-label">Default phrases</div>
+          <p>Printed when a feedback box is left empty.</p>
+        </div>
+        <div className="settings-body">
+        <div className="settings-grid">
         {(
           [
             ['siteSurvey', 'Site Survey Feedback (empty →)'],
@@ -93,6 +105,7 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
             />
           </label>
         ))}
+        </div>
         <p className="muted">
           Quick-insert chips are seeded from the spec defaults; a chip editor is planned for Phase 2.
         </p>
@@ -107,10 +120,15 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
         >
           Reset to defaults
         </button>
-      </div>
+        </div>
+      </section>
 
-      <div className="card">
-        <h3>Data</h3>
+      <section className="settings-section">
+        <div className="settings-label">
+          <div className="section-label">Data</div>
+          <p>History and AHJ boards sync to the team automatically. JSON is an offline backup.</p>
+        </div>
+        <div className="settings-body">
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <button type="button" className="btn secondary" onClick={() => downloadExport(settings, records, ahjs)}>
             Export all
@@ -168,6 +186,8 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
           Everything is stored in this browser's localStorage. Export regularly; use Import on a teammate's
           browser to consolidate.
         </p>
+        </div>
+      </section>
       </div>
     </div>
   );

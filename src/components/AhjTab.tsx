@@ -302,11 +302,72 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
 
   return (
     <div className="ahj-page">
-      <h2 style={{ fontSize: 22, margin: '4px 0' }}>AHJ Requirements</h2>
-      <p className="muted" style={{ margin: '0 0 12px', maxWidth: 640, lineHeight: 1.5 }}>
-        Each requirement is a post on its AHJ's board. When a project's Jurisdiction matches an AHJ name or alias,
-        Compose shows its posts automatically.
-      </p>
+      <div className="list-head">
+        <h1>AHJ Requirements</h1>
+        <span className="muted">Compose shows a board automatically when the Jurisdiction matches</span>
+        <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="btn primary"
+          onClick={() => {
+            setModal('add');
+            setPickerOpen(false);
+            setFormName('');
+            setFormAliases('');
+            setFormError('');
+          }}
+        >
+          + Add AHJ
+        </button>
+      </div>
+
+      <div className="ahj-layout">
+        {/* Phase 8 (Option A): the AHJ list is a permanent pane, not a
+            dropdown — you can see every board and its post count at once. */}
+        <div className="card ahj-sidebar">
+          <div className="ahj-sidebar-search">
+            <input
+              type="text"
+              ref={pickerInput}
+              value={pickerQuery}
+              onChange={(e) => setPickerQuery(e.target.value)}
+              placeholder="Search AHJs…"
+              aria-label="Search AHJs"
+            />
+          </div>
+          <div className="sort-toggle ahj-sidebar-sort">
+            <button type="button" className={sort === 'name' ? 'active' : ''} onClick={() => setSort('name')}>
+              Name
+            </button>
+            <button type="button" className={sort === 'updated' ? 'active' : ''} onClick={() => setSort('updated')}>
+              Last updated
+            </button>
+          </div>
+          <div className="ahj-sidebar-list">
+            {pickerItems.map((a) => {
+              const n = livePosts(a).length;
+              return (
+                <button
+                  type="button"
+                  key={a.id}
+                  className={`ahj-sidebar-item${a.id === selectedId ? ' selected' : ''}`}
+                  onClick={() => select(a.id)}
+                >
+                  <span className="ahj-sidebar-name">
+                    <span className="cell-name">{a.name}</span>
+                    <span className="cell-meta">{a.aliases.length ? a.aliases.join(', ') : 'No aliases'}</span>
+                  </span>
+                  <span className="ahj-sidebar-count">{n}</span>
+                </button>
+              );
+            })}
+            {pickerItems.length === 0 && (
+              <div className="muted" style={{ padding: '12px 14px' }}>No AHJ matches “{pickerQuery}”.</div>
+            )}
+          </div>
+        </div>
+
+        <div className="ahj-board">
 
       <div className="card">
         <h3>Search all AHJs</h3>
@@ -363,93 +424,6 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
         )}
       </div>
 
-      <div className="card">
-        <h3>Jurisdiction</h3>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
-          <div className="ahj-picker">
-            <button type="button" className="ahj-picker-btn" onClick={() => { setPickerOpen(!pickerOpen); setPickerQuery(''); }}>
-              <span style={{ fontWeight: 600, color: sel ? 'var(--dyn-ink)' : 'var(--dyn-muted)' }}>
-                {sel ? sel.name : 'Select an AHJ…'}
-              </span>
-              <span className="muted" style={{ fontSize: 11 }}>▼</span>
-            </button>
-            {pickerOpen && (
-              <>
-                <div className="ahj-overlay" onClick={() => setPickerOpen(false)} />
-                <div className="ahj-picker-menu">
-                  <div style={{ padding: 10, borderBottom: '1px solid var(--dyn-line)' }}>
-                    <input
-                      type="text"
-                      ref={pickerInput}
-                      value={pickerQuery}
-                      onChange={(e) => setPickerQuery(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' && pickerItems[0]) select(pickerItems[0].id);
-                        if (e.key === 'Escape') setPickerOpen(false);
-                      }}
-                      placeholder="Type to filter — e.g. corp"
-                      style={{ marginTop: 0 }}
-                    />
-                  </div>
-                  <div className="ahj-picker-list">
-                    {pickerItems.map((a) => {
-                      const u = ahjLastActivity(a);
-                      const n = livePosts(a).length;
-                      return (
-                        <button
-                          type="button"
-                          key={a.id}
-                          className={`ahj-picker-item${a.id === selectedId ? ' selected' : ''}`}
-                          onClick={() => select(a.id)}
-                        >
-                          <span style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
-                            <span style={{ fontWeight: 600, color: 'var(--dyn-ink)' }}>{a.name}</span>
-                            {a.aliases.length > 0 && <span className="muted">aka {a.aliases.join(', ')}</span>}
-                          </span>
-                          <span className="muted" style={{ whiteSpace: 'nowrap' }}>
-                            {n} post{n === 1 ? '' : 's'}
-                            {u ? ` · ${fmtShort(u.at)}` : ''}
-                          </span>
-                        </button>
-                      );
-                    })}
-                    {pickerItems.length === 0 && (
-                      <div className="muted" style={{ padding: '12px 10px' }}>No AHJ matches “{pickerQuery}”.</div>
-                    )}
-                  </div>
-                  <div className="muted" style={{ padding: '7px 12px', borderTop: '1px solid var(--dyn-line)', background: 'var(--dyn-bg)' }}>
-                    {pickerItems.length} of {active.length} AHJs · sorted by {sort === 'name' ? 'name' : 'last updated'}
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span className="muted" style={{ fontWeight: 600 }}>Sort</span>
-            <div className="sort-toggle">
-              <button type="button" className={sort === 'name' ? 'active' : ''} onClick={() => setSort('name')}>
-                Name
-              </button>
-              <button type="button" className={sort === 'updated' ? 'active' : ''} onClick={() => setSort('updated')}>
-                Last updated
-              </button>
-            </div>
-          </div>
-          <button
-            type="button"
-            className="btn primary"
-            onClick={() => {
-              setModal('add');
-              setPickerOpen(false);
-              setFormName('');
-              setFormAliases('');
-              setFormError('');
-            }}
-          >
-            + Add AHJ
-          </button>
-        </div>
-      </div>
 
       {sel ? (
         <>
@@ -634,8 +608,10 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
           )}
         </>
       ) : (
-        <div className="ahj-empty">Pick an AHJ above to see its requirement posts, or add a new AHJ.</div>
+        <div className="ahj-empty">Pick an AHJ on the left to see its requirement posts, or add a new AHJ.</div>
       )}
+        </div>
+      </div>
 
       <div className="card" style={{ marginTop: 10, padding: 0, overflow: 'hidden' }}>
         <button
