@@ -435,7 +435,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
     <>
       <header className="topbar">
         <img src="/dyn-logo.png" alt="Dynamic EcoHome" />
-        <span className="title">SOW Post Generator</span>
+        <span className="title">SOW Operational Tool</span>
         <nav>
           {(
             [

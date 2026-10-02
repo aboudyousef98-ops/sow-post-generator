@@ -346,6 +346,7 @@ label.field .badge {
 input[type='text'],
 input[type='date'],
 input[type='number'],
+input[type='password'],
 select,
 textarea {
   width: 100%;
@@ -1978,14 +1979,20 @@ table.list tr.row:hover {
 }
 
 .login-card label {
+  display: block;
   text-align: left;
   font-size: 13px;
   font-weight: 600;
   color: var(--dyn-text);
 }
 
+.login-card input {
+  margin-top: 5px;
+}
+
 .login-card .btn {
   margin-top: 6px;
+  width: 100%;
 }
 
 .login-error {

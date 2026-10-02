@@ -1,4 +1,7 @@
-# SOW Post Generator — Dynamic EcoHome
+# SOW Operational Tool — Dynamic EcoHome
+
+> Renamed from "SOW Post Generator" (2026-10-02): post drafting is now one part
+> of a wider SOW operations tool. The repo/package keep the old slug.
 
 Internal tool for the design team (Aboud Yousef, Omar Rajab, Mohammad Refai): paste a Salesforce
 fulfillment record (text or screenshot) + four short notes → the standardized Slack "project

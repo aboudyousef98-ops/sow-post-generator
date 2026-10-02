@@ -61,7 +61,7 @@ export default function Login({ onLogin }: { onLogin: (session: Session) => void
     <div className="login-screen">
       <form className="card login-card" onSubmit={submit}>
         <img src="/dyn-logo.png" alt="Dynamic EcoHome" />
-        <h2>SOW Post Generator</h2>
+        <h2>SOW Operational Tool</h2>
         <p className="login-sub">Sign in to continue</p>
         <label>
           Username
