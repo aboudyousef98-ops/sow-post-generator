@@ -3,6 +3,24 @@
 Date: 2026-10-02 · Plan: `_PLAN_board.md` · Spec: `../10-project-board.md`
 (as amended by Aboud: existing login + existing Blobs sync, no Supabase/Google)
 
+## Added same day — Board→Compose linking (next commit, brainstormed with Aboud)
+
+Aboud's rule, locked during brainstorming: **the board controls Compose,
+never the opposite.** No status automations (explicitly rejected — posting
+does NOT flip a status), no board-row creation from Compose.
+
+- `PostRecord.projectId` (optional, additive). Set only by: launching a post
+  from a board row, or clicking **Link** on the Compose suggestion.
+- Board **Post column**: `—` (click = start a prefilled, linked draft) ·
+  `Draft · AY · 5 min ago` (click = open that draft) · `Posted 10/02 ✓`
+  (click = History). Also "Open in Compose" in the row ⋯ menu.
+- Compose: teal link bar — a **chip** when linked (click → board, row
+  highlighted + Completed section auto-opens if needed; ✕ unlinks) or a
+  **customer-name match suggestion** with an explicit Link button. Nothing
+  links silently.
+- Tests: 333 green, incl. `App.board.test.tsx` covering the full loop.
+  Verified live in Chrome end-to-end.
+
 ## Added same day (commit d3cd3de, Aboud's requests)
 
 - **Completed projects section**: any project whose status label has the
