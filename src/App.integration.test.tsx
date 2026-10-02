@@ -147,6 +147,13 @@ describe('Compose acceptance flow', () => {
           const body = init?.method === 'PUT' ? JSON.parse(String(init.body)) : { ahjs: [] };
           return new Response(JSON.stringify(body), { status: 200 });
         }
+        if (String(url).includes('/board')) {
+          const body =
+            init?.method === 'PUT'
+              ? { board: JSON.parse(String(init.body)) }
+              : { board: { projects: [], labels: [], activity: [] } };
+          return new Response(JSON.stringify(body), { status: 200 });
+        }
         return new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 });
       }),
     );

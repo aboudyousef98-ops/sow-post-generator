@@ -1,7 +1,9 @@
 // localStorage persistence — spec/02-data-model.md. Keys: sowpost.records,
 // sowpost.settings, sowpost.currentId, sowpost.ahjs. No credentials are ever stored.
 
+import type { BoardState } from '../board/types';
 import type { Ahj, ExportFile, InstallNotes, PostRecord, Settings } from '../types';
+import { emptyBoard, mergeBoard } from './board';
 import { emptyInstallNotes } from './installNotes';
 
 const KEY_RECORDS = 'sowpost.records';
@@ -244,6 +246,24 @@ export function loadCurrentId(): string | null {
 export function saveCurrentId(id: string | null): void {
   if (id === null) localStorage.removeItem(KEY_CURRENT);
   else localStorage.setItem(KEY_CURRENT, id);
+}
+
+// ---- Project Board cache ----------------------------------------------------
+
+const KEY_BOARD = 'sowpost.board';
+
+/** Offline cache of the shared board — merged on load, same contract as records. */
+export function loadBoard(): BoardState {
+  const stored = read<BoardState>(KEY_BOARD);
+  if (!stored || !Array.isArray(stored.projects)) return emptyBoard();
+  return mergeBoard(emptyBoard(), stored);
+}
+
+/** Merge-on-write, never overwrite — same rationale as saveRecords(). */
+export function saveBoard(board: BoardState): void {
+  const onDisk = read<BoardState>(KEY_BOARD);
+  const base = onDisk && Array.isArray(onDisk.projects) ? mergeBoard(emptyBoard(), onDisk) : emptyBoard();
+  localStorage.setItem(KEY_BOARD, JSON.stringify(mergeBoard(base, board)));
 }
 
 export function loadAhjs(): Ahj[] {

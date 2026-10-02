@@ -31,11 +31,13 @@ describe('Phase 9 navigation and sessions', () => {
   it('shows main tabs with Compose sub-tabs, and AHJ has no sub strip', () => {
     render(<App session={ADMIN} />);
 
-    // Main strip.
-    expect(screen.getByRole('button', { name: 'Compose' })).toBeTruthy();
+    // Main strip. Signed in, the app lands on the Board (project-board Q6).
+    expect(screen.getByRole('button', { name: 'Board' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Board' }).className).toContain('active');
     expect(screen.getByRole('button', { name: 'AHJ Requirements' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Admin' })).toBeTruthy();
     // Compose sub strip.
+    fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
     expect(screen.getByRole('button', { name: 'New Post' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^History/ })).toBeTruthy();
@@ -77,6 +79,7 @@ describe('Phase 9 navigation and sessions', () => {
   it('a new post is stamped with the signed-in user, not a picked name', async () => {
     render(<App session={MEMBER} />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Compose' })); // app lands on Board now
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Stamp Check' } });
     await waitFor(
       () => expect(JSON.parse(localStorage.getItem('sowpost.records') ?? '[]')).toHaveLength(1),
@@ -93,6 +96,7 @@ describe('Phase 9 navigation and sessions', () => {
 
   it('customer name is forced to Title Case as you type (ANTHONY STEREFF → Anthony Stereff)', () => {
     render(<App session={MEMBER} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Compose' })); // app lands on Board now
     const input = screen.getByLabelText(/Customer name/i) as HTMLInputElement;
     fireEvent.change(input, { target: { value: 'ANTHONY STEREFF' } });
     expect(input.value).toBe('Anthony Stereff');

@@ -1,59 +1,53 @@
-# Plan — Project Board (10-project-board.md), approved by Aboud 2026-10-02
+# Plan — Project Board (10-project-board.md), re-based 2026-10-02
 
-Phase B0 plan as posted and OK'd ("go"). Defaults below stand unless Aboud
-says otherwise; open items are in the SPEC-GAP list.
+Aboud's direction after the B0 review: **"no need for this complicated login
+process, all I need is the monday.com CRM system in ours."** So the Supabase /
+Google-OAuth architecture from the spec is dropped and the board rides the
+app's existing infrastructure instead. Where this file disagrees with
+`10-project-board.md`, this file wins.
 
-## Libraries (installed, exact versions)
+## Architecture (actual)
 
-| Package | Version | Why |
-|---|---|---|
-| `@supabase/supabase-js` | 2.117.2 | D2 — DB + auth + realtime |
-| `@tanstack/react-table` | 8.21.3 | D5 — latest 8.x (v9 is now stable; D5 locked 8.x, Aboud can overrule) |
-| `@floating-ui/react` | 0.27.20 | No popover exists in the repo; label/person/date pickers need viewport-edge handling |
+- **No Supabase, no new login.** Identity = the existing Phase 9 session
+  (display name). Access control = the existing origin allowlist + tokenized
+  API paths — the same protection the drafts/history store already has.
+- **Storage** = Netlify Blobs store `sowpost`, key `board`, holding
+  `{ projects, labels, activity }` — served by `netlify/functions/board.mts`
+  (GET/PUT, merge by id/`updatedAt`, etag compare-and-swap), exactly like
+  `records.mts`.
+- **Client** = localStorage cache `sowpost.board` + optimistic edits +
+  debounced push (1 s). "Live" updates are **polling**: refetch every 15 s
+  while the page is visible, and on window focus. Plenty for 3 users.
+- Labels (status + Design/Schedule) are data with fixed-id seeds, so renames
+  survive merges and two browsers can't duplicate the seed set.
+- Activity log is append-only client-written entries, union-merged by id,
+  capped at 1000 server-side.
 
-Not installed: `sonner` (own `Toast` has 5-s Undo) · `react-day-picker`
-(**native `<input type="date">`** — already the repo pattern in Compose) ·
-`@dnd-kit` (backlog).
+## Libraries
 
-## Phase map (§11)
+`@tanstack/react-table@8.21.3` (table, sorting, CSS-var resizing) and
+`@floating-ui/react@0.27.20` (pickers' popovers). `@supabase/supabase-js`
+was removed. Dates: native `<input type="date">`; toasts: existing Toast.
 
-- **B0 (this phase):** libs, `supabase/migrations/0001_board.sql`,
-  `supabase/seed.sql`, `src/lib/supabase.ts`, `src/board/types.ts`,
-  `dates.ts` board helpers + tests, `.env.example`, `check-no-secrets.mjs`
-  hardening, `SETUP.md`. No visible UI change.
-- **B1:** replace the Phase 9 password login with Supabase Google auth +
-  allowlist; access-pending screen; Settings → Team on `team_members`;
-  Bearer checks in `/api/extract`, `/api/rewrite` (and `/api/ahjs`).
-- **B2:** Board tab — TanStack table, column registry, editors, Edit labels,
-  quick add, duplicate guard, archive/undo, search/filter/sort, resizing +
-  per-user persistence, realtime.
-- **B3:** drafts/history → `posts` table; one-time localStorage upload;
-  Compose ↔ Board linking; status automations; retire `records.mts`/`users.mts`.
-- **B4:** scheduled `/api/backup` to Netlify Blobs (30-day retention),
-  health pill reports DB.
+## Shipped in the board phase (see `_CHECKPOINT_board_core.md`)
 
-## Decisions taken on defaults (flagged in the B0 review)
+Board main tab (first, default landing when signed in) with: quick add +
+duplicate guard, label cells with Edit-labels panel (rename/recolor/reorder/
+default/done/archive-with-reassign), person picker, date cell, 1–3 star
+rating, search/filters/My projects/Show archived, sortable headers,
+resizable + hideable columns persisted per browser, row menu (copy name,
+activity, archive w/ Undo, admin delete), activity viewer.
 
-1. **Auth:** Phase 9 username/password login is replaced in B1 by Supabase
-   Google sign-in (D4). Phase 9 was never deployed, so nothing in prod churns.
-2. **AHJ tab:** stays on its Netlify Blobs sync in v1; only drafts/history
-   move to Supabase. (AHJs → Supabase = backlog.)
-3. **`posts.deleted_at`** added to the §5.2 migration — the app's tombstone
-   delete + Undo needs a real column.
-4. **Tabs:** Board becomes a new main tab (first, default landing per Q6);
-   two-level nav stays.
-5. **TanStack 8.21.3**, not v9 — D5 is locked.
-6. **Guard:** keep tokenized paths + origin check AND add Bearer auth
-   (spec §10 said "replace"; both is zero churn + defense in depth).
-7. **Deep link `#/compose/<postId>`:** hand-rolled hash listener, no router.
-8. **Migration author mapping:** exact `display_name` match; unmatched →
-   current user + logged SPEC-GAP.
+## Next phase (not started — needs Aboud's go)
 
-## Open SPEC-GAPs for Aboud (§13)
+Compose ↔ Board linking: a Post column on the board, a Project field in
+Compose with suggestions from the parsed customer name, status automations
+(draft linked → Working on it; Mark as posted → Done, forward-only with
+Undo), deep links. PostRecord gains an optional `projectId`.
 
-- [ ] Real team emails for `seed.sql`; who besides Aboud is admin
-- [ ] Company-owned Supabase account + boss sign-off (D10); Free vs Pro
-- [ ] Q1 Design/Schedule meaning (labels vs date) — coded as labels
-- [ ] Q2 Rating meaning — coded generic 1–3, not L1–L4
-- [ ] Q3 Designed date — coded manual
-- [ ] Q5 Automations — coded ON (draft→Working on it, posted→Done), each toggleable
+## Deliberately dropped from the spec (with the Supabase exit)
+
+Google sign-in + allowlist (D4) · RLS/Bearer hardening (§10) · `/api/backup`
+scheduled function (Blobs is already the store; export/import JSON remains
+the manual backup) · realtime websockets (polling instead) · one-time
+localStorage→DB migration (§8 — nothing moves, the stores stay where they are).

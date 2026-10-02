@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import BoardTab from './board/BoardTab';
+import type { BoardState } from './board/types';
 import AhjTab from './components/AhjTab';
 import ComposeTab from './components/ComposeTab';
 import DraftsTab from './components/DraftsTab';
@@ -6,18 +8,29 @@ import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
 import UsersTab from './components/UsersTab';
 import { Toasts, type Toast } from './components/Toast';
-import { fetchSharedAhjs, fetchSharedRecords, health, putSharedAhjs, putSharedRecords } from './lib/api';
+import {
+  fetchSharedAhjs,
+  fetchSharedBoard,
+  fetchSharedRecords,
+  health,
+  putSharedAhjs,
+  putSharedBoard,
+  putSharedRecords,
+} from './lib/api';
 import { mergeAhjs } from './lib/ahj';
+import { mergeBoard } from './lib/board';
 import { blankRecord, hasContent } from './lib/record';
 import {
   clearLiveDraft,
   loadAhjs,
+  loadBoard,
   loadCurrentId,
   loadLiveDraft,
   loadRecords,
   loadSettings,
   mergeRecords,
   saveAhjs,
+  saveBoard,
   saveCurrentId,
   saveLiveDraft,
   saveRecords,
@@ -29,10 +42,11 @@ import type { Ahj, PostRecord, Session, Settings } from './types';
 // Phase 9: two-level navigation. The flat Tab union stays (every old
 // setTab('compose') call site still works); each tab belongs to a main group
 // and the header renders a main strip plus the active group's sub strip.
-type Tab = 'compose' | 'drafts' | 'history' | 'ahj' | 'settings' | 'users';
-type MainTab = 'compose' | 'ahj' | 'admin';
+type Tab = 'board' | 'compose' | 'drafts' | 'history' | 'ahj' | 'settings' | 'users';
+type MainTab = 'board' | 'compose' | 'ahj' | 'admin';
 
 const MAIN_OF: Record<Tab, MainTab> = {
+  board: 'board',
   compose: 'compose',
   drafts: 'compose',
   history: 'compose',
@@ -42,7 +56,7 @@ const MAIN_OF: Record<Tab, MainTab> = {
 };
 
 /** Where each main tab lands when clicked directly. */
-const MAIN_HOME: Record<MainTab, Tab> = { compose: 'compose', ahj: 'ahj', admin: 'settings' };
+const MAIN_HOME: Record<MainTab, Tab> = { board: 'board', compose: 'compose', ahj: 'ahj', admin: 'settings' };
 
 interface AppProps {
   /** Absent only in tests, which render the inner app without the login gate. */
@@ -54,8 +68,11 @@ export default function App({ session, onLogout }: AppProps = {}) {
   const [settings, setSettingsState] = useState<Settings>(() => loadSettings());
   const [records, setRecordsState] = useState<PostRecord[]>(() => loadRecords());
   const [ahjs, setAhjsState] = useState<Ahj[]>(() => loadAhjs());
+  const [boardState, setBoardState] = useState<BoardState>(() => loadBoard());
   const [ahjSelectedId, setAhjSelectedId] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>('compose');
+  // Default landing = Board (spec/10-project-board Q6). The gateless test
+  // render keeps landing on Compose so the whole pre-board suite stays valid.
+  const [tab, setTab] = useState<Tab>(session ? 'board' : 'compose');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'off'>('checking');
   const [syncStatus, setSyncStatus] = useState<'checking' | 'synced' | 'local'>('checking');
@@ -99,11 +116,17 @@ export default function App({ session, onLogout }: AppProps = {}) {
     saveSettings(s);
   }, []);
 
-  // Per-store sync health; the pill is green only when BOTH stores are ok.
-  const storeSync = useRef<{ records: boolean; ahjs: boolean }>({ records: false, ahjs: false });
-  const reportSync = useCallback((store: 'records' | 'ahjs', ok: boolean) => {
+  // Per-store sync health; the pill is green only when ALL stores are ok.
+  const storeSync = useRef<{ records: boolean; ahjs: boolean; board: boolean }>({
+    records: false,
+    ahjs: false,
+    board: false,
+  });
+  const reportSync = useCallback((store: 'records' | 'ahjs' | 'board', ok: boolean) => {
     storeSync.current[store] = ok;
-    setSyncStatus(storeSync.current.records && storeSync.current.ahjs ? 'synced' : 'local');
+    setSyncStatus(
+      storeSync.current.records && storeSync.current.ahjs && storeSync.current.board ? 'synced' : 'local',
+    );
   }, []);
 
   // A server response is a SNAPSHOT of what we pushed, merged with the store —
@@ -143,6 +166,53 @@ export default function App({ session, onLogout }: AppProps = {}) {
     }, 1500);
   }, [applyServerRecords, reportSync]);
 
+  // The Project Board syncs the same way: localStorage cache + debounced push;
+  // the server merges and returns the authoritative state.
+  const applyServerBoard = useCallback((server: Partial<BoardState>) => {
+    setBoardState((cur) => {
+      const merged = mergeBoard(cur, server);
+      saveBoard(merged);
+      return merged;
+    });
+  }, []);
+  const boardPushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const setBoard = useCallback(
+    (b: BoardState) => {
+      setBoardState(b);
+      saveBoard(b);
+      clearTimeout(boardPushTimer.current);
+      boardPushTimer.current = setTimeout(() => {
+        putSharedBoard(b)
+          .then((merged) => {
+            applyServerBoard(merged);
+            reportSync('board', true);
+          })
+          .catch(() => reportSync('board', false));
+      }, 1000);
+    },
+    [applyServerBoard, reportSync],
+  );
+
+  // "Live" board updates without websockets: refetch on an interval while the
+  // page is visible, and on window focus. Pull-only — pushes stay edit-driven.
+  useEffect(() => {
+    const pull = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchSharedBoard()
+        .then((server) => {
+          applyServerBoard(server);
+          reportSync('board', true);
+        })
+        .catch(() => reportSync('board', false));
+    };
+    const interval = setInterval(pull, 15000);
+    window.addEventListener('focus', pull);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', pull);
+    };
+  }, [applyServerBoard, reportSync]);
+
   // AHJ boards sync the same way (Phase 5): debounced deep-merge push.
   const ahjPushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const setAhjs = useCallback((a: Ahj[]) => {
@@ -177,9 +247,16 @@ export default function App({ session, onLogout }: AppProps = {}) {
           const final = await putSharedAhjs(mergeAhjs(loadAhjs(), server));
           applyServerAhjs(final);
         })(),
+        (async () => {
+          const server = await fetchSharedBoard();
+          applyServerBoard(server);
+          const final = await putSharedBoard(mergeBoard(loadBoard(), server));
+          applyServerBoard(final);
+        })(),
       ]);
       reportSync('records', results[0].status === 'fulfilled');
       reportSync('ahjs', results[1].status === 'fulfilled');
+      reportSync('board', results[2].status === 'fulfilled');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
@@ -439,6 +516,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
         <nav>
           {(
             [
+              ['board', 'Board'],
               ['compose', 'Compose'],
               ['ahj', 'AHJ Requirements'],
               // Admin is visible to admins (and to the gateless test render).
@@ -542,6 +620,16 @@ export default function App({ session, onLogout }: AppProps = {}) {
       )}
 
       <main className="page">
+        {tab === 'board' && (
+          <BoardTab
+            board={boardState}
+            setBoard={setBoard}
+            me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
+            isAdmin={!session || session.role === 'admin'}
+            authors={settings.authors}
+            toast={toast}
+          />
+        )}
         {tab === 'compose' && (
           <ComposeTab
             record={current}

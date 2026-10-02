@@ -2061,3 +2061,521 @@ table.list tr.row:hover {
   align-self: flex-start;
   margin-top: 4px;
 }
+
+/* ───────────────────────── Project Board ─────────────────────────
+   Monday-style table. Column widths arrive as CSS variables set on the table
+   element by BoardTab (the TanStack "performant resizing" pattern), so a drag
+   moves the vars and never re-renders the rows. */
+
+.board-page .list-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.board-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dyn-border);
+}
+
+.board-toolbar input[type='search'] {
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+  padding: 6px 10px;
+  font: inherit;
+  width: 200px;
+}
+
+.btn.board-filter-on {
+  background: var(--dyn-teal-soft);
+  border-color: var(--dyn-teal-line);
+  color: var(--dyn-teal-ink);
+}
+
+/* The ONLY sideways scroller — the page itself never scrolls horizontally. */
+.board-scroll {
+  overflow: auto;
+  max-height: calc(100vh - 290px);
+  min-height: 160px;
+}
+
+.board-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.board-table th,
+.board-table td {
+  border-bottom: 1px solid var(--dyn-line);
+  border-right: 1px solid var(--dyn-line);
+  padding: 0 8px;
+  height: 40px;
+  background: var(--dyn-surface);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  position: relative;
+}
+
+.board-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: var(--dyn-subtle);
+  color: var(--dyn-navy);
+  font-weight: 600;
+  text-align: left;
+}
+
+.board-table tbody tr:hover td {
+  background: var(--dyn-subtle);
+}
+
+/* Sticky first column (project name) — above body cells, below the header. */
+.board-table .board-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 2;
+}
+.board-table thead th.board-sticky {
+  z-index: 4;
+}
+.board-table .board-sticky::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--dyn-border-strong);
+}
+
+.board-th {
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.board-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+  touch-action: none;
+  user-select: none;
+  opacity: 0;
+}
+.board-table thead th:hover .board-resizer,
+.board-resizer.resizing {
+  opacity: 1;
+  background: var(--dyn-teal);
+}
+
+.board-row-archived td {
+  opacity: 0.55;
+}
+.board-row-highlight td {
+  background: var(--dyn-highlight) !important;
+}
+
+/* Name cell: text button + row menu on hover */
+.board-name-wrap {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.board-name {
+  background: none;
+  border: 0;
+  font: inherit;
+  color: var(--dyn-ink);
+  font-weight: 500;
+  cursor: text;
+  padding: 2px 4px;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  border-radius: 4px;
+}
+.board-name:hover {
+  outline: 1px dashed var(--dyn-dash);
+}
+.board-name-input {
+  font: inherit;
+  width: 100%;
+  border: 1px solid var(--dyn-teal);
+  border-radius: 4px;
+  padding: 2px 4px;
+}
+.board-row-menu {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--dyn-muted);
+  font-size: 16px;
+  padding: 0 4px;
+  border-radius: 4px;
+  visibility: hidden;
+}
+tr:hover .board-row-menu,
+.board-row-menu[aria-expanded='true'] {
+  visibility: visible;
+}
+.board-row-menu:hover {
+  background: var(--dyn-line);
+}
+
+/* Label cells: full-color block, centered (monday pattern) */
+.board-label-cell {
+  display: block;
+  width: calc(100% + 16px);
+  margin: 0 -8px;
+  height: 100%;
+  border: 0;
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-label-cell.empty {
+  background: var(--dyn-surface);
+  color: var(--dyn-muted);
+}
+tr:hover .board-label-cell.empty {
+  background: var(--dyn-subtle);
+}
+
+.board-popover {
+  background: var(--dyn-surface);
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: 8px;
+  box-shadow: var(--shadow-card);
+  padding: 8px;
+  z-index: 60;
+  max-width: 320px;
+}
+.board-popover-footer {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  background: none;
+  border: 0;
+  border-top: 1px solid var(--dyn-line);
+  padding: 8px 4px 2px;
+  font: inherit;
+  color: var(--dyn-muted);
+  cursor: pointer;
+}
+.board-popover-footer:hover {
+  color: var(--dyn-navy);
+}
+
+.board-label-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(110px, 1fr));
+  gap: 6px;
+}
+.board-label-option {
+  border: 0;
+  border-radius: 4px;
+  font: inherit;
+  font-weight: 500;
+  padding: 8px 10px;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-label-option:hover {
+  filter: brightness(0.92);
+}
+
+/* Menus (person picker, filters, row menu, columns) */
+.board-menu {
+  display: flex;
+  flex-direction: column;
+  min-width: 170px;
+  max-height: 300px;
+  overflow: auto;
+}
+.board-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  font: inherit;
+  text-align: left;
+  padding: 7px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--dyn-text);
+}
+.board-menu-item:hover {
+  background: var(--dyn-subtle);
+}
+.board-menu-item.active {
+  background: var(--dyn-teal-soft);
+}
+.board-menu-item.muted {
+  color: var(--dyn-muted);
+}
+.board-menu-item.strong {
+  font-weight: 600;
+  color: var(--dyn-navy);
+}
+.board-menu-item.danger {
+  color: var(--dyn-danger);
+}
+
+/* Person cell */
+.board-person {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  padding: 2px 0;
+  min-width: 0;
+}
+.board-person.empty {
+  color: var(--dyn-muted);
+  justify-content: center;
+}
+.board-person-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-avatar {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--dyn-navy);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.board-avatar.add {
+  background: var(--dyn-line);
+  color: var(--dyn-muted);
+  font-size: 14px;
+}
+
+/* Date cell */
+.board-date {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  padding: 2px 0;
+}
+.board-date.empty {
+  color: var(--dyn-muted);
+}
+.board-date-pop {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.board-date-pop input {
+  font: inherit;
+  padding: 4px 6px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+}
+.board-date-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+/* Rating */
+.board-rating {
+  display: inline-flex;
+  border-radius: 4px;
+}
+.board-rating:focus-visible {
+  outline: 2px solid var(--dyn-teal);
+}
+.board-star {
+  background: none;
+  border: 0;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--dyn-dash);
+  padding: 2px 3px;
+}
+.board-star.on {
+  color: var(--dyn-orange);
+}
+
+/* Edit labels modal */
+.board-label-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 10px 0;
+  max-height: 320px;
+  overflow: auto;
+}
+.board-label-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.board-label-row input:not([type='radio']):not([type='checkbox']) {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 5px 8px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+}
+.board-label-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--dyn-muted);
+  white-space: nowrap;
+}
+.board-label-tools {
+  display: inline-flex;
+  gap: 4px;
+}
+.board-label-add {
+  display: flex;
+  gap: 8px;
+  margin: 12px 0 4px;
+}
+.board-label-add input {
+  flex: 1;
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px dashed var(--dyn-dash);
+  border-radius: var(--radius-input);
+}
+.board-swatch {
+  width: 24px;
+  height: 24px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.board-swatch.active {
+  border-color: var(--dyn-navy);
+}
+.board-swatch-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 24px);
+  gap: 6px;
+}
+
+/* Add row + duplicate guard */
+.board-add {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-top: 1px solid var(--dyn-border);
+}
+.board-add input {
+  font: inherit;
+  border: 1px dashed var(--dyn-dash);
+  border-radius: var(--radius-input);
+  padding: 7px 10px;
+  width: 280px;
+  max-width: 100%;
+}
+.board-add input:focus {
+  border-style: solid;
+  border-color: var(--dyn-teal);
+  outline: none;
+}
+.board-dup-warn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--dyn-warn-bg);
+  color: var(--dyn-warn-ink);
+  border-radius: var(--radius-input);
+  padding: 4px 10px;
+  font-size: 13px;
+}
+
+.board-empty {
+  padding: 24px 16px;
+  text-align: center;
+}
+
+/* Activity */
+.board-activity {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 50vh;
+  overflow: auto;
+  margin: 10px 0;
+}
+.board-activity-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--dyn-line);
+  padding-bottom: 8px;
+}
+.board-activity-row ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+/* Shared modal footer (board modals) */
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+/* ≤480px: same table, sideways scroll inside the board, toolbar wraps. */
+@media (max-width: 480px) {
+  .board-toolbar input[type='search'] {
+    width: 100%;
+  }
+  .board-scroll {
+    max-height: calc(100vh - 340px);
+  }
+}

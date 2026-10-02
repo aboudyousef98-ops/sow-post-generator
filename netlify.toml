@@ -56,6 +56,11 @@
   to = "/.netlify/functions/users"
   status = 200
 
+[[redirects]]
+  from = "/api/:token/board"
+  to = "/.netlify/functions/board"
+  status = 200
+
 # SPA fallback — must stay last.
 [[redirects]]
   from = "/*"

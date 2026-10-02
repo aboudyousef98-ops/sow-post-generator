@@ -1,60 +1,69 @@
-// Board row types — mirror of supabase/migrations/0001_board.sql
-// (10-project-board.md §5.4). Column names stay snake_case so rows go
-// straight between supabase-js and the UI with no mapping layer.
+// Project Board data model — 10-project-board.md §5, re-based onto the app's
+// existing architecture by Aboud's decision (2026-10-02): NO Supabase, no new
+// login. The board lives in the same Netlify Blobs + localStorage-cache +
+// merge-by-updatedAt world as records/ahjs, and identity is the Phase 9
+// session. "Live updates" are polling, which is plenty for 3 users.
 
-import type { PostRecord } from '../types';
+export type LabelColumnKey = 'status' | 'phase';
 
-export type MemberId = string;
-export type LabelId = string;
-
-export interface TeamMember {
-  id: MemberId;
-  email: string;
-  display_name: string;
-  initials: string | null;
-  role: 'member' | 'admin';
-  active: boolean;
-}
-
-export interface Label {
-  id: LabelId;
-  column_key: 'status' | 'phase';
+/** A status / Design-Schedule option — data, not an enum (D6: custom labels). */
+export interface BoardLabel {
+  id: string;
+  columnKey: LabelColumnKey;
   name: string;
-  color: string; // '#RRGGBB'
-  sort_order: number;
-  is_default: boolean;
-  is_done: boolean;
-  is_system: boolean;
+  color: string; // '#RRGGBB' from the 16-swatch palette
+  sortOrder: number;
+  /** Applied to new rows (one non-archived default per column). */
+  isDefault: boolean;
+  /** "Finished" meaning, for automations and filters (status only). */
+  isDone: boolean;
+  /** Seeded label: rename/recolor OK, archive not allowed. */
+  isSystem: boolean;
   archived: boolean;
+  /** Merge key — newer wins, same contract as PostRecord. */
+  updatedAt: string;
 }
 
-export interface Project {
-  id: string;
+/** One board row. */
+export interface BoardProject {
+  id: string; // uuid
   name: string;
-  sow_coordinator_id: MemberId | null;
-  status_id: LabelId | null;
-  phase_id: LabelId | null;
-  designed_date: string | null; // 'YYYY-MM-DD' — calendar date, parse with lib/dates
-  rating: 1 | 2 | 3 | null;
+  /**
+   * SOW coordinator as a roster display name ('' = unassigned) — the same
+   * convention as PostRecord.author. // SPEC-GAP: a rename in Admin → Users
+   * does not retag old rows; acceptable for a 3-person roster.
+   */
+  coordinator: string;
+  statusId: string | null;
+  phaseId: string | null;
+  designedDate: string | null; // 'YYYY-MM-DD' — parse with lib/dates only
+  rating: 1 | 2 | 3 | null; // null = not rated
+  /** Manual order key; defaults to creation epoch ms → newest on top. */
   position: number;
-  archived_at: string | null;
-  created_by: MemberId | null;
-  created_at: string;
-  updated_by: MemberId | null;
-  updated_at: string;
+  archivedAt?: string;
+  /** Admin "Delete permanently" tombstone — hidden everywhere, wins merges. */
+  deletedAt?: string;
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  schemaVersion: 1;
 }
 
-/** A `posts` row: the existing PostRecord travels untouched inside `payload`. */
-export interface PostRow {
-  id: string;
-  project_id: string | null;
-  author_id: MemberId | null; // "Posting as"
-  state: 'draft' | 'posted';
-  customer: string | null;
-  install_date: string | null; // 'YYYY-MM-DD'
-  payload: PostRecord;
-  posted_at: string | null;
-  deleted_at: string | null; // tombstone — see 0001_board.sql header
-  updated_at: string;
-  updated_by: MemberId | null;
+/** Field-level change history, written by the client alongside each edit. */
+export interface BoardActivity {
+  id: string; // uuid — merge/dedup key
+  projectId: string;
+  actor: string;
+  action: 'create' | 'update' | 'archive' | 'restore' | 'delete';
+  /** key → old/new. Label/person values are stored as display strings. */
+  changes?: Record<string, { old: string; new: string }>;
+  at: string;
+}
+
+/** What the shared store holds (Blobs key "board") and the client caches. */
+export interface BoardState {
+  projects: BoardProject[];
+  labels: BoardLabel[];
+  activity: BoardActivity[];
 }

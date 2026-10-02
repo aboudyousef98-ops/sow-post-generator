@@ -188,6 +188,36 @@ export async function putSharedUsers(users: TeamUser[]): Promise<TeamUser[]> {
   return Array.isArray(json.users) ? json.users : users;
 }
 
+// ---- Project Board (Netlify Blobs behind /api/board) -----------------------
+
+import type { BoardState } from '../board/types';
+
+function boardPath(): string {
+  return `/api/${TOKEN}/board`;
+}
+
+export async function fetchSharedBoard(): Promise<BoardState> {
+  const res = await fetch(boardPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { board?: BoardState };
+  if (!json.board || !Array.isArray(json.board.projects)) {
+    throw { status: 502, message: 'Bad board response' } satisfies ApiError;
+  }
+  return json.board;
+}
+
+/** Push the local board; the server merges by id/updatedAt and returns the merged state. */
+export async function putSharedBoard(board: BoardState): Promise<BoardState> {
+  const res = await fetch(boardPath(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(board),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { board?: BoardState };
+  return json.board && Array.isArray(json.board.projects) ? json.board : board;
+}
+
 export interface HealthResponse {
   ok: boolean;
   hasKey: boolean;
