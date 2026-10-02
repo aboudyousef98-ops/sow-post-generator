@@ -136,6 +136,83 @@ describe('BoardTab', () => {
     expect(screen.getByRole('button', { name: 'Waiting on SF' })).toBeTruthy();
   });
 
+  it('status → Done moves the row out of sight into Completed projects, with Undo', () => {
+    render(<Harness />);
+    addProject('Martha Thompson');
+
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Done' }));
+
+    // Gone from the main board (section is collapsed by default)…
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    expect(screen.getByText('Nothing in progress — everything is in Completed projects below.')).toBeTruthy();
+    expect(toasts.at(-1)?.text).toBe('Martha Thompson → Completed projects.');
+
+    // …and in the Completed section when expanded, still fully editable.
+    const toggle = screen.getByRole('button', { name: /Completed projects/ });
+    expect(within(toggle).getByText('1')).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(screen.getByText('Martha Thompson')).toBeTruthy();
+
+    // Undo brings it straight back to the main board.
+    act(() => toasts.at(-1)!.action!.fn());
+    expect(within(screen.getByRole('button', { name: /Completed projects/ })).getByText('0')).toBeTruthy();
+    expect(screen.getByText('Martha Thompson')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'New project' })).toBeTruthy();
+  });
+
+  it('a custom label marked "done" also completes a project', () => {
+    render(<Harness />);
+    addProject('Martha Thompson');
+
+    // Add a label and tick its "done" flag in Edit labels.
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    fireEvent.click(screen.getByRole('button', { name: /Edit labels/ }));
+    const modal = document.querySelector('.modal') as HTMLElement;
+    fireEvent.change(within(modal).getByLabelText('New label name'), { target: { value: 'Shipped' } });
+    fireEvent.click(within(modal).getByRole('button', { name: 'Add' }));
+    const row = within(modal).getByLabelText('Rename Shipped').closest('.board-label-row') as HTMLElement;
+    fireEvent.click(within(row).getByRole('checkbox'));
+    fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Shipped' }));
+
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    expect(
+      within(screen.getByRole('button', { name: /Completed projects/ })).getByText('1'),
+    ).toBeTruthy();
+  });
+
+  it('designed-date range filter keeps only rows inside From–To', () => {
+    render(<Harness />);
+    addProject('Early Job');
+    addProject('Late Job');
+
+    // Give each row a designed date through the date cell popover.
+    const setDate = (name: string, iso: string) => {
+      const row = screen.getByText(name).closest('tr')!;
+      fireEvent.click(row.querySelector('.board-date')!); // the empty phase cell also reads "—"
+      fireEvent.change(screen.getByLabelText('Designed date'), { target: { value: iso } });
+    };
+    setDate('Early Job', '2026-09-01');
+    setDate('Late Job', '2026-10-20');
+
+    fireEvent.change(screen.getByLabelText('Designed date from'), { target: { value: '2026-10-01' } });
+    fireEvent.change(screen.getByLabelText('Designed date to'), { target: { value: '2026-10-31' } });
+    expect(screen.queryByText('Early Job')).toBeNull();
+    expect(screen.getByText('Late Job')).toBeTruthy();
+
+    // A row with no date at all is hidden while a range is set.
+    addProject('Dateless Job');
+    expect(screen.queryByText('Dateless Job')).toBeNull();
+
+    // Clearing the range brings everything back.
+    fireEvent.click(screen.getByTitle('Clear the date range'));
+    expect(screen.getByText('Early Job')).toBeTruthy();
+    expect(screen.getByText('Dateless Job')).toBeTruthy();
+  });
+
   it('search filters rows; My projects filters by coordinator', () => {
     render(<Harness />);
     addProject('Martha Thompson');

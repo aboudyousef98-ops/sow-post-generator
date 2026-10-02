@@ -34,6 +34,7 @@ import { DateCell, LabelCell, NameCell, PersonCell, RatingCell, UpdatedCell, ini
 const KEY_WIDTHS = 'sowpost.board.colWidths.v1';
 const KEY_VISIBILITY = 'sowpost.board.colVisibility.v1';
 const KEY_FILTERS = 'sowpost.board.filters.v1';
+const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
 
 interface Filters {
   search: string;
@@ -42,9 +43,21 @@ interface Filters {
   phaseIds: string[];
   mine: boolean;
   showArchived: boolean;
+  /** Designed-date range, ISO 'YYYY-MM-DD' ('' = no bound). */
+  dateFrom: string;
+  dateTo: string;
 }
 
-const NO_FILTERS: Filters = { search: '', coordinators: [], statusIds: [], phaseIds: [], mine: false, showArchived: false };
+const NO_FILTERS: Filters = {
+  search: '',
+  coordinators: [],
+  statusIds: [],
+  phaseIds: [],
+  mine: false,
+  showArchived: false,
+  dateFrom: '',
+  dateTo: '',
+};
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -215,6 +228,8 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
   const [addName, setAddName] = useState('');
   const [duplicate, setDuplicate] = useState<BoardProject | null>(null);
   const [columnsMenu, setColumnsMenu] = useState(false);
+  // Completed section: out of sight by default, one click away.
+  const [doneOpen, setDoneOpen] = useState(() => localStorage.getItem(KEY_DONE_OPEN) === '1');
   const addRef = useRef<HTMLInputElement>(null);
 
   // Persist viewer preferences (D7: per-browser, never shared).
@@ -228,6 +243,9 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
   useEffect(() => {
     localStorage.setItem(KEY_FILTERS, JSON.stringify(filters));
   }, [filters]);
+  useEffect(() => {
+    localStorage.setItem(KEY_DONE_OPEN, doneOpen ? '1' : '0');
+  }, [doneOpen]);
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -337,8 +355,32 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
       .filter((p) => (filters.statusIds.length ? filters.statusIds.includes(p.statusId ?? '') : true))
       .filter((p) => (filters.phaseIds.length ? filters.phaseIds.includes(p.phaseId ?? '') : true))
       .filter((p) => (filters.mine ? p.coordinator === me : true))
+      // Designed-date range: ISO strings compare correctly as text. A row
+      // with no date is hidden while a range is set — it can't be "inside" it.
+      .filter((p) =>
+        filters.dateFrom || filters.dateTo
+          ? p.designedDate !== null &&
+            (!filters.dateFrom || p.designedDate >= filters.dateFrom) &&
+            (!filters.dateTo || p.designedDate <= filters.dateTo)
+          : true,
+      )
       .sort((a, b) => b.position - a.position);
   }, [board.projects, filters, me]);
+
+  // A project whose status label "counts as done" leaves the main board and
+  // lands in the Completed projects section below (Aboud, 2026-10-02).
+  const doneStatusIds = useMemo(
+    () => new Set(board.labels.filter((l) => l.isDone).map((l) => l.id)),
+    [board.labels],
+  );
+  const { active, completed } = useMemo(() => {
+    const active: BoardProject[] = [];
+    const completed: BoardProject[] = [];
+    for (const p of visible) (p.statusId && doneStatusIds.has(p.statusId) ? completed : active).push(p);
+    // Most recently finished first — updatedAt moves when the status flips.
+    completed.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    return { active, completed };
+  }, [visible, doneStatusIds]);
 
   const labelSortValue = (labels: BoardLabel[], id: string | null) => labelById(labels, id)?.sortOrder;
 
@@ -399,7 +441,23 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
             labels={board.labels}
             columnKey="status"
             valueId={row.original.statusId}
-            onPick={(statusId) => applyPatch(row.original, { statusId })}
+            onPick={(statusId) => {
+              const prev = row.original.statusId;
+              applyPatch(row.original, { statusId });
+              // Crossing INTO a done label hides the row from the main board —
+              // announce where it went, with a way back.
+              const wasDone = Boolean(labelById(boardRef.current.labels, prev)?.isDone);
+              const isDone = Boolean(labelById(boardRef.current.labels, statusId)?.isDone);
+              if (isDone && !wasDone) {
+                toast(`${row.original.name} → Completed projects.`, {
+                  label: 'Undo',
+                  fn: () => {
+                    const cur = boardRef.current.projects.find((p) => p.id === row.original.id);
+                    if (cur) applyPatch(cur, { statusId: prev });
+                  },
+                });
+              }
+            }}
             onEditLabels={() => setEditLabels('status')}
           />
         ),
@@ -463,7 +521,7 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
   );
 
   const table = useReactTable({
-    data: visible,
+    data: active,
     columns,
     state: { sorting, columnSizing, columnVisibility },
     onSortingChange: setSorting,
@@ -473,6 +531,20 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
     getSortedRowModel: getSortedRowModel(),
     enableColumnResizing: true,
     columnResizeMode: 'onChange',
+  });
+
+  // Completed projects — same columns and widths, its own rows. Resizing
+  // lives on the main header only; sorting state is shared so both tables
+  // always read the same way.
+  const doneTable = useReactTable({
+    data: completed,
+    columns,
+    state: { sorting, columnSizing, columnVisibility },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableColumnResizing: false,
   });
 
   // Column widths as CSS variables on the table element — cells read them with
@@ -494,6 +566,8 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
   const openDuplicate = () => {
     if (!duplicate) return;
     setFilters((f) => ({ ...f, search: '', mine: false }));
+    // The twin may live in the Completed section — reveal it before scrolling.
+    if (duplicate.statusId && doneStatusIds.has(duplicate.statusId)) setDoneOpen(true);
     setHighlightId(duplicate.id);
     setDuplicate(null);
     setAddName('');
@@ -503,7 +577,10 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
     setTimeout(() => setHighlightId(null), 2500);
   };
 
-  const liveCount = board.projects.filter((p) => !p.deletedAt && !p.archivedAt).length;
+  // Header counts speak about ACTIVE work; completed rows have their own count.
+  const activeTotal = board.projects.filter(
+    (p) => !p.deletedAt && !p.archivedAt && !(p.statusId && doneStatusIds.has(p.statusId)),
+  ).length;
   const dupStatus = duplicate ? labelById(board.labels, duplicate.statusId)?.name : '';
 
   return (
@@ -511,7 +588,9 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
       <div className="list-head">
         <h1>Board</h1>
         <span className="muted">
-          {liveCount === 0 ? 'no projects yet' : `${visible.length} of ${liveCount} project${liveCount === 1 ? '' : 's'}`}
+          {activeTotal === 0 && completed.length === 0
+            ? 'no projects yet'
+            : `${active.length} of ${activeTotal} active project${activeTotal === 1 ? '' : 's'}`}
         </span>
         <span style={{ flex: 1 }} />
         <button type="button" className="btn primary" onClick={() => addRef.current?.focus()}>
@@ -560,6 +639,36 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
           >
             Show archived
           </button>
+          <span className={`board-date-range ${filters.dateFrom || filters.dateTo ? 'on' : ''}`}>
+            <span className="muted">Designed</span>
+            <input
+              type="date"
+              aria-label="Designed date from"
+              title="Designed date — from"
+              value={filters.dateFrom}
+              max={filters.dateTo || undefined}
+              onChange={(e) => setFilters({ ...filters, dateFrom: e.target.value })}
+            />
+            <span className="muted">–</span>
+            <input
+              type="date"
+              aria-label="Designed date to"
+              title="Designed date — to"
+              value={filters.dateTo}
+              min={filters.dateFrom || undefined}
+              onChange={(e) => setFilters({ ...filters, dateTo: e.target.value })}
+            />
+            {(filters.dateFrom || filters.dateTo) && (
+              <button
+                type="button"
+                className="btn small secondary"
+                title="Clear the date range"
+                onClick={() => setFilters({ ...filters, dateFrom: '', dateTo: '' })}
+              >
+                ✕
+              </button>
+            )}
+          </span>
           <span style={{ flex: 1 }} />
           <Popover
             open={columnsMenu}
@@ -636,9 +745,13 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
             )}
           </table>
 
-          {visible.length === 0 && (
+          {active.length === 0 && (
             <p className="muted board-empty">
-              {liveCount === 0 ? 'No projects yet — add the first one below.' : 'Nothing matches the filters.'}
+              {activeTotal === 0 && completed.length === 0
+                ? 'No projects yet — add the first one below.'
+                : activeTotal === 0
+                  ? 'Nothing in progress — everything is in Completed projects below.'
+                  : 'Nothing matches the filters.'}
             </p>
           )}
         </div>
@@ -675,6 +788,54 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
             </span>
           )}
         </div>
+      </div>
+
+      <div className="card list-card board-done">
+        <button
+          type="button"
+          className="board-done-toggle"
+          aria-expanded={doneOpen}
+          onClick={() => setDoneOpen((v) => !v)}
+        >
+          <span className={`board-done-caret ${doneOpen ? 'open' : ''}`}>▸</span>
+          Completed projects
+          <span className="board-done-count">{completed.length}</span>
+        </button>
+        {doneOpen &&
+          (completed.length === 0 ? (
+            <p className="muted board-empty">
+              Nothing here yet — a project lands here when its status is set to a “done” label.
+            </p>
+          ) : (
+            <div className="board-scroll">
+              <table className="board-table" style={{ ...columnSizeVars, width: table.getTotalSize() }}>
+                <thead>
+                  {doneTable.getHeaderGroups().map((hg) => (
+                    <tr key={hg.id}>
+                      {hg.headers.map((header) => (
+                        <th
+                          key={header.id}
+                          className={header.column.id === 'name' ? 'board-sticky' : ''}
+                          style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
+                        >
+                          <button
+                            type="button"
+                            className="board-th"
+                            onClick={header.column.getToggleSortingHandler()}
+                            title="Sort"
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
+                          </button>
+                        </th>
+                      ))}
+                    </tr>
+                  ))}
+                </thead>
+                <BodyInner table={doneTable} highlightId={highlightId} />
+              </table>
+            </div>
+          ))}
       </div>
 
       {editLabels && (

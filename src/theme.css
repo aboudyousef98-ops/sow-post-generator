@@ -2570,6 +2570,64 @@ tr:hover .board-label-cell.empty {
   margin-top: 14px;
 }
 
+/* Completed projects — the done rows live below, out of the way. */
+.board-done {
+  margin-top: 16px;
+}
+.board-done-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  color: #00885c; /* darker shade of the Done green, readable on white */
+  cursor: pointer;
+  padding: 12px 14px;
+  text-align: left;
+}
+.board-done-caret {
+  display: inline-block;
+  transition: transform 0.15s;
+  font-size: 12px;
+}
+.board-done-caret.open {
+  transform: rotate(90deg);
+}
+.board-done-count {
+  background: #00c875;
+  color: #fff;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 9px;
+}
+.board-done .board-scroll {
+  max-height: 40vh;
+  border-top: 1px solid var(--dyn-border);
+}
+
+/* Designed-date range filter */
+.board-date-range {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.board-date-range input[type='date'] {
+  font: inherit;
+  font-size: 13px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+  padding: 4px 6px;
+  color: var(--dyn-text);
+}
+.board-date-range.on input[type='date'] {
+  border-color: var(--dyn-teal-line);
+  background: var(--dyn-teal-soft);
+}
+
 /* ≤480px: same table, sideways scroll inside the board, toolbar wraps. */
 @media (max-width: 480px) {
   .board-toolbar input[type='search'] {
