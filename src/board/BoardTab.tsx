@@ -20,10 +20,14 @@ import {
   cleanName,
   findDuplicate,
   labelById,
+  linkedPosts,
   newProject,
   patchProject,
+  type LinkedPosts,
   type ProjectPatch,
 } from '../lib/board';
+import { relativeTime } from '../lib/dates';
+import type { PostRecord } from '../types';
 import type { Toast } from '../components/Toast';
 import type { BoardActivity, BoardLabel, BoardProject, BoardState, LabelColumnKey } from './types';
 import ActivityModal from './ActivityModal';
@@ -76,6 +80,13 @@ interface Props {
   isAdmin: boolean;
   authors: string[];
   toast: (text: string, action?: Toast['action']) => void;
+  /** Team records — READ ONLY here, to render the Post column. */
+  records: PostRecord[];
+  /** Board → Compose: open (or create) this project's post. */
+  onOpenCompose: (project: BoardProject) => void;
+  /** Row to highlight/scroll to when arriving from a Compose chip. */
+  focusId?: string | null;
+  onFocusHandled?: () => void;
 }
 
 /** Multi-select checkbox filter in a popover (coordinator / status / phase). */
@@ -128,6 +139,7 @@ function FilterSelect({
 function RowMenu({
   project,
   isAdmin,
+  onOpenCompose,
   onCopyName,
   onActivity,
   onArchive,
@@ -136,6 +148,7 @@ function RowMenu({
 }: {
   project: BoardProject;
   isAdmin: boolean;
+  onOpenCompose: () => void;
   onCopyName: () => void;
   onActivity: () => void;
   onArchive: () => void;
@@ -158,6 +171,9 @@ function RowMenu({
       }
     >
       <div className="board-menu" role="menu">
+        <button type="button" role="menuitem" className="board-menu-item strong" onClick={act(onOpenCompose)}>
+          Open in Compose
+        </button>
         <button type="button" role="menuitem" className="board-menu-item" onClick={act(onCopyName)}>
           Copy name
         </button>
@@ -214,7 +230,18 @@ function BodyInner({ table, highlightId }: { table: TanTable<BoardProject>; high
 }
 const MemoBody = memo(BodyInner, (prev, next) => prev.table.options.data === next.table.options.data) as typeof BodyInner;
 
-export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast }: Props) {
+export default function BoardTab({
+  board,
+  setBoard,
+  me,
+  isAdmin,
+  authors,
+  toast,
+  records,
+  onOpenCompose,
+  focusId,
+  onFocusHandled,
+}: Props) {
   const [filters, setFilters] = useState<Filters>(() => readJson(KEY_FILTERS, NO_FILTERS));
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState(() => readJson<Record<string, number>>(KEY_WIDTHS, {}));
@@ -249,6 +276,37 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
 
   const boardRef = useRef(board);
   boardRef.current = board;
+
+  // Arriving from a Compose chip: reveal the row (even a completed one),
+  // highlight it briefly, and scroll it into view.
+  useEffect(() => {
+    if (!focusId) return;
+    const project = boardRef.current.projects.find((p) => p.id === focusId);
+    if (project?.statusId && boardRef.current.labels.find((l) => l.id === project.statusId)?.isDone) {
+      setDoneOpen(true);
+    }
+    setHighlightId(focusId);
+    const scroll = setTimeout(() => {
+      document.querySelector(`[data-project-id="${focusId}"]`)?.scrollIntoView({ block: 'center' });
+    }, 50);
+    const clear = setTimeout(() => setHighlightId(null), 2500);
+    onFocusHandled?.();
+    return () => {
+      clearTimeout(scroll);
+      clearTimeout(clear);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusId]);
+
+  /** projectId → its latest draft/posted, recomputed when team records change. */
+  const postsByProject = useMemo(() => {
+    const map = new Map<string, LinkedPosts>();
+    for (const r of records) {
+      if (!r.projectId || r.deletedAt) continue;
+      if (!map.has(r.projectId)) map.set(r.projectId, linkedPosts(records, r.projectId));
+    }
+    return map;
+  }, [records]);
 
   // ---- writes ---------------------------------------------------------------
 
@@ -399,6 +457,7 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
             <RowMenu
               project={row.original}
               isAdmin={isAdmin}
+              onOpenCompose={() => onOpenCompose(row.original)}
               onCopyName={() => {
                 navigator.clipboard?.writeText(row.original.name);
                 toast('Name copied.');
@@ -505,6 +564,42 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
         ),
       },
       {
+        id: 'post',
+        header: 'Post',
+        size: 150,
+        minSize: 100,
+        maxSize: 800,
+        // Sort groups: drafts first, then posted, then empty.
+        accessorFn: (p) => {
+          const lp = postsByProject.get(p.id);
+          return lp?.draft ? 2 : lp?.posted ? 1 : 0;
+        },
+        cell: ({ row }) => {
+          const lp = postsByProject.get(row.original.id);
+          let text = '—';
+          let title = 'Start a post for this project';
+          if (lp?.draft) {
+            text = `Draft · ${initialsOf(lp.draft.author)} · ${relativeTime(lp.draft.updatedAt)}`;
+            title = 'Open the draft in Compose';
+          } else if (lp?.posted?.postedAt) {
+            // Local date of the timestamp — a UTC slice could read a day early.
+            const d = new Date(lp.posted.postedAt);
+            text = `Posted ${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')} ✓`;
+            title = 'Posted — open History';
+          }
+          return (
+            <button
+              type="button"
+              className={`board-post-cell ${lp?.draft ? 'draft' : lp?.posted ? 'posted' : 'empty'}`}
+              title={title}
+              onClick={() => onOpenCompose(row.original)}
+            >
+              {text}
+            </button>
+          );
+        },
+      },
+      {
         id: 'updated',
         header: 'Last update',
         size: 150,
@@ -517,7 +612,7 @@ export default function BoardTab({ board, setBoard, me, isAdmin, authors, toast 
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh
     // when the data they RENDER changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board.labels, authors, me, isAdmin],
+    [board.labels, authors, me, isAdmin, postsByProject],
   );
 
   const table = useReactTable({

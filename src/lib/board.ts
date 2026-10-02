@@ -213,6 +213,42 @@ export function activityForPatch(
   return { id: crypto.randomUUID(), projectId: before.id, actor, action: 'update', changes, at: now };
 }
 
+// ---- Compose ↔ Board link (read-only from the board's side) -----------------
+
+import type { PostRecord } from '../types';
+
+export interface LinkedPosts {
+  /** Most recently edited draft linked to the project. */
+  draft?: PostRecord;
+  /** Most recently posted record linked to the project. */
+  posted?: PostRecord;
+}
+
+/** What the board's Post column shows for one project. */
+export function linkedPosts(records: PostRecord[], projectId: string): LinkedPosts {
+  const out: LinkedPosts = {};
+  for (const r of records) {
+    if (r.projectId !== projectId || r.deletedAt) continue;
+    if (r.status === 'draft') {
+      if (!out.draft || r.updatedAt > out.draft.updatedAt) out.draft = r;
+    } else if (!out.posted || (r.postedAt ?? '') > (out.posted.postedAt ?? '')) {
+      out.posted = r;
+    }
+  }
+  return out;
+}
+
+/**
+ * The board row a Compose customer name matches — same normalization as the
+ * duplicate guard. Used only to SUGGEST a link; nothing links silently.
+ */
+export function matchProjectByCustomer(
+  projects: BoardProject[],
+  customerName: string,
+): BoardProject | undefined {
+  return findDuplicate(projects, customerName);
+}
+
 export function activityEntry(
   projectId: string,
   actor: string,

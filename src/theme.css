@@ -2609,6 +2609,78 @@ tr:hover .board-label-cell.empty {
   border-top: 1px solid var(--dyn-border);
 }
 
+/* Post column (board → Compose) */
+.board-post-cell {
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.board-post-cell.empty {
+  color: var(--dyn-muted);
+}
+.board-post-cell.draft {
+  color: var(--dyn-teal-ink);
+  font-weight: 600;
+}
+.board-post-cell.posted {
+  color: #00885c;
+  font-weight: 600;
+}
+
+/* Compose ↔ Board link bar (chip when linked, suggestion when matching) */
+.board-link-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--dyn-teal-soft);
+  border: 1px solid var(--dyn-teal-line);
+  border-radius: var(--radius-input);
+  padding: 7px 12px;
+  margin-bottom: 14px;
+  font-size: 13px;
+}
+.board-link-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--dyn-navy);
+  cursor: pointer;
+  padding: 0;
+}
+.board-link-chip:hover {
+  text-decoration: underline;
+}
+.board-link-status {
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 4px;
+  padding: 2px 8px;
+}
+.board-link-x {
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--dyn-muted);
+  font-size: 13px;
+  padding: 2px 4px;
+  margin-left: auto;
+}
+.board-link-x:hover {
+  color: var(--dyn-danger);
+}
+
 /* Designed-date range filter */
 .board-date-range {
   display: inline-flex;

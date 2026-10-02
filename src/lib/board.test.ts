@@ -8,6 +8,8 @@ import {
   findDuplicate,
   labelTextColor,
   labelsFor,
+  linkedPosts,
+  matchProjectByCustomer,
   mergeBoard,
   nameKey,
   newProject,
@@ -132,6 +134,40 @@ describe('activityForPatch', () => {
   it('returns null when nothing actually changed', () => {
     const p = proj();
     expect(activityForPatch(p, { rating: null }, 'X', seedLabels(), T2)).toBeNull();
+  });
+});
+
+describe('linkedPosts', () => {
+  const rec = (over: Record<string, unknown>) =>
+    ({ id: 'r', status: 'draft', updatedAt: T0, projectId: 'p1', ...over }) as never;
+
+  it('picks the newest draft and the newest posted, ignoring other projects and deleted', () => {
+    const result = linkedPosts(
+      [
+        rec({ id: 'd1', updatedAt: T0 }),
+        rec({ id: 'd2', updatedAt: T1 }),
+        rec({ id: 'dead', updatedAt: T2, deletedAt: T2 }),
+        rec({ id: 'other', updatedAt: T2, projectId: 'p2' }),
+        rec({ id: 'po1', status: 'posted', postedAt: T0 }),
+        rec({ id: 'po2', status: 'posted', postedAt: T1 }),
+      ],
+      'p1',
+    );
+    expect(result.draft?.id).toBe('d2');
+    expect(result.posted?.id).toBe('po2');
+  });
+
+  it('returns empty for an unlinked project', () => {
+    expect(linkedPosts([rec({})], 'p9')).toEqual({});
+  });
+});
+
+describe('matchProjectByCustomer', () => {
+  it('matches case/space-insensitively, skips archived rows', () => {
+    const row = proj({ name: 'Martha Thompson' });
+    expect(matchProjectByCustomer([row], ' martha  THOMPSON ')?.id).toBe('p1');
+    expect(matchProjectByCustomer([proj({ archivedAt: T1 })], 'Martha Thompson')).toBeUndefined();
+    expect(matchProjectByCustomer([row], '')).toBeUndefined();
   });
 });
 

@@ -4,8 +4,9 @@
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { emptyBoard } from '../lib/board';
-import type { BoardState } from './types';
+import { emptyBoard, newProject, seedLabels } from '../lib/board';
+import type { PostRecord } from '../types';
+import type { BoardProject, BoardState } from './types';
 import BoardTab from './BoardTab';
 
 // floating-ui's autoUpdate needs ResizeObserver, which jsdom lacks.
@@ -16,8 +17,9 @@ class RO {
 }
 
 const toasts: { text: string; action?: { label: string; fn: () => void } }[] = [];
+const opened: BoardProject[] = [];
 
-function Harness({ initial }: { initial?: BoardState }) {
+function Harness({ initial, records = [] }: { initial?: BoardState; records?: PostRecord[] }) {
   const [board, setBoard] = useState<BoardState>(initial ?? emptyBoard());
   return (
     <BoardTab
@@ -27,8 +29,14 @@ function Harness({ initial }: { initial?: BoardState }) {
       isAdmin
       authors={['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai']}
       toast={(text, action) => toasts.push({ text, action })}
+      records={records}
+      onOpenCompose={(p) => opened.push(p)}
     />
   );
+}
+
+function boardProject(name: string, id: string): BoardProject {
+  return { ...newProject(name, 'Aboud Yousef', seedLabels(), '2026-10-01T00:00:00.000Z'), id };
 }
 
 function addProject(name: string) {
@@ -41,6 +49,7 @@ describe('BoardTab', () => {
   beforeEach(() => {
     localStorage.clear();
     toasts.length = 0;
+    opened.length = 0;
     vi.stubGlobal('ResizeObserver', RO);
   });
   afterEach(() => {
@@ -211,6 +220,26 @@ describe('BoardTab', () => {
     fireEvent.click(screen.getByTitle('Clear the date range'));
     expect(screen.getByText('Early Job')).toBeTruthy();
     expect(screen.getByText('Dateless Job')).toBeTruthy();
+  });
+
+  it('Post column: — when unlinked, Draft/Posted when linked; click hands the project to Compose', () => {
+    const board = emptyBoard();
+    const p1 = { ...boardProject('Martha Thompson', 'pj-1') };
+    const p2 = { ...boardProject('Patrick Lingwall', 'pj-2') };
+    const p3 = { ...boardProject('No Post Yet', 'pj-3') };
+    board.projects = [p1, p2, p3];
+    const records = [
+      { id: 'd1', status: 'draft', author: 'Omar Rajab', projectId: 'pj-1', updatedAt: '2026-10-02T10:00:00Z' },
+      { id: 'po1', status: 'posted', author: 'Aboud Yousef', projectId: 'pj-2', postedAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z' },
+    ] as unknown as PostRecord[];
+
+    render(<Harness initial={board} records={records} />);
+
+    expect(screen.getByText(/Draft · OR ·/)).toBeTruthy();
+    expect(screen.getByText(/Posted \d{2}\/\d{2} ✓/)).toBeTruthy();
+    const empty = screen.getByText('No Post Yet').closest('tr')!;
+    fireEvent.click(within(empty).getByTitle('Start a post for this project'));
+    expect(opened.map((p) => p.id)).toEqual(['pj-3']);
   });
 
   it('search filters rows; My projects filters by coordinator', () => {

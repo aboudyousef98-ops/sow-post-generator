@@ -199,6 +199,14 @@ export interface PostRecord {
    * next merge. Filtered out of all lists.
    */
   deletedAt?: string;
+  /**
+   * Board link (one-way: the board controls Compose, never the opposite).
+   * Set when a draft is launched from a board row, or when the designer
+   * accepts the customer-name match in Compose. The board only READS it —
+   * the Post column reflects the latest linked draft/post. Additive;
+   * schemaVersion stays 1.
+   */
+  projectId?: string;
   schemaVersion: 1;
 }
 

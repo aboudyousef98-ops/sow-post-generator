@@ -10,6 +10,8 @@ import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '.
 import { autoTags } from '../lib/record';
 import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
 import { POLISH_KEYS, rawTextFor } from '../lib/installNotes';
+import { labelById, labelTextColor, matchProjectByCustomer } from '../lib/board';
+import type { BoardLabel, BoardProject } from '../board/types';
 import type { Ahj, Level, PolishKey, PostRecord, Region, RewriteMode, Settings, SfFields } from '../types';
 import InstallNotesCard from './InstallNotesCard';
 import NoteBox from './NoteBox';
@@ -27,6 +29,11 @@ interface Props {
   aiAvailable: boolean;
   ahjs: Ahj[];
   onOpenAhjBoard: (id: string) => void;
+  /** Project Board rows/labels — READ ONLY (the board controls Compose, never the opposite). */
+  boardProjects: BoardProject[];
+  boardLabels: BoardLabel[];
+  /** Jump to the board with this row highlighted. */
+  onOpenBoard: (projectId: string) => void;
 }
 
 const FEEDBACK_FIELDS: { key: PolishKey; label: string; placeholder: string }[] = [
@@ -47,6 +54,9 @@ export default function ComposeTab({
   aiAvailable,
   ahjs,
   onOpenAhjBoard,
+  boardProjects,
+  boardLabels,
+  onOpenBoard,
 }: Props) {
   const [manualFields, setManualFields] = useState<Set<string>>(new Set());
   const [rawPairs, setRawPairs] = useState<Record<string, string> | null>(null);
@@ -340,6 +350,67 @@ export default function ComposeTab({
           + New post
         </button>
       </div>
+
+      {/* Board link — the board controls Compose, never the opposite: this bar
+          only sets/clears the draft's projectId or navigates. The linked row
+          may vanish (deleted on the board) — then the suggestion returns. */}
+      {(() => {
+        const linked = record.projectId
+          ? boardProjects.find((p) => p.id === record.projectId && !p.deletedAt)
+          : undefined;
+        if (linked) {
+          const status = labelById(boardLabels, linked.statusId);
+          return (
+            <div className="board-link-bar linked">
+              <button
+                type="button"
+                className="board-link-chip"
+                title="Show this project on the board"
+                onClick={() => onOpenBoard(linked.id)}
+              >
+                📋 {linked.name}
+                {status && (
+                  <span
+                    className="board-link-status"
+                    style={{ background: status.color, color: labelTextColor(status.color) }}
+                  >
+                    {status.name}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                className="board-link-x"
+                title="Unlink from the board"
+                aria-label="Unlink from the board"
+                onClick={() => update((r) => ({ ...r, projectId: undefined }))}
+              >
+                ✕
+              </button>
+            </div>
+          );
+        }
+        if (record.status !== 'draft') return null;
+        const match = matchProjectByCustomer(boardProjects, record.sf.customerName);
+        if (!match) return null;
+        const statusName = labelById(boardLabels, match.statusId)?.name;
+        return (
+          <div className="board-link-bar">
+            <span>
+              This customer is on the board — link this post to <b>{match.name}</b>
+              {statusName ? ` · ${statusName}` : ''}
+              {match.coordinator ? ` · ${match.coordinator}` : ''}?
+            </span>
+            <button
+              type="button"
+              className="btn small primary"
+              onClick={() => update((r) => ({ ...r, projectId: match.id }))}
+            >
+              Link
+            </button>
+          </div>
+        );
+      })()}
 
       <div className="compose-grid">
         <div className="compose-form">

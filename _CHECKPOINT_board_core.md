@@ -3,6 +3,18 @@
 Date: 2026-10-02 · Plan: `_PLAN_board.md` · Spec: `../10-project-board.md`
 (as amended by Aboud: existing login + existing Blobs sync, no Supabase/Google)
 
+## Added same day (commit d3cd3de, Aboud's requests)
+
+- **Completed projects section**: any project whose status label has the
+  "done" flag disappears from the main board and lands in a collapsible
+  section below it (count badge, same columns and widths, rows stay fully
+  editable — changing the status back returns the row to the main board).
+  The move shows a toast with Undo. Main header counts speak about active
+  projects only. Custom labels marked "done" in Edit labels behave the same.
+- **Designed-date range filter** in the toolbar (From – To, native date
+  inputs, ✕ to clear). Rows with no Designed date hide while a range is set.
+- Both verified by tests (326 total green) and live in Chrome.
+
 ## Built
 
 - **Unwound Supabase** (B0's plumbing): dependency, `supabase/` SQL, client,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BoardTab from './board/BoardTab';
-import type { BoardState } from './board/types';
+import type { BoardProject, BoardState } from './board/types';
 import AhjTab from './components/AhjTab';
 import ComposeTab from './components/ComposeTab';
 import DraftsTab from './components/DraftsTab';
@@ -18,7 +18,8 @@ import {
   putSharedRecords,
 } from './lib/api';
 import { mergeAhjs } from './lib/ahj';
-import { mergeBoard } from './lib/board';
+import { linkedPosts, mergeBoard } from './lib/board';
+import { titleCaseName } from './lib/nameCase';
 import { blankRecord, hasContent } from './lib/record';
 import {
   clearLiveDraft,
@@ -465,6 +466,51 @@ export default function App({ session, onLogout }: AppProps = {}) {
     [setRecords, toast, commitDraft],
   );
 
+  // ---- Board → Compose (one-way: the board controls Compose) --------------
+
+  const [boardFocusId, setBoardFocusId] = useState<string | null>(null);
+
+  /** The Compose chip's jump back to the board, row highlighted. */
+  const openBoardAt = useCallback((projectId: string) => {
+    setBoardFocusId(projectId);
+    setTab('board');
+  }, []);
+
+  /**
+   * The Post cell / "Open in Compose": open the project's draft if it has
+   * one, go to History if it is posted, otherwise start a prefilled draft
+   * already linked to the row.
+   */
+  const openFromBoard = useCallback(
+    (project: BoardProject) => {
+      const lp = linkedPosts(recordsRef.current, project.id);
+      if (lp.draft) {
+        openDraft(lp.draft.id);
+        return;
+      }
+      if (lp.posted) {
+        setTab('history');
+        toast(`${project.name} is posted — it lives in History.`);
+        return;
+      }
+      // Same flush rule as newPost: never discard what is on screen.
+      const open = currentRef.current;
+      if (hasContent(open)) commitDraft(open);
+      clearLiveDraft();
+      const author = session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? '';
+      const blank = blankRecord(author, settings);
+      const rec: PostRecord = {
+        ...blank,
+        projectId: project.id,
+        sf: { ...blank.sf, customerName: titleCaseName(project.name) },
+      };
+      setCurrent(rec);
+      commitDraft(rec);
+      setTab('compose');
+    },
+    [openDraft, commitDraft, settings, session, toast],
+  );
+
   // Delete = tombstone (deletedAt) so the deletion syncs to every browser
   // instead of the record resurrecting on the next merge.
   const deleteRecord = useCallback(
@@ -628,6 +674,10 @@ export default function App({ session, onLogout }: AppProps = {}) {
             isAdmin={!session || session.role === 'admin'}
             authors={settings.authors}
             toast={toast}
+            records={records}
+            onOpenCompose={openFromBoard}
+            focusId={boardFocusId}
+            onFocusHandled={() => setBoardFocusId(null)}
           />
         )}
         {tab === 'compose' && (
@@ -646,6 +696,9 @@ export default function App({ session, onLogout }: AppProps = {}) {
               setAhjSelectedId(id);
               setTab('ahj');
             }}
+            boardProjects={boardState.projects}
+            boardLabels={boardState.labels}
+            onOpenBoard={openBoardAt}
           />
         )}
         {tab === 'ahj' && (
