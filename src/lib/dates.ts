@@ -47,3 +47,35 @@ export function todayIso(): string {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// ---- Board helpers (10-project-board.md §5.4) ------------------------------
+
+/**
+ * ISO 'YYYY-MM-DD' → Date at LOCAL midnight. The board's critical date rule:
+ * `new Date('2026-09-24')` parses as UTC and reads as 09/23 in Texas, so
+ * calendar dates must always be built from parts.
+ */
+export function parseIsoLocal(iso: string): Date | null {
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+}
+
+/**
+ * Timestamp (ISO with time, e.g. a row's updated_at) → 'just now' / '5 min ago'
+ * / '2 h ago' / '3 d ago', falling back to the local MM/DD/YYYY after a week.
+ * `now` is a parameter so tests never depend on the wall clock.
+ */
+export function relativeTime(isoTimestamp: string, now: number = Date.now()): string {
+  const t = Date.parse(isoTimestamp);
+  if (Number.isNaN(t)) return '';
+  // Small negative ages happen with clock skew between machines — never show
+  // a future time for them.
+  const sec = Math.max(0, Math.floor((now - t) / 1000));
+  if (sec < 60) return 'just now';
+  if (sec < 3600) return `${Math.floor(sec / 60)} min ago`;
+  if (sec < 86400) return `${Math.floor(sec / 3600)} h ago`;
+  if (sec < 7 * 86400) return `${Math.floor(sec / 86400)} d ago`;
+  const d = new Date(t); // local calendar date of the timestamp
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`;
+}
