@@ -2,6 +2,7 @@
 
 import type { Region, SfFields } from '../types';
 import { isoToUs, isPast, usDateToIso, weekdayName } from './dates';
+import { titleCaseName } from './nameCase';
 
 /** Labels as they appear on the SF Lightning record page (case-insensitive match). */
 const KNOWN_LABELS = [
@@ -175,6 +176,8 @@ export function parseSfText(input: string, today?: string): ParseResult {
       `Install Scheduled Date (${isoToUs(fields.installScheduledDate)}) is in the past.`,
     );
   }
+  // SF renders names in ALL CAPS; the post must not (Aboud, 2026-10-02).
+  if (fields.customerName) fields.customerName = titleCaseName(fields.customerName);
   if (!fields.customerName) warnings.push('Customer name missing.');
 
   return { fields, warnings, rawPairs };
@@ -195,7 +198,8 @@ export function extractedToFields(
   const fields: Partial<SfFields> = { source: 'image' };
   const s = (k: string) => (typeof e[k] === 'string' && (e[k] as string).trim() ? (e[k] as string).trim() : undefined);
 
-  fields.customerName = s('customerName');
+  const extractedName = s('customerName');
+  fields.customerName = extractedName ? titleCaseName(extractedName) : undefined;
   fields.recordTitle = s('recordTitle');
   if (typeof e.systemSizeKw === 'number') fields.systemSizeKw = e.systemSizeKw;
   fields.projectStatus = s('projectStatus');

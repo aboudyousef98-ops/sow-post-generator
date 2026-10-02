@@ -22,6 +22,8 @@ interface Props {
   settings: Settings;
   setSettings: (s: Settings) => void;
   toast: (text: string, action?: Toast['action']) => void;
+  /** Phase 9: when signed in, the session name is the author — no picker. */
+  lockedAuthor?: string;
 }
 
 const fmt = (iso: string) =>
@@ -41,8 +43,8 @@ const parseAliases = (s: string) => s.split('\n').map((x) => x.trim()).filter(Bo
 
 type Modal = null | 'add' | 'rename' | 'delete' | 'history';
 
-export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, setSettings, toast }: Props) {
-  const author = settings.lastAuthor ?? settings.authors[0] ?? '';
+export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, setSettings, toast, lockedAuthor }: Props) {
+  const author = lockedAuthor ?? settings.lastAuthor ?? settings.authors[0] ?? '';
 
   const [globalQuery, setGlobalQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -483,15 +485,19 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
                 <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   Posting as
-                  <select
-                    value={author}
-                    onChange={(e) => setSettings({ ...settings, lastAuthor: e.target.value })}
-                    style={{ width: 'auto', marginTop: 0, padding: '4px 8px', fontSize: 12.5 }}
-                  >
-                    {settings.authors.map((a) => (
-                      <option key={a}>{a}</option>
-                    ))}
-                  </select>
+                  {lockedAuthor ? (
+                    <strong>{author}</strong>
+                  ) : (
+                    <select
+                      value={author}
+                      onChange={(e) => setSettings({ ...settings, lastAuthor: e.target.value })}
+                      style={{ width: 'auto', marginTop: 0, padding: '4px 8px', fontSize: 12.5 }}
+                    >
+                      {settings.authors.map((a) => (
+                        <option key={a}>{a}</option>
+                      ))}
+                    </select>
+                  )}
                   · Ctrl+Enter to post
                 </label>
                 <button type="button" className="btn primary" disabled={!composer.trim()} onClick={addPost}>

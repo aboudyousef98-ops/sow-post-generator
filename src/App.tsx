@@ -4,6 +4,7 @@ import ComposeTab from './components/ComposeTab';
 import DraftsTab from './components/DraftsTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
+import UsersTab from './components/UsersTab';
 import { Toasts, type Toast } from './components/Toast';
 import { fetchSharedAhjs, fetchSharedRecords, health, putSharedAhjs, putSharedRecords } from './lib/api';
 import { mergeAhjs } from './lib/ahj';
@@ -23,11 +24,33 @@ import {
   saveSettings,
 } from './lib/storage';
 import { buildPostHtml, buildPostText } from './lib/template';
-import type { Ahj, PostRecord, Settings } from './types';
+import type { Ahj, PostRecord, Session, Settings } from './types';
 
-type Tab = 'compose' | 'drafts' | 'history' | 'ahj' | 'settings';
+// Phase 9: two-level navigation. The flat Tab union stays (every old
+// setTab('compose') call site still works); each tab belongs to a main group
+// and the header renders a main strip plus the active group's sub strip.
+type Tab = 'compose' | 'drafts' | 'history' | 'ahj' | 'settings' | 'users';
+type MainTab = 'compose' | 'ahj' | 'admin';
 
-export default function App() {
+const MAIN_OF: Record<Tab, MainTab> = {
+  compose: 'compose',
+  drafts: 'compose',
+  history: 'compose',
+  ahj: 'ahj',
+  settings: 'admin',
+  users: 'admin',
+};
+
+/** Where each main tab lands when clicked directly. */
+const MAIN_HOME: Record<MainTab, Tab> = { compose: 'compose', ahj: 'ahj', admin: 'settings' };
+
+interface AppProps {
+  /** Absent only in tests, which render the inner app without the login gate. */
+  session?: Session;
+  onLogout?: () => void;
+}
+
+export default function App({ session, onLogout }: AppProps = {}) {
   const [settings, setSettingsState] = useState<Settings>(() => loadSettings());
   const [records, setRecordsState] = useState<PostRecord[]>(() => loadRecords());
   const [ahjs, setAhjsState] = useState<Ahj[]>(() => loadAhjs());
@@ -49,8 +72,25 @@ export default function App() {
       const onDisk = stored.find((r) => r.id === live.id);
       if (!onDisk || live.updatedAt > onDisk.updatedAt) return live;
     }
-    return found ?? blankRecord(loadSettings().lastAuthor ?? 'Aboud Yousef', loadSettings());
+    return found ?? blankRecord(session?.displayName ?? loadSettings().lastAuthor ?? 'Aboud Yousef', loadSettings());
   });
+
+  // The signed-in identity IS the author (Phase 9). Pinning lastAuthor keeps
+  // every author consumer (blankRecord, AhjTab's "posting as") on the session
+  // name without threading the session through them all.
+  useEffect(() => {
+    if (!session) return;
+    setSettingsState((s) => {
+      if (s.lastAuthor === session.displayName && s.authors.includes(session.displayName)) return s;
+      const next = {
+        ...s,
+        lastAuthor: session.displayName,
+        authors: s.authors.includes(session.displayName) ? s.authors : [...s.authors, session.displayName],
+      };
+      saveSettings(next);
+      return next;
+    });
+  }, [session]);
 
   // ---- persistence -------------------------------------------------------
 
@@ -399,16 +439,18 @@ export default function App() {
         <nav>
           {(
             [
-              ['compose', 'Compose', 0],
-              ['drafts', 'Drafts', allDrafts.length],
-              ['history', 'History', history.length],
-              ['ahj', 'AHJ Requirements', 0],
-              ['settings', 'Settings', 0],
-            ] as [Tab, string, number][]
-          ).map(([key, label, count]) => (
-            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+              ['compose', 'Compose'],
+              ['ahj', 'AHJ Requirements'],
+              // Admin is visible to admins (and to the gateless test render).
+              ...(!session || session.role === 'admin' ? [['admin', 'Admin'] as [MainTab, string]] : []),
+            ] as [MainTab, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              className={MAIN_OF[tab] === key ? 'active' : ''}
+              onClick={() => setTab(MAIN_HOME[key])}
+            >
               {label}
-              {count > 0 && <span className="tab-badge">{count}</span>}
             </button>
           ))}
         </nav>
@@ -437,23 +479,67 @@ export default function App() {
             AI
           </span>
         </span>
-        <select
-          className="author-pill"
-          title="Posting as"
-          aria-label="Posting as"
-          value={current.author}
-          onChange={(e) => updateCurrent((r) => ({ ...r, author: e.target.value }))}
-        >
-          {/* An author who has been removed from the roster would otherwise
-              make this render blank, which reads as "the control is missing". */}
-          {(settings.authors.includes(current.author)
-            ? settings.authors
-            : [current.author, ...settings.authors].filter(Boolean)
-          ).map((a) => (
-            <option key={a}>{a}</option>
-          ))}
-        </select>
+        {session ? (
+          // Signed in: identity comes from the login — nobody picks a name.
+          <>
+            <span className="author-pill author-fixed" title="Posting as">
+              {session.displayName}
+            </span>
+            <button className="btn small secondary logout-btn" onClick={onLogout}>
+              Log out
+            </button>
+          </>
+        ) : (
+          <select
+            className="author-pill"
+            title="Posting as"
+            aria-label="Posting as"
+            value={current.author}
+            onChange={(e) => updateCurrent((r) => ({ ...r, author: e.target.value }))}
+          >
+            {/* An author who has been removed from the roster would otherwise
+                make this render blank, which reads as "the control is missing". */}
+            {(settings.authors.includes(current.author)
+              ? settings.authors
+              : [current.author, ...settings.authors].filter(Boolean)
+            ).map((a) => (
+              <option key={a}>{a}</option>
+            ))}
+          </select>
+        )}
       </header>
+
+      {/* Sub strip for the active main tab (AHJ has no sub-tabs). */}
+      {MAIN_OF[tab] === 'compose' && (
+        <nav className="subnav">
+          {(
+            [
+              ['compose', 'New Post', 0],
+              ['drafts', 'Drafts', allDrafts.length],
+              ['history', 'History', history.length],
+            ] as [Tab, string, number][]
+          ).map(([key, label, count]) => (
+            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+              {label}
+              {count > 0 && <span className="tab-badge">{count}</span>}
+            </button>
+          ))}
+        </nav>
+      )}
+      {MAIN_OF[tab] === 'admin' && (
+        <nav className="subnav">
+          {(
+            [
+              ['settings', 'Settings'],
+              ['users', 'Users'],
+            ] as [Tab, string][]
+          ).map(([key, label]) => (
+            <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
 
       <main className="page">
         {tab === 'compose' && (
@@ -483,6 +569,7 @@ export default function App() {
             settings={settings}
             setSettings={setSettings}
             toast={toast}
+            lockedAuthor={session?.displayName}
           />
         )}
         {tab === 'drafts' && (
@@ -507,6 +594,12 @@ export default function App() {
             toast={toast}
           />
         )}
+        {tab === 'users' &&
+          (session ? (
+            <UsersTab session={session} toast={(t) => toast(t)} />
+          ) : (
+            <div className="card">Sign in to manage users.</div>
+          ))}
         {tab === 'settings' && (
           <SettingsTab
             settings={settings}

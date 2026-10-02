@@ -1875,3 +1875,182 @@ table.list tr.row:hover {
   outline: 2px solid var(--dyn-teal);
   outline-offset: -2px;
 }
+
+/* ---- Phase 9: sub-tab strip, login screen, Users admin --------------------- */
+
+/* Second-level tabs under the navy bar. Sticks right below the topbar so both
+   strips stay reachable while the long Compose form scrolls. */
+.subnav {
+  background: var(--dyn-surface);
+  border-bottom: 1px solid var(--dyn-border);
+  display: flex;
+  gap: 4px;
+  padding: 0 20px;
+  height: 40px;
+  position: sticky;
+  top: 52px;
+  z-index: 19;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.subnav::-webkit-scrollbar {
+  display: none;
+}
+
+.subnav button {
+  background: none;
+  border: none;
+  color: var(--dyn-muted);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  padding: 0 14px;
+  cursor: pointer;
+  border-bottom: 3px solid transparent;
+  height: 100%;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.subnav button.active {
+  color: var(--dyn-navy);
+  border-bottom-color: var(--dyn-orange);
+}
+
+.subnav .tab-badge {
+  background: var(--dyn-line);
+  color: var(--dyn-text);
+}
+
+/* The static "Posting as" identity (signed in — not a picker). */
+.author-fixed {
+  display: inline-flex;
+  align-items: center;
+  cursor: default;
+}
+
+.topbar .logout-btn {
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.12);
+  border: 0;
+  color: #fff;
+}
+
+.topbar .logout-btn:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+/* Login screen — a single centered card on the app background. */
+.login-screen {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--dyn-bg);
+  padding: 20px;
+}
+
+.login-card {
+  width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+
+.login-card img {
+  height: 36px;
+  align-self: center;
+}
+
+.login-card h2 {
+  margin: 4px 0 0;
+  color: var(--dyn-navy);
+}
+
+.login-card .login-sub {
+  margin: 0 0 6px;
+  color: var(--dyn-muted);
+  font-size: 13.5px;
+}
+
+.login-card label {
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dyn-text);
+}
+
+.login-card .btn {
+  margin-top: 6px;
+}
+
+.login-error {
+  background: #fdecea;
+  color: var(--dyn-danger);
+  border-radius: var(--radius-input);
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+}
+
+/* Admin › Users */
+.users-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-width: 760px;
+}
+
+.users-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13.5px;
+}
+
+.users-table th {
+  text-align: left;
+  color: var(--dyn-muted);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--dyn-border);
+}
+
+.users-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--dyn-line);
+  vertical-align: middle;
+}
+
+.users-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.users-actions input {
+  width: 150px;
+  margin-top: 0;
+}
+
+.users-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 340px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dyn-text);
+}
+
+.users-add .btn {
+  align-self: flex-start;
+  margin-top: 4px;
+}

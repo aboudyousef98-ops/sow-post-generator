@@ -4,6 +4,7 @@ import { LEVEL_INFO, LEVEL_NAMES } from '../lib/classify';
 import { todayIso } from '../lib/dates';
 import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
+import { titleCaseName } from '../lib/nameCase';
 import { livePosts, matchAhj } from '../lib/ahj';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
@@ -409,7 +410,7 @@ export default function ComposeTab({
             <input
               type="text"
               value={record.sf.customerName}
-              onChange={(e) => setSf({ customerName: e.target.value }, 'customerName')}
+              onChange={(e) => setSf({ customerName: titleCaseName(e.target.value) }, 'customerName')}
             />
           </label>
           <label className="field">

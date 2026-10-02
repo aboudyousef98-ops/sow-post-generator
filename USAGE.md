@@ -33,9 +33,40 @@ npm run dev             # netlify dev on http://localhost:8888
 npm run test
 ```
 
+## Signing in (Phase 9, 2026-10-02)
+
+The app now opens with a **login screen** — username + password, once per
+browser (it stays signed in until you press **Log out** in the top bar).
+
+- Your name on every post comes from your login. The "Posting as" picker is
+  gone — nobody can post under someone else's name by accident.
+- The team roster is managed in **Admin → Users** (admin only): add a member
+  with a username, a display name (what appears on posts) and a password.
+  Reset passwords and remove people from the same screen.
+- **Change my password** is at the bottom of Admin → Users.
+- The first account on a fresh deployment is the admin account; change its
+  password right after the first login (Admin → Users → Change my password).
+- Forgot a password? An admin resets it from Admin → Users. Nothing is ever
+  emailed — there is no email anywhere in this.
+- Honest scope: this is a *team-discipline* login, checked in the browser. It
+  stops name mix-ups; it is not bank-grade security.
+
+## Tabs (Phase 9)
+
+Three main tabs in the navy bar, with sub-tabs underneath:
+
+| Main tab | Sub-tabs | Who sees it |
+|---|---|---|
+| **Compose** | New Post · Drafts · History | everyone |
+| **AHJ Requirements** | — | everyone |
+| **Admin** | Settings · Users | admin only |
+
+Everything about writing posts lives under Compose; future sections of the
+SOW operational tool get their own main tab.
+
 ## Daily workflow (designers)
 
-1. **Compose** opens directly (no login).
+1. Sign in once, then **Compose** opens directly.
 2. In Salesforce: Ctrl+A, Ctrl+C on the record page → click the paste zone → Ctrl+V.
    (Or paste/drag a screenshot — it goes through AI extraction; verify name + date.)
    Paste the Proj. Coordination tab too — the second paste merges in.

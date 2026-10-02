@@ -237,6 +237,38 @@ export interface Ahj {
   schemaVersion: 1;
 }
 
+// ---- Team login (Phase 9) --------------------------------------------------
+// Browser-checked identity, NOT hard security (Aboud's explicit choice,
+// 2026-10-02): it stops people posting under each other's names, it does not
+// stop a determined technical user. The user list lives in the shared Blobs
+// store (same sync as records) so a user added on one machine can log in on
+// another with no redeploy. Passwords are stored salted+hashed, never plain.
+
+export type UserRole = 'admin' | 'member';
+
+export interface TeamUser {
+  /** Lowercase, unique — the login handle. */
+  username: string;
+  /** What appears as the post author. */
+  displayName: string;
+  role: UserRole;
+  salt: string;
+  /** hex sha256(`${salt}:${password}`) — see auth.ts. */
+  passHash: string;
+  createdAt: string;
+  updatedAt: string;
+  /** Tombstone, same rationale as PostRecord.deletedAt. */
+  deletedAt?: string;
+  schemaVersion: 1;
+}
+
+/** What a signed-in browser remembers. No password material, ever. */
+export interface Session {
+  username: string;
+  displayName: string;
+  role: UserRole;
+}
+
 export interface Settings {
   authors: string[];
   fixedTags: string[];

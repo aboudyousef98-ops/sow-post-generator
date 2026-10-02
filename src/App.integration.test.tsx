@@ -668,7 +668,7 @@ describe('the AI can never quietly delete or overwrite a note', () => {
     fireEvent.click(screen.getByRole('button', { name: /Polish with AI/i }));
     await waitFor(() => expect(document.querySelector('.bullet-drift, .dropped-tokens')).toBeTruthy());
 
-    fireEvent.click(screen.getByRole('button', { name: /New post/i }));
+    fireEvent.click(screen.getByRole('button', { name: '+ New post' }));
 
     await waitFor(() => expect(document.querySelector('.bullet-drift')).toBeNull());
     expect(document.querySelector('.dropped-tokens')).toBeNull();
@@ -701,7 +701,7 @@ describe('opening another draft never discards what is on screen', () => {
     render(<App />);
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'First Project' } });
     await waitFor(() => expect(byName('First Project')).toBeTruthy(), { timeout: 2000 });
-    fireEvent.click(screen.getByRole('button', { name: /New post/i }));
+    fireEvent.click(screen.getByRole('button', { name: '+ New post' }));
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Second Project' } });
     await waitFor(() => expect(byName('Second Project')).toBeTruthy(), { timeout: 2000 });
   }
@@ -783,21 +783,21 @@ describe('a power cut loses nothing', () => {
 
   it('does not resurrect a stale live draft over a newer saved one', async () => {
     const { unmount } = render(<App />);
-    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'First text' } });
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'First Text' } });
     await waitFor(() => expect(localStorage.getItem('sowpost.records')).toBeTruthy(), { timeout: 2000 });
 
     // The saved list moves on; the live key is left holding the older text.
     const stale = JSON.parse(localStorage.getItem('sowpost.live') ?? 'null');
-    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Second text' } });
+    fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Second Text' } });
     await waitFor(() =>
-      expect(localStorage.getItem('sowpost.records')).toContain('Second text'),
+      expect(localStorage.getItem('sowpost.records')).toContain('Second Text'),
       { timeout: 2000 },
     );
     localStorage.setItem('sowpost.live', JSON.stringify(stale));
     unmount();
 
     render(<App />);
-    expect((screen.getByLabelText(/Customer name/i) as HTMLInputElement).value).toBe('Second text');
+    expect((screen.getByLabelText(/Customer name/i) as HTMLInputElement).value).toBe('Second Text');
   });
 });
 

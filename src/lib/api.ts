@@ -160,6 +160,34 @@ export async function putSharedAhjs(ahjs: Ahj[]): Promise<Ahj[]> {
   return Array.isArray(json.ahjs) ? json.ahjs : ahjs;
 }
 
+// ---- Phase 9: shared team login roster (Netlify Blobs behind /api/users) ---
+
+import type { TeamUser } from '../types';
+
+function usersPath(): string {
+  return `/api/${TOKEN}/users`;
+}
+
+export async function fetchSharedUsers(): Promise<TeamUser[]> {
+  const res = await fetch(usersPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { users?: TeamUser[] };
+  if (!Array.isArray(json.users)) throw { status: 502, message: 'Bad users response' } satisfies ApiError;
+  return json.users;
+}
+
+/** Push local users; the server merges by username/updatedAt and returns the merged roster. */
+export async function putSharedUsers(users: TeamUser[]): Promise<TeamUser[]> {
+  const res = await fetch(usersPath(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ users }),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { users?: TeamUser[] };
+  return Array.isArray(json.users) ? json.users : users;
+}
+
 export interface HealthResponse {
   ok: boolean;
   hasKey: boolean;
