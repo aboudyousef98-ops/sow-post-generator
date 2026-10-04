@@ -74,6 +74,24 @@ describe('defaults', () => {
     expect(s.defaults.homeowner).toBe('No feedback.');
     expect(s.designers).toHaveLength(10);
   });
+
+  it('default settings seed the CLR agent and project manager rosters (meeting 2026-10-04)', () => {
+    const s = defaultSettings();
+    expect(s.clrAgents).toEqual([
+      'Adam Hallett',
+      'Blake Armstrong',
+      'Alexandria Mullen',
+      'Tre Goodloe',
+      'Austen Hallett',
+    ]);
+    expect(s.projectManagers).toEqual([
+      'Mirna Jamalieh',
+      'Joud Samardali',
+      'Ghawi Mahmoud',
+      'Yasmeen Momani',
+      "Mua'ath Ali",
+    ]);
+  });
 });
 
 describe('migrateRecord — Phase 7 (spec/10 §2.2)', () => {

@@ -30,6 +30,10 @@ export function defaultSettings(): Settings {
       'Abdallah Aljamal',
       'Ahmad Awad',
     ],
+    // CLR agents + project managers (SF "Fulfillment Coordinator") — meeting
+    // 2026-10-04, names from Aboud's Salesforce screenshots.
+    clrAgents: ['Adam Hallett', 'Blake Armstrong', 'Alexandria Mullen', 'Tre Goodloe', 'Austen Hallett'],
+    projectManagers: ['Mirna Jamalieh', 'Joud Samardali', 'Ghawi Mahmoud', 'Yasmeen Momani', "Mua'ath Ali"],
     defaults: { siteSurvey: 'All good.', design: 'All good.', homeowner: 'No feedback.' },
     chips: {
       // Installation Notes — spec/10 §7. The 1-story / 2-story / two-walls

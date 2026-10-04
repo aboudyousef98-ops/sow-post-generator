@@ -31,6 +31,16 @@ describe('hasContent — installNotes (carried fix, Phase 7 review)', () => {
     expect(hasContent(r)).toBe(true);
   });
 
+  it('a record with ONLY services ticked counts as content (meeting 2026-10-04)', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), services: ['FSU'] } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY a roof rating chosen counts as content', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), roofRating: 3 } });
+    expect(hasContent(r)).toBe(true);
+  });
+
   it('a completely blank record from blankRecord() has no content', () => {
     expect(hasContent(blankRecord('Aboud Yousef', defaultSettings()))).toBe(false);
   });

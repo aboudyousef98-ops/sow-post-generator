@@ -132,6 +132,86 @@ describe('InstallNotesCard', () => {
     expect(screen.queryByText(/Polished preview text/)).toBeNull();
   });
 
+  it('service equipment allows multiple ticks (meeting 2026-10-04)', () => {
+    render(<Harness />);
+
+    fireEvent.click(screen.getByLabelText(/^MPU/));
+    fireEvent.click(screen.getByLabelText(/^FSU/));
+
+    expect((screen.getByLabelText(/^MPU/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/^FSU/) as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText(/^FTP/) as HTMLInputElement).checked).toBe(false);
+  });
+
+  it('a legacy single `service` shows as a tick, and unticking everything clears it for good', () => {
+    const initial: PostRecord = {
+      ...blankRecord('Aboud Yousef', defaultSettings()),
+      installNotes: { ...emptyInstallNotes(), service: 'MPU' },
+    };
+    render(<Harness initial={initial} />);
+
+    const mpu = screen.getByLabelText(/^MPU/) as HTMLInputElement;
+    expect(mpu.checked).toBe(true);
+    fireEvent.click(mpu);
+    expect(mpu.checked).toBe(false);
+  });
+
+  it('walls go up to 5 and stories up to 3 (meeting 2026-10-04)', () => {
+    render(<Harness />);
+
+    fireEvent.change(screen.getByLabelText(/^Walls/i), { target: { value: '5' } });
+    expect(screen.getByLabelText(/^Wall 5 orientation/i)).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText(/^Stories/i), { target: { value: '3' } });
+    expect((screen.getByLabelText(/^Stories/i) as HTMLSelectElement).value).toBe('3');
+  });
+
+  it('the Main disconnect location box is gone (meeting 2026-10-04)', () => {
+    render(<Harness />);
+    expect(screen.queryByLabelText(/Main disconnect location/i)).toBeNull();
+  });
+
+  it('duration dropdown defaults to Automatic, follows the ticks, and can be overridden', () => {
+    render(<Harness />);
+    const sel = screen.getByLabelText(/^Power disconnect duration/i) as HTMLSelectElement;
+
+    expect(sel.value).toBe(''); // Automatic
+    expect(screen.getByRole('option', { name: /Automatic — 1–2 hours/ })).toBeTruthy();
+
+    fireEvent.click(screen.getByLabelText(/^MPU/));
+    expect(screen.getByRole('option', { name: /Automatic — 4–6 hours/ })).toBeTruthy();
+
+    fireEvent.change(sel, { target: { value: '1-2' } });
+    expect(sel.value).toBe('1-2'); // pinned by hand
+  });
+
+  it('roof rating is a 1–10 dropdown (Roof Rating System)', () => {
+    render(<Harness />);
+    const sel = screen.getByLabelText(/^Roof rating/i) as HTMLSelectElement;
+    fireEvent.change(sel, { target: { value: '8' } });
+    expect(sel.value).toBe('8');
+  });
+
+  it('a Poor-rated roof (3–4) on a project with an install date shows the alert banner', () => {
+    const base = blankRecord('Aboud Yousef', defaultSettings());
+    const initial: PostRecord = {
+      ...base,
+      sf: { ...base.sf, installScheduledDate: '2026-10-07' },
+      installNotes: { ...emptyInstallNotes(), roofRating: 3 },
+    };
+    render(<Harness initial={initial} />);
+    expect(screen.getByText(/alert the team/i)).toBeTruthy();
+  });
+
+  it('an Unviable roof (1–2) warns "do not install" even with no install date', () => {
+    const initial: PostRecord = {
+      ...blankRecord('Aboud Yousef', defaultSettings()),
+      installNotes: { ...emptyInstallNotes(), roofRating: 2 },
+    };
+    render(<Harness initial={initial} />);
+    expect(screen.getByText(/do not install/i)).toBeTruthy();
+  });
+
   it('a migrated pre-Phase-7 draft reopens with its old text in "Anything else"', () => {
     const legacy: PostRecord = {
       ...blankRecord('Aboud Yousef', defaultSettings()),

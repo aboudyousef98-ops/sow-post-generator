@@ -30,6 +30,7 @@ Please take the following notes into consideration:
 • *Project Classification:*
     ◦ Level 1 – Standard Installation.
     ◦ Planning window: 1 crew-day.
+• *Installation Notes:* Expected power disconnect duration: 1–2 hours.
 • *Clearance:* All required clearance requirements have been met.
 • *Site Survey Feedback:* All good.
 • *Design Feedback:* All good.
@@ -55,7 +56,7 @@ describe('buildPostText', () => {
     const rec = norcaRecord({
       installNotes: { ...emptyInstallNotes(), other: 'Attic run' },
     });
-    expect(buildPostText(rec, defaultSettings())).toContain('*Installation Notes:* Attic run.');
+    expect(buildPostText(rec, defaultSettings())).toContain('◦ Attic run.');
   });
 
   it('OTHER region prints the raw region text', () => {
@@ -99,11 +100,11 @@ describe('buildPostText', () => {
     expect(regionLine(rec)).toBe('HOU');
   });
 
-  it('drops empty bullets entirely (empty installation notes, missing jurisdiction)', () => {
+  it('drops empty bullets entirely (missing jurisdiction); Installation Notes keeps its automatic duration', () => {
     const rec = norcaRecord();
     rec.sf.jurisdiction = undefined;
     const text = buildPostText(rec, defaultSettings());
-    expect(text).not.toContain('*Installation Notes:*');
+    expect(text).toContain('*Installation Notes:* Expected power disconnect duration: 1–2 hours.');
     expect(text).not.toContain('*Jurisdiction:*');
     // Defaults still fill the feedback bullets.
     expect(text).toContain('*Site Survey Feedback:* All good.');
@@ -162,6 +163,22 @@ describe('finalTags', () => {
     rec.tags.push('khaled mattar');
     expect(finalTags(rec).filter((t) => t.toLowerCase() === 'khaled mattar')).toHaveLength(1);
   });
+
+  it('appends the CLR agent and project manager after the designer (meeting 2026-10-04)', () => {
+    const rec = norcaRecord({
+      designerTag: 'Khaled Mattar',
+      clrAgentTag: 'Adam Hallett',
+      pmTag: 'Mirna Jamalieh',
+    });
+    expect(finalTags(rec)).toEqual([
+      'Tarek Abu Hseini',
+      'Mohammed Azizi',
+      'Diego Banegas',
+      'Khaled Mattar',
+      'Adam Hallett',
+      'Mirna Jamalieh',
+    ]);
+  });
 });
 
 describe('buildPostHtml', () => {
@@ -171,9 +188,10 @@ describe('buildPostHtml', () => {
     expect(html).toContain('<li><strong>Installation Date &amp; Day:</strong> Thursday, 10/01/2026.</li>');
     expect(html).toContain('<li><strong>Site Address:</strong> 1317 Skylark Rd, Pasadena, TX 77502.</li>');
     expect(html).toContain('<p>@Tarek Abu Hseini @Mohammed Azizi @Diego Banegas</p>');
-    // 8 single-value bullets + Project Classification, which is now a parent
-    // <li> wrapping two nested ones (level, planning window) — spec/10 §12.1.
-    expect(html.match(/<li>/g)).toHaveLength(11);
+    // 9 single-value bullets (incl. the automatic disconnect-duration note) +
+    // Project Classification, which is a parent <li> wrapping two nested ones
+    // (level, planning window) — spec/10 §12.1.
+    expect(html.match(/<li>/g)).toHaveLength(12);
   });
 
   it('escapes HTML in user text', () => {
@@ -272,9 +290,11 @@ describe('multi-line notes render as sub-bullets', () => {
     });
 
   it('keeps a single-line note inline after its label', () => {
-    const rec = norcaRecord({ installNotes: { ...emptyInstallNotes(), other: 'Standard exterior placement.' } });
+    const rec = norcaRecord({
+      notes: { layout: '', siteSurvey: 'Standard exterior placement.', design: '', homeowner: '' },
+    });
     expect(buildPostText(rec, defaultSettings())).toContain(
-      '• *Installation Notes:* Standard exterior placement.',
+      '• *Site Survey Feedback:* Standard exterior placement.',
     );
   });
 
@@ -363,9 +383,11 @@ describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
   const withNotes = (over = {}) =>
     norcaRecord({ installNotes: { ...emptyInstallNotes(), ...over } });
 
-  it('a single value renders inline', () => {
-    const text = buildPostText(withNotes({ stories: 1 }), defaultSettings());
-    expect(text).toContain('• *Installation Notes:* 1-story house.');
+  it('a lone automatic duration renders inline; a second value makes sub-bullets', () => {
+    const text = buildPostText(withNotes(), defaultSettings());
+    expect(text).toContain('• *Installation Notes:* Expected power disconnect duration: 1–2 hours.');
+    const two = buildPostText(withNotes({ stories: 1 }), defaultSettings());
+    expect(two).toContain('• *Installation Notes:*\n    ◦ 1-story house.\n    ◦ Expected power disconnect duration: 1–2 hours.');
   });
 
   it('several values render as sub-bullets', () => {
@@ -389,9 +411,9 @@ describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
     expect(text).toContain('◦ Solar run: 1-1/4" PVC.');
   });
 
-  it('both bullets disappear when nothing is filled in', () => {
+  it('Conduit Raceway disappears when nothing is filled; Installation Notes keeps only the automatic duration', () => {
     const text = buildPostText(withNotes(), defaultSettings());
-    expect(text).not.toContain('Installation Notes');
+    expect(text).toContain('*Installation Notes:* Expected power disconnect duration: 1–2 hours.');
     expect(text).not.toContain('Conduit Raceway');
     expect(text).not.toContain('Installation Layout');
   });
@@ -404,7 +426,9 @@ describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
 
   it('the HTML version mirrors the text version and escapes values', () => {
     const html = buildPostHtml(withNotes({ stories: 1, solarRun: '1-1/4" PVC <east>' }), defaultSettings());
-    expect(html).toContain('<li><strong>Installation Notes:</strong> 1-story house.</li>');
+    expect(html).toContain(
+      '<li><strong>Installation Notes:</strong><ul><li>1-story house.</li><li>Expected power disconnect duration: 1–2 hours.</li></ul></li>',
+    );
     expect(html).toContain('<li><strong>Conduit Raceway:</strong> <u>Solar run:</u> 1-1/4" PVC &lt;east&gt;.</li>');
   });
 
@@ -445,8 +469,8 @@ Please take the following notes into consideration:
     ◦ Installation on two walls (North, West).
     ◦ 1-story house.
     ◦ This project requires an MPU.
+    ◦ Expected power disconnect duration: 4–6 hours.
     ◦ Battery location: garage, left of the door.
-    ◦ Main disconnect location: exterior south wall.
     ◦ Special cases: window to be closed off; small boxes relocated.
 • *Conduit Raceway:*
     ◦ Grid/service run: 2" PVC, 12 ft.

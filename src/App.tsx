@@ -3,6 +3,7 @@ import BoardTab from './board/BoardTab';
 import type { BoardProject, BoardState } from './board/types';
 import AhjTab from './components/AhjTab';
 import ComposeTab from './components/ComposeTab';
+import DailyProgressTab from './components/DailyProgressTab';
 import DraftsTab from './components/DraftsTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
@@ -43,7 +44,7 @@ import type { Ahj, PostRecord, Session, Settings } from './types';
 // Phase 9: two-level navigation. The flat Tab union stays (every old
 // setTab('compose') call site still works); each tab belongs to a main group
 // and the header renders a main strip plus the active group's sub strip.
-type Tab = 'board' | 'compose' | 'drafts' | 'history' | 'ahj' | 'settings' | 'users';
+type Tab = 'board' | 'compose' | 'drafts' | 'history' | 'ahj' | 'settings' | 'users' | 'progress';
 type MainTab = 'board' | 'compose' | 'ahj' | 'admin';
 
 const MAIN_OF: Record<Tab, MainTab> = {
@@ -54,6 +55,7 @@ const MAIN_OF: Record<Tab, MainTab> = {
   ahj: 'ahj',
   settings: 'admin',
   users: 'admin',
+  progress: 'admin',
 };
 
 /** Where each main tab lands when clicked directly. */
@@ -656,6 +658,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
             [
               ['settings', 'Settings'],
               ['users', 'Users'],
+              ['progress', 'Daily Progress'],
             ] as [Tab, string][]
           ).map(([key, label]) => (
             <button key={key} className={tab === key ? 'active' : ''} onClick={() => setTab(key)}>
@@ -741,6 +744,9 @@ export default function App({ session, onLogout }: AppProps = {}) {
           ) : (
             <div className="card">Sign in to manage users.</div>
           ))}
+        {tab === 'progress' && (
+          <DailyProgressTab board={boardState} records={records} toast={toast} />
+        )}
         {tab === 'settings' && (
           <SettingsTab
             settings={settings}

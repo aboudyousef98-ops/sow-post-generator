@@ -12,6 +12,7 @@ import type {
   PolishKey,
   PostRecord,
   PostValue,
+  RoofRating,
   ServiceWork,
 } from '../types';
 import { effectiveText, noteLines, punctuate, stripBullet, type PolishState } from './noteText';
@@ -34,11 +35,48 @@ export const ORIENTATIONS: Orientation[] = [
 
 export const SERVICE_WORK: ServiceWork[] = ['MPU', 'FSU', 'FTP'];
 
-const WALL_WORD: Record<1 | 2 | 3, string> = {
+/**
+ * The ticked services, in fixed MPU/FSU/FTP order regardless of tick order,
+ * falling back to the deprecated single `service` on pre-2026-10-04 drafts.
+ */
+export function servicesOf(n: InstallNotes): ServiceWork[] {
+  if (n.services?.length) return SERVICE_WORK.filter((s) => n.services!.includes(s));
+  return n.service ? [n.service] : [];
+}
+
+const WALL_WORD: Record<1 | 2 | 3 | 4 | 5, string> = {
   1: 'one wall',
   2: 'two walls',
   3: 'three walls',
+  4: 'four walls',
+  5: 'five walls',
 };
+
+/**
+ * Expected power disconnect duration — DERIVED, never picked (meeting
+ * 2026-10-05): MPU or FSU work, or a TNMP utility, means the service is down
+ * 4–6 hours; everything else (Duracell battery systems) is 1–2 hours.
+ */
+export function disconnectDurationFor(n: InstallNotes | undefined, utility?: string): '1-2' | '4-6' {
+  const s = n ? servicesOf(n) : [];
+  const tnmp = /tnmp|texas[-\s]?new\s?mexico/i.test(utility ?? '');
+  return s.includes('MPU') || s.includes('FSU') || tnmp ? '4-6' : '1-2';
+}
+
+export const DURATION_WORD: Record<'1-2' | '4-6', string> = { '1-2': '1–2 hours', '4-6': '4–6 hours' };
+
+/**
+ * Roof Rating System — Mohammed Azizi, design-sow-team, 2026-09-24. The post
+ * prints the rating with its band and the band's OUTCOME; the age/wear
+ * criteria stay with the surveyors.
+ */
+export function roofBand(rating: RoofRating): { name: string; outcome: string } {
+  if (rating >= 9) return { name: 'Prime', outcome: 'approved to install right away' };
+  if (rating >= 7) return { name: 'Good', outcome: 'workable with small adjustments' };
+  if (rating >= 5) return { name: 'Conditional', outcome: 'strongly recommend replacing the roof first' };
+  if (rating >= 3) return { name: 'Poor', outcome: 'the roof must be repaired or replaced before mounting' };
+  return { name: 'Unviable', outcome: 'do not install' };
+}
 
 /** Every free-text box inside InstallNotes, with its polish key and post label. */
 export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; label: string }[] = [
@@ -122,8 +160,11 @@ function labelledRun(label: string, raw: string, key: PolishKey, p: PolishState)
 
 const field = (f: InstallTextField) => INSTALL_TEXT_FIELDS.find((x) => x.field === f)!;
 
-/** The `Installation Notes` bullet's sub-bullets, in the order spec/10 §3.1 fixes. */
-export function installNoteLines(n: InstallNotes | undefined, p: PolishState): string[] {
+/**
+ * The `Installation Notes` bullet's sub-bullets, in the order spec/10 §3.1
+ * fixes. `utility` (sf.utility) feeds the automatic disconnect-duration line.
+ */
+export function installNoteLines(n: InstallNotes | undefined, p: PolishState, utility?: string): string[] {
   if (!n) return [];
   const lines: string[] = [];
 
@@ -132,13 +173,30 @@ export function installNoteLines(n: InstallNotes | undefined, p: PolishState): s
     const or = n.orientations.slice(0, n.walls).filter(Boolean);
     lines.push(`Installation on ${WALL_WORD[n.walls]}${or.length ? ` (${or.join(', ')})` : ''}.`);
   }
-  if (n.stories === 1) lines.push('1-story house.');
-  else if (n.stories === 2) lines.push('2-story house.');
-  else if (n.stories === 'other' && n.storiesOther.trim()) lines.push(punctuate(n.storiesOther));
-  if (n.service) lines.push(`This project requires an ${n.service}.`);
+  if (n.stories === 'other') {
+    if (n.storiesOther.trim()) lines.push(punctuate(n.storiesOther));
+  } else if (n.stories) lines.push(`${n.stories}-story house.`);
+  const services = servicesOf(n);
+  if (services.length) {
+    // "an MPU and an FSU" / "an MPU, an FSU and an FTP" — one sentence, every
+    // item keeps its own article so each reads as its own requirement.
+    const withArticle = services.map((s) => `an ${s}`);
+    const joined =
+      withArticle.length === 1
+        ? withArticle[0]
+        : `${withArticle.slice(0, -1).join(', ')} and ${withArticle[withArticle.length - 1]}`;
+    lines.push(`This project requires ${joined}.`);
+  }
+  // Manual pin wins; otherwise the hours follow the situation automatically.
+  const duration = n.disconnectDuration ?? disconnectDurationFor(n, utility);
+  lines.push(`Expected power disconnect duration: ${DURATION_WORD[duration]}.`);
+  if (n.roofRating) {
+    const band = roofBand(n.roofRating);
+    lines.push(`Roof rating: ${n.roofRating}/10 (${band.name}) — ${band.outcome}.`);
+  }
 
-  // 2. Labelled free text.
-  for (const f of ['batteryLocation', 'mainDisconnectLocation', 'specialCases'] as InstallTextField[]) {
+  // 2. Labelled free text. (mainDisconnectLocation retired, meeting 2026-10-04.)
+  for (const f of ['batteryLocation', 'specialCases'] as InstallTextField[]) {
     const def = field(f);
     lines.push(...labelled(def.label, n[f], def.key, p));
   }

@@ -53,13 +53,14 @@ browser (it stays signed in until you press **Log out** in the top bar).
 
 ## Tabs (Phase 9)
 
-Three main tabs in the navy bar, with sub-tabs underneath:
+Four main tabs in the navy bar, with sub-tabs underneath:
 
 | Main tab | Sub-tabs | Who sees it |
 |---|---|---|
+| **Board** | — | everyone |
 | **Compose** | New Post · Drafts · History | everyone |
 | **AHJ Requirements** | — | everyone |
-| **Admin** | Settings · Users | admin only |
+| **Admin** | Settings · Users · Daily Progress | admin only |
 
 Everything about writing posts lives under Compose; future sections of the
 SOW operational tool get their own main tab.
@@ -73,10 +74,16 @@ SOW operational tool get their own main tab.
 3. Check the warnings strip; fix any field (everything is editable).
 4. Pick the **Project Level** yourself — the scope and planning window under the
    select are there to remind you what each level covers.
-5. Fill in **Installation Notes**: walls + their orientation, stories, and the
-   service equipment are dropdowns; the four conduit runs, special cases and
-   "anything else" are boxes. Everything you put here is exactly what the post
-   prints — empty fields simply disappear. Then write the three **Feedback**
+5. Fill in **Installation Notes**: walls (up to 5) + their orientation and
+   stories (up to 3) are dropdowns; **Service equipment is checkboxes** — tick
+   any mix of MPU/FSU/FTP and the post writes one combined sentence. The
+   **power disconnect duration** fills itself (MPU/FSU or TNMP utility →
+   4–6 hours, otherwise 1–2) and the dropdown lets you pin a different value
+   when needed. **Roof rating** is the team's 1–10 Roof Rating System; the
+   post prints the rating, its band and the outcome. The four conduit runs,
+   special cases and "anything else" are boxes. Everything you put here is
+   exactly what the post prints — empty fields simply disappear (only the
+   automatic duration line always shows). Then write the three **Feedback**
    boxes in your own words (Arabic/English ok), **one bullet per line** →
    **✨ Polish with AI** (Ctrl+Enter in any box). The AI only ever sees the
    free-text boxes — it cannot change a wall count, an orientation or an MPU.
@@ -135,6 +142,26 @@ the crew reading the post can see how many crew-days to reserve:
     ◦ Level 3 – Service Equipment Modification.
     ◦ Planning window: 1.5 to 2 crew-days.
 ```
+
+## Meeting changes (2026-10-04/05)
+
+- **Service equipment is multi-tick** — a project that is both an MPU and an
+  FSU shows both: "This project requires an MPU and an FSU."
+- **Walls up to 5, stories up to 3.** "Main disconnect location" is gone from
+  the form and the post.
+- **Expected power disconnect duration** is on every post, automatic from the
+  situation (MPU/FSU ticked or TNMP utility → 4–6 hours, otherwise 1–2 hours),
+  with a dropdown to pin a different value when needed.
+- **Roof rating (1–10)** replaces the old condition dropdown — Mohammed
+  Azizi's Roof Rating System (design-sow-team, Sept 24): 9–10 Prime · 7–8 Good
+  · 5–6 Conditional · 3–4 Poor · 1–2 Unviable. A Poor roof on a scheduled
+  project and any Unviable roof show a warning banner in Compose.
+- **CLR Agent and Project Manager dropdowns** sit under the Designer and get
+  tagged on the post after the designer. Both rosters are editable in
+  Admin → Settings.
+- **Admin → Daily Progress**: the daily report — projects designed on a picked
+  date (defaults to today) and projects whose installation lands in the next
+  7 days (from the linked post), with a **Copy report** button for Slack.
 
 ## The second AI button — 🦜 هري ابو روي (2026-09-30)
 

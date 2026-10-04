@@ -1,7 +1,7 @@
 // Record factory + tag housekeeping.
 
 import type { PostRecord, Region, Settings } from '../types';
-import { emptyInstallNotes, INSTALL_TEXT_FIELDS } from './installNotes';
+import { emptyInstallNotes, INSTALL_TEXT_FIELDS, servicesOf } from './installNotes';
 
 export function blankRecord(author: string, settings: Settings): PostRecord {
   const now = new Date().toISOString();
@@ -58,7 +58,11 @@ export function hasContent(r: PostRecord): boolean {
     n?.storiesOther,
     ...(n?.orientations ?? []),
   ];
-  const dropdownChosen = n?.walls !== undefined || n?.stories !== undefined || n?.service !== undefined;
+  const dropdownChosen =
+    n?.walls !== undefined ||
+    n?.stories !== undefined ||
+    n?.roofRating !== undefined ||
+    (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }
 

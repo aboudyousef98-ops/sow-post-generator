@@ -429,13 +429,15 @@ describe('Installation Notes UI', () => {
     fireEvent.change(screen.getAllByLabelText(/^Wall 1 orientation/i)[0], { target: { value: 'North' } });
     fireEvent.change(screen.getAllByLabelText(/^Wall 2 orientation/i)[0], { target: { value: 'West' } });
     fireEvent.change(screen.getByLabelText(/^Stories/i), { target: { value: '1' } });
-    fireEvent.change(screen.getByLabelText(/^Service equipment/i), { target: { value: 'MPU' } });
+    // Service equipment is multi-tick since the 2026-10-04 meeting.
+    fireEvent.click(screen.getByLabelText(/^MPU/));
+    fireEvent.click(screen.getByLabelText(/^FSU/));
     fireEvent.change(screen.getByLabelText(/^Load run/i), { target: { value: '18 ft through the attic' } });
 
     const preview = document.querySelector('.preview') as HTMLElement;
     expect(preview.textContent).toContain('Installation on two walls (North, West).');
     expect(preview.textContent).toContain('1-story house.');
-    expect(preview.textContent).toContain('This project requires an MPU.');
+    expect(preview.textContent).toContain('This project requires an MPU and an FSU.');
     expect(preview.textContent).toContain('Load run: 18 ft through the attic.');
   });
 

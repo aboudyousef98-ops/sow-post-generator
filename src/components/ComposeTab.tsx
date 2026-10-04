@@ -787,6 +787,33 @@ export default function ComposeTab({
             </select>
           </label>
         </div>
+        {/* CLR agent + project manager, tagged like the designer (meeting 2026-10-04). */}
+        <div className="fields-2col" style={{ marginTop: 8 }}>
+          <label className="field">
+            CLR Agent
+            <select
+              value={record.clrAgentTag ?? ''}
+              onChange={(e) => update((r) => ({ ...r, clrAgentTag: e.target.value || undefined }))}
+            >
+              <option value="">none</option>
+              {settings.clrAgents.map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Project Manager
+            <select
+              value={record.pmTag ?? ''}
+              onChange={(e) => update((r) => ({ ...r, pmTag: e.target.value || undefined }))}
+            >
+              <option value="">none</option>
+              {settings.projectManagers.map((d) => (
+                <option key={d}>{d}</option>
+              ))}
+            </select>
+          </label>
+        </div>
       </div>
 
         </div>

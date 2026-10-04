@@ -1108,13 +1108,24 @@ table.list tr.row:hover {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
-  align-items: flex-end;
+  /* Top-aligned so every label in the row sits on one line, even when a
+     field carries a hint below its control (meeting revisions 2026-10-05). */
+  align-items: flex-start;
   margin-bottom: 10px;
 }
 .install-row .field {
   margin-bottom: 0;
   min-width: 140px;
   flex: 0 1 auto;
+}
+
+/* Rows whose fields should read as equal columns (roof rating + duration). */
+.install-row-even .field {
+  flex: 0 0 230px;
+}
+
+.install-row-even .field select {
+  width: 100%;
 }
 .install-subhead {
   font-size: 12.5px;
@@ -2060,6 +2071,87 @@ table.list tr.row:hover {
 .users-add .btn {
   align-self: flex-start;
   margin-top: 4px;
+}
+
+/* Installation Notes — service multi-ticks + meeting-2026-10-04 fields */
+.service-ticks {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  min-height: 34px;
+}
+
+.service-tick {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.field-hint {
+  display: block;
+  max-width: 250px;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--dyn-muted);
+  margin-top: 2px;
+}
+.roof-warning {
+  margin: 6px 0 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--dyn-warn-bg);
+  border: 1px solid var(--dyn-orange);
+  color: var(--dyn-ink);
+  font-size: 13px;
+}
+
+/* Admin › Daily Progress */
+.daily-progress {
+  max-width: 640px;
+}
+
+.daily-progress .dp-date {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+  margin-bottom: 14px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dyn-text);
+}
+
+.daily-progress h4 {
+  margin: 14px 0 6px;
+  font-size: 14px;
+  color: var(--dyn-ink);
+}
+
+.daily-progress ul {
+  margin: 0 0 4px;
+  padding-left: 20px;
+  font-size: 13.5px;
+  color: var(--dyn-text);
+}
+
+.daily-progress li {
+  padding: 2px 0;
+}
+
+.daily-progress .dp-nodate {
+  color: var(--dyn-orange);
+}
+
+.daily-progress .dp-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--dyn-muted);
+}
+
+.daily-progress .btn {
+  margin-top: 16px;
 }
 
 /* ───────────────────────── Project Board ─────────────────────────

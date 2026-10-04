@@ -84,9 +84,14 @@ export function missingRequired(record: PostRecord): string[] {
   return missing;
 }
 
-/** Final ordered tag list: fixed → region lead → designer → manual extras, deduped, nulls skipped. */
+/** Final ordered tag list: fixed → region lead → designer → CLR agent → PM → manual extras, deduped, nulls skipped. */
 export function finalTags(record: PostRecord): string[] {
-  const all = [...record.tags, ...(record.designerTag ? [record.designerTag] : [])];
+  const all = [
+    ...record.tags,
+    ...(record.designerTag ? [record.designerTag] : []),
+    ...(record.clrAgentTag ? [record.clrAgentTag] : []),
+    ...(record.pmTag ? [record.pmTag] : []),
+  ];
   const seen = new Set<string>();
   return all.filter((t) => {
     const k = t.trim();
@@ -143,7 +148,7 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
         `Planning window: ${LEVEL_INFO[record.level].window}.`,
       ],
     },
-    { label: 'Installation Notes', values: installNoteLines(record.installNotes, record) },
+    { label: 'Installation Notes', values: installNoteLines(record.installNotes, record, record.sf.utility) },
     { label: 'Conduit Raceway', values: conduitRunLines(record.installNotes, record) },
     { label: 'Clearance', values: ['All required clearance requirements have been met.'] },
     { label: 'Site Survey Feedback', values: effectiveNoteLines(record, 'siteSurvey', settings) },

@@ -1,67 +1,195 @@
 import { describe, expect, it } from 'vitest';
 import type { InstallNotes } from '../types';
-import { conduitRunLines, emptyInstallNotes, installNoteLines, rawTextFor } from './installNotes';
+import {
+  conduitRunLines,
+  disconnectDurationFor,
+  emptyInstallNotes,
+  installNoteLines,
+  rawTextFor,
+} from './installNotes';
 import { makeRecord } from './__fixtures__/makeRecord';
 
 const n = (over: Partial<InstallNotes> = {}): InstallNotes => ({ ...emptyInstallNotes(), ...over });
 const off = { usePolished: {} };
 
+// Every post carries the derived duration line (meeting 2026-10-05: the
+// designer picks the SITUATION — services/utility — and the hours follow).
+const DUR_12 = 'Expected power disconnect duration: 1–2 hours.';
+const DUR_46 = 'Expected power disconnect duration: 4–6 hours.';
+
+describe('disconnectDurationFor (meeting 2026-10-05 — derived, never picked)', () => {
+  it('MPU or FSU → 4–6 hours', () => {
+    expect(disconnectDurationFor(n({ services: ['MPU'] }))).toBe('4-6');
+    expect(disconnectDurationFor(n({ services: ['FSU', 'FTP'] }))).toBe('4-6');
+  });
+
+  it('a TNMP utility → 4–6 hours even with no service work', () => {
+    expect(disconnectDurationFor(n(), 'TNMP')).toBe('4-6');
+    expect(disconnectDurationFor(n(), 'Texas-New Mexico Power')).toBe('4-6');
+  });
+
+  it('everything else → 1–2 hours (all projects are Duracell systems)', () => {
+    expect(disconnectDurationFor(n())).toBe('1-2');
+    expect(disconnectDurationFor(n({ services: ['FTP'] }), 'CenterPoint')).toBe('1-2');
+  });
+
+  it('the legacy single `service` counts too', () => {
+    expect(disconnectDurationFor(n({ service: 'MPU' }))).toBe('4-6');
+  });
+});
+
 describe('installNoteLines — walls (spec/10 §3.1)', () => {
   it('one wall with an orientation', () => {
     expect(installNoteLines(n({ walls: 1, orientations: ['North'] }), off)).toEqual([
       'Installation on one wall (North).',
+      DUR_12,
     ]);
   });
 
   it('two walls list both orientations in order', () => {
     expect(installNoteLines(n({ walls: 2, orientations: ['North', 'West'] }), off)).toEqual([
       'Installation on two walls (North, West).',
+      DUR_12,
     ]);
   });
 
   it('three walls with one orientation still unset skip the blank', () => {
     expect(installNoteLines(n({ walls: 3, orientations: ['North', '', 'West'] }), off)).toEqual([
       'Installation on three walls (North, West).',
+      DUR_12,
     ]);
   });
 
   it('no orientation chosen omits the parentheses', () => {
     expect(installNoteLines(n({ walls: 2, orientations: ['', ''] }), off)).toEqual([
       'Installation on two walls.',
+      DUR_12,
     ]);
   });
 
   it('orientations beyond the wall count are ignored', () => {
     expect(installNoteLines(n({ walls: 1, orientations: ['North', 'West'] }), off)).toEqual([
       'Installation on one wall (North).',
+      DUR_12,
+    ]);
+  });
+
+  it('supports four and five walls (meeting 2026-10-04)', () => {
+    expect(installNoteLines(n({ walls: 4, orientations: ['North', 'East', 'South', 'West'] }), off)).toEqual([
+      'Installation on four walls (North, East, South, West).',
+      DUR_12,
+    ]);
+    expect(installNoteLines(n({ walls: 5, orientations: [] }), off)).toEqual([
+      'Installation on five walls.',
+      DUR_12,
     ]);
   });
 
   it('no wall count means no wall line', () => {
-    expect(installNoteLines(n({ orientations: ['North'] }), off)).toEqual([]);
+    expect(installNoteLines(n({ orientations: ['North'] }), off)).toEqual([DUR_12]);
   });
 });
 
 describe('installNoteLines — stories and service', () => {
-  it('renders 1 and 2 stories verbatim', () => {
-    expect(installNoteLines(n({ stories: 1 }), off)).toEqual(['1-story house.']);
-    expect(installNoteLines(n({ stories: 2 }), off)).toEqual(['2-story house.']);
+  it('renders 1, 2 and 3 stories verbatim', () => {
+    expect(installNoteLines(n({ stories: 1 }), off)).toEqual(['1-story house.', DUR_12]);
+    expect(installNoteLines(n({ stories: 2 }), off)).toEqual(['2-story house.', DUR_12]);
+    expect(installNoteLines(n({ stories: 3 }), off)).toEqual(['3-story house.', DUR_12]);
   });
 
   it('other uses the free text, punctuated', () => {
     expect(installNoteLines(n({ stories: 'other', storiesOther: 'Split level, garage below' }), off)).toEqual([
       'Split level, garage below.',
+      DUR_12,
     ]);
   });
 
   it('other with no text drops the line', () => {
-    expect(installNoteLines(n({ stories: 'other', storiesOther: '  ' }), off)).toEqual([]);
+    expect(installNoteLines(n({ stories: 'other', storiesOther: '  ' }), off)).toEqual([DUR_12]);
   });
 
-  it('each service value gets the standard sentence', () => {
-    expect(installNoteLines(n({ service: 'MPU' }), off)).toEqual(['This project requires an MPU.']);
-    expect(installNoteLines(n({ service: 'FSU' }), off)).toEqual(['This project requires an FSU.']);
-    expect(installNoteLines(n({ service: 'FTP' }), off)).toEqual(['This project requires an FTP.']);
+  it('each single service gets the standard sentence (MPU/FSU pull the duration to 4–6)', () => {
+    expect(installNoteLines(n({ services: ['MPU'] }), off)).toEqual([
+      'This project requires an MPU.',
+      DUR_46,
+    ]);
+    expect(installNoteLines(n({ services: ['FSU'] }), off)).toEqual([
+      'This project requires an FSU.',
+      DUR_46,
+    ]);
+    expect(installNoteLines(n({ services: ['FTP'] }), off)).toEqual([
+      'This project requires an FTP.',
+      DUR_12,
+    ]);
+  });
+
+  it('multiple ticked services share one sentence, in MPU/FSU/FTP order (meeting 2026-10-04)', () => {
+    expect(installNoteLines(n({ services: ['FSU', 'MPU'] }), off)).toEqual([
+      'This project requires an MPU and an FSU.',
+      DUR_46,
+    ]);
+    expect(installNoteLines(n({ services: ['FTP', 'FSU', 'MPU'] }), off)).toEqual([
+      'This project requires an MPU, an FSU and an FTP.',
+      DUR_46,
+    ]);
+  });
+
+  it('a legacy single `service` still renders when `services` is absent', () => {
+    expect(installNoteLines(n({ service: 'FSU' }), off)).toEqual([
+      'This project requires an FSU.',
+      DUR_46,
+    ]);
+  });
+
+  it('an empty services array with a legacy value falls back to the legacy value', () => {
+    // JSON can hold services: [] from an un-ticked session; the old pick must survive.
+    expect(installNoteLines(n({ services: [], service: 'MPU' }), off)).toEqual([
+      'This project requires an MPU.',
+      DUR_46,
+    ]);
+  });
+
+  it('a TNMP utility flips the rendered duration to 4–6 hours', () => {
+    expect(installNoteLines(n(), off, 'TNMP')).toEqual([DUR_46]);
+  });
+
+  it('a manual duration override beats the derived value (revision 2026-10-05)', () => {
+    // MPU would derive 4–6, but the designer pinned 1–2.
+    expect(installNoteLines(n({ services: ['MPU'], disconnectDuration: '1-2' }), off)).toEqual([
+      'This project requires an MPU.',
+      DUR_12,
+    ]);
+    // Nothing ticked would derive 1–2, but the designer pinned 4–6.
+    expect(installNoteLines(n({ disconnectDuration: '4-6' }), off)).toEqual([DUR_46]);
+  });
+});
+
+describe('installNoteLines — roof rating (Roof Rating System, design-sow-team 2026-09-24)', () => {
+  it('renders each band with its outcome', () => {
+    expect(installNoteLines(n({ roofRating: 10 }), off)).toEqual([
+      DUR_12,
+      'Roof rating: 10/10 (Prime) — approved to install right away.',
+    ]);
+    expect(installNoteLines(n({ roofRating: 8 }), off)).toEqual([
+      DUR_12,
+      'Roof rating: 8/10 (Good) — workable with small adjustments.',
+    ]);
+    expect(installNoteLines(n({ roofRating: 5 }), off)).toEqual([
+      DUR_12,
+      'Roof rating: 5/10 (Conditional) — strongly recommend replacing the roof first.',
+    ]);
+    expect(installNoteLines(n({ roofRating: 3 }), off)).toEqual([
+      DUR_12,
+      'Roof rating: 3/10 (Poor) — the roof must be repaired or replaced before mounting.',
+    ]);
+    expect(installNoteLines(n({ roofRating: 1 }), off)).toEqual([
+      DUR_12,
+      'Roof rating: 1/10 (Unviable) — do not install.',
+    ]);
+  });
+
+  it('no rating chosen → no roof line', () => {
+    expect(installNoteLines(n(), off)).toEqual([DUR_12]);
   });
 });
 
@@ -69,25 +197,27 @@ describe('installNoteLines — labelled free text', () => {
   it('joins multiple lines with "; " under one label and strips typed bullets', () => {
     expect(
       installNoteLines(n({ specialCases: 'window to be closed off.\n- small boxes relocated' }), off),
-    ).toEqual(['Special cases: window to be closed off; small boxes relocated.']);
+    ).toEqual([DUR_12, 'Special cases: window to be closed off; small boxes relocated.']);
   });
 
   it('strips a trailing question mark so it does not double up with the label period (carried fix 2)', () => {
     // clause() must strip "?" (not just ".;,") before the label's own "." is
     // appended, else this would render "Special cases: Is this ok?.".
     expect(installNoteLines(n({ specialCases: 'Is this ok?' }), off)).toEqual([
+      DUR_12,
       'Special cases: Is this ok.',
     ]);
   });
 
-  it('keeps battery and disconnect locations in spec order', () => {
+  it('renders battery location but no longer renders main disconnect location (removed, meeting 2026-10-04)', () => {
     expect(
       installNoteLines(n({ batteryLocation: 'garage', mainDisconnectLocation: 'south wall' }), off),
-    ).toEqual(['Battery location: garage.', 'Main disconnect location: south wall.']);
+    ).toEqual([DUR_12, 'Battery location: garage.']);
   });
 
   it('renders "Anything else" as unlabelled bullets, one per line', () => {
     expect(installNoteLines(n({ other: 'Attic run\nBack-to-back' }), off)).toEqual([
+      DUR_12,
       'Attic run.',
       'Back-to-back.',
     ]);
@@ -95,19 +225,28 @@ describe('installNoteLines — labelled free text', () => {
 
   it('emits the dropdown lines before the free-text lines', () => {
     const lines = installNoteLines(
-      n({ walls: 1, orientations: ['North'], stories: 1, service: 'MPU', other: 'Attic run' }),
+      n({
+        walls: 1,
+        orientations: ['North'],
+        stories: 1,
+        services: ['MPU'],
+        roofRating: 8,
+        other: 'Attic run',
+      }),
       off,
     );
     expect(lines).toEqual([
       'Installation on one wall (North).',
       '1-story house.',
       'This project requires an MPU.',
+      DUR_46,
+      'Roof rating: 8/10 (Good) — workable with small adjustments.',
       'Attic run.',
     ]);
   });
 
-  it('an all-empty block produces nothing', () => {
-    expect(installNoteLines(n(), off)).toEqual([]);
+  it('a block with nothing chosen still carries the automatic duration; no notes at all yields nothing', () => {
+    expect(installNoteLines(n(), off)).toEqual([DUR_12]);
     expect(installNoteLines(undefined, off)).toEqual([]);
   });
 });
@@ -118,7 +257,7 @@ describe('installNoteLines — polish selection', () => {
   it('uses the polished text by default', () => {
     expect(
       installNoteLines(notes, { polished: { 'install.specialCases': 'Window to be closed off' }, usePolished: {} }),
-    ).toEqual(['Special cases: Window to be closed off.']);
+    ).toEqual([DUR_12, 'Special cases: Window to be closed off.']);
   });
 
   it('an explicit false reverts to the raw draft', () => {
@@ -127,7 +266,7 @@ describe('installNoteLines — polish selection', () => {
         polished: { 'install.specialCases': 'Window to be closed off' },
         usePolished: { 'install.specialCases': false },
       }),
-    ).toEqual(['Special cases: window closed.']);
+    ).toEqual([DUR_12, 'Special cases: window closed.']);
   });
 });
 

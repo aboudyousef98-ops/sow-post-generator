@@ -67,6 +67,8 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
         <LinesEditor label="Authors (Posting as)" values={settings.authors} onChange={(v) => patch({ authors: v })} />
         <LinesEditor label="Fixed tags" values={settings.fixedTags} onChange={(v) => patch({ fixedTags: v })} />
         <LinesEditor label="Designers / installers" values={settings.designers} onChange={(v) => patch({ designers: v })} />
+        <LinesEditor label="CLR agents" values={settings.clrAgents} onChange={(v) => patch({ clrAgents: v })} />
+        <LinesEditor label="Project managers" values={settings.projectManagers} onChange={(v) => patch({ projectManagers: v })} />
         <div className="settings-stack">
         {(['HOU', 'DFW'] as Region[]).map((region) => (
           <label className="field" key={region}>

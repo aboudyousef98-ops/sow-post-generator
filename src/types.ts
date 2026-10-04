@@ -89,6 +89,10 @@ export type Orientation =
 
 export type ServiceWork = 'MPU' | 'FSU' | 'FTP';
 
+/** Roof Rating System — Mohammed Azizi, design-sow-team, 2026-09-24.
+ * 9–10 Prime · 7–8 Good · 5–6 Conditional · 3–4 Poor · 1–2 Unviable. */
+export type RoofRating = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
+
 /**
  * One value under a post bullet. A plain string is a single sub-bullet; the
  * object form carries its own points beneath it, which is how a conduit run
@@ -108,14 +112,24 @@ export type InstallTextField =
   | 'other';
 
 export interface InstallNotes {
-  walls?: 1 | 2 | 3;
+  walls?: 1 | 2 | 3 | 4 | 5;
   /** One entry per wall; index i is wall i. '' = not chosen yet. */
   orientations: (Orientation | '')[];
-  stories?: 1 | 2 | 'other';
+  stories?: 1 | 2 | 3 | 'other';
   /** Free text, rendered only when `stories === 'other'`. */
   storiesOther: string;
+  /** @deprecated Meeting 2026-10-04 — replaced by `services` (multi-tick). Kept so pre-change JSON still parses; `servicesOf()` falls back to it. */
   service?: ServiceWork;
+  /** Ticked service work (any combination). Rendered in MPU/FSU/FTP order.
+   * Also drives the automatic disconnect-duration line — see
+   * `disconnectDurationFor()` (meeting 2026-10-05: hours are never picked). */
+  services?: ServiceWork[];
+  /** Manual override for the disconnect-duration line; undefined = automatic
+   * (derived from services/utility — see disconnectDurationFor). */
+  disconnectDuration?: '1-2' | '4-6';
+  roofRating?: RoofRating;
   batteryLocation: string;
+  /** @deprecated Meeting 2026-10-04 — removed from the form and the post. Kept so stored drafts still parse. */
   mainDisconnectLocation: string;
   // Conduit raceway
   loadRun: string;
@@ -168,6 +182,10 @@ export interface PostRecord {
   usePolished: Partial<Record<PolishKey, boolean>>;
   tags: string[];
   designerTag?: string;
+  /** CLR agent tagged on the post, same contract as designerTag (meeting 2026-10-04). */
+  clrAgentTag?: string;
+  /** Project manager (SF "Fulfillment Coordinator") tagged on the post. */
+  pmTag?: string;
   warnings: string[];
   /**
    * Designer's approval to append AHJ requirements to the post — stores the id
@@ -282,6 +300,10 @@ export interface Settings {
   fixedTags: string[];
   regionLead: Record<Region, string | null>;
   designers: string[];
+  /** CLR agent roster for the Compose dropdown (meeting 2026-10-04). */
+  clrAgents: string[];
+  /** Project manager roster (SF "Fulfillment Coordinator"). */
+  projectManagers: string[];
   defaults: { siteSurvey: string; design: string; homeowner: string };
   chips: Partial<Record<PolishKey, string[]>>;
   lastAuthor?: string;
