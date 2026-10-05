@@ -14,6 +14,7 @@ import {
   nameKey,
   newProject,
   patchProject,
+  positionForMove,
   seedLabels,
 } from './board';
 
@@ -134,6 +135,33 @@ describe('activityForPatch', () => {
   it('returns null when nothing actually changed', () => {
     const p = proj();
     expect(activityForPatch(p, { rating: null }, 'X', seedLabels(), T2)).toBeNull();
+  });
+  it('ignores position — reorders are not activity noise', () => {
+    const p = proj();
+    expect(activityForPatch(p, { position: 42 }, 'X', seedLabels(), T2)).toBeNull();
+  });
+});
+
+describe('positionForMove', () => {
+  // Displayed order is position-DESC: a (top) … c (bottom).
+  const rows = [
+    proj({ id: 'a', position: 3000 }),
+    proj({ id: 'b', position: 2000 }),
+    proj({ id: 'c', position: 1000 }),
+  ];
+
+  it('midpoint between the new neighbours', () => {
+    expect(positionForMove(rows, 2, 1)).toBe(2500); // c dropped between a and b
+  });
+  it('dropped on top: lands above the current max', () => {
+    expect(positionForMove(rows, 2, 0)!).toBeGreaterThan(3000);
+  });
+  it('dropped at the bottom: lands below the current min', () => {
+    expect(positionForMove(rows, 0, 3)!).toBeLessThan(1000);
+  });
+  it('dropping a row where it already sits is a no-op', () => {
+    expect(positionForMove(rows, 1, 1)).toBeNull(); // before itself
+    expect(positionForMove(rows, 1, 2)).toBeNull(); // right after itself
   });
 });
 

@@ -37,7 +37,7 @@ export interface BoardProject {
   statusId: string | null;
   phaseId: string | null;
   designedDate: string | null; // 'YYYY-MM-DD' — parse with lib/dates only
-  rating: 1 | 2 | 3 | null; // null = not rated
+  rating: 1 | 2 | 3 | 4 | 5 | null; // null = not rated
   /** Manual order key; defaults to creation epoch ms → newest on top. */
   position: number;
   archivedAt?: string;

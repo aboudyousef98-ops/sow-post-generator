@@ -1,14 +1,14 @@
 // Daily Progress report (Admin › Daily Progress) — pure logic.
 // Section 1: Design-phase projects designed on the picked date.
-// Section 2: Schedule-phase projects whose linked post's install date falls in
-// the next 7 days (today..today+7), plus a flagged "no date yet" bucket.
+// Section 2: Schedule-phase projects designed on that SAME picked date, each
+// showing its linked post's install date, plus a flagged "no date yet" bucket.
 
 import { describe, expect, it } from 'vitest';
 import type { BoardProject, BoardState } from '../board/types';
 import type { PostRecord } from '../types';
 import { emptyBoard, newProject, seedLabels } from './board';
 import { makeRecord } from './__fixtures__/makeRecord';
-import { addDaysIso, designedOn, formatDailyReport, scheduledNext7 } from './dailyProgress';
+import { designedOn, formatDailyReport, parseUpdates, scheduledOn, shortDate } from './dailyProgress';
 
 const T0 = '2026-10-02T10:00:00.000Z';
 
@@ -32,16 +32,6 @@ function postedFor(projectId: string, date: string, over: Partial<PostRecord> = 
   });
 }
 
-describe('addDaysIso', () => {
-  it('adds days within a month', () => {
-    expect(addDaysIso('2026-10-04', 7)).toBe('2026-10-11');
-  });
-  it('rolls over month and year boundaries', () => {
-    expect(addDaysIso('2026-10-28', 7)).toBe('2026-11-04');
-    expect(addDaysIso('2026-12-29', 7)).toBe('2027-01-05');
-  });
-});
-
 describe('designedOn', () => {
   it('returns Design-phase projects designed on the given date, sorted by name', () => {
     const b = board([
@@ -64,46 +54,39 @@ describe('designedOn', () => {
   });
 });
 
-describe('scheduledNext7', () => {
-  const TODAY = '2026-10-04';
+describe('scheduledOn', () => {
+  const DAY = '2026-10-04';
 
-  it('includes Schedule projects whose linked post installs within today..today+7, sorted by date', () => {
+  it('includes Schedule projects designed on the picked date, with their install date, sorted by date', () => {
     const b = board([
-      proj({ id: 'p1', name: 'Lavon Grier', phaseId: 'phase-schedule' }),
-      proj({ id: 'p2', name: 'Early Bird', phaseId: 'phase-schedule' }),
+      proj({ id: 'p1', name: 'Lavon Grier', phaseId: 'phase-schedule', designedDate: DAY }),
+      proj({ id: 'p2', name: 'Early Bird', phaseId: 'phase-schedule', designedDate: DAY }),
     ]);
-    const records = [postedFor('p1', '2026-10-07'), postedFor('p2', '2026-10-05')];
-    const { scheduled, noDate } = scheduledNext7(b, records, TODAY);
+    const records = [postedFor('p1', '2026-10-21'), postedFor('p2', '2026-10-05')];
+    const { scheduled, noDate } = scheduledOn(b, records, DAY);
     expect(scheduled.map((s) => [s.project.name, s.dateIso])).toEqual([
       ['Early Bird', '2026-10-05'],
-      ['Lavon Grier', '2026-10-07'],
+      ['Lavon Grier', '2026-10-21'],
     ]);
     expect(noDate).toEqual([]);
   });
 
-  it('window is inclusive on both ends and excludes past/far dates', () => {
+  it('excludes Schedule projects designed on a different date or with no designed date', () => {
     const b = board([
-      proj({ id: 'p1', phaseId: 'phase-schedule' }), // today — in
-      proj({ id: 'p2', phaseId: 'phase-schedule' }), // today+7 — in
-      proj({ id: 'p3', phaseId: 'phase-schedule' }), // yesterday — out
-      proj({ id: 'p4', phaseId: 'phase-schedule' }), // today+8 — out
+      proj({ id: 'p1', phaseId: 'phase-schedule', designedDate: '2026-10-03' }),
+      proj({ id: 'p2', phaseId: 'phase-schedule', designedDate: null }),
     ]);
-    const records = [
-      postedFor('p1', '2026-10-04'),
-      postedFor('p2', '2026-10-11'),
-      postedFor('p3', '2026-10-03'),
-      postedFor('p4', '2026-10-12'),
-    ];
-    const { scheduled, noDate } = scheduledNext7(b, records, TODAY);
-    expect(scheduled.map((s) => s.project.id)).toEqual(['p1', 'p2']);
-    // Out-of-window projects HAVE a date — they are not flagged as missing one.
+    const records = [postedFor('p1', '2026-10-06'), postedFor('p2', '2026-10-06')];
+    const { scheduled, noDate } = scheduledOn(b, records, DAY);
+    expect(scheduled).toEqual([]);
+    // Wrong-design-date rows are simply out of scope — not flagged as missing a date.
     expect(noDate).toEqual([]);
   });
 
   it('a posted record beats a draft; a draft is used when nothing is posted', () => {
     const b = board([
-      proj({ id: 'p1', phaseId: 'phase-schedule' }),
-      proj({ id: 'p2', phaseId: 'phase-schedule' }),
+      proj({ id: 'p1', phaseId: 'phase-schedule', designedDate: DAY }),
+      proj({ id: 'p2', phaseId: 'phase-schedule', designedDate: DAY }),
     ]);
     const records = [
       // p1: posted says 10/06, a newer draft says 10/20 — posted wins.
@@ -123,7 +106,7 @@ describe('scheduledNext7', () => {
         sf: { ...makeRecord().sf, installScheduledDate: '2026-10-08' },
       }),
     ];
-    const { scheduled } = scheduledNext7(b, records, TODAY);
+    const { scheduled } = scheduledOn(b, records, DAY);
     expect(scheduled.map((s) => [s.project.id, s.dateIso])).toEqual([
       ['p1', '2026-10-06'],
       ['p2', '2026-10-08'],
@@ -132,15 +115,36 @@ describe('scheduledNext7', () => {
 
   it('flags Schedule projects with no linked post or no install date; ignores other phases', () => {
     const b = board([
-      proj({ id: 'p1', name: 'No Link', phaseId: 'phase-schedule' }),
-      proj({ id: 'p2', name: 'Blank Date', phaseId: 'phase-schedule' }),
-      proj({ id: 'p3', name: 'Designing', phaseId: 'phase-design' }),
-      proj({ id: 'p4', name: 'Gone', phaseId: 'phase-schedule', archivedAt: T0 }),
+      proj({ id: 'p1', name: 'No Link', phaseId: 'phase-schedule', designedDate: DAY }),
+      proj({ id: 'p2', name: 'Blank Date', phaseId: 'phase-schedule', designedDate: DAY }),
+      proj({ id: 'p3', name: 'Designing', phaseId: 'phase-design', designedDate: DAY }),
+      proj({ id: 'p4', name: 'Gone', phaseId: 'phase-schedule', designedDate: DAY, archivedAt: T0 }),
     ]);
     const records = [postedFor('p2', '')];
-    const { scheduled, noDate } = scheduledNext7(b, records, TODAY);
+    const { scheduled, noDate } = scheduledOn(b, records, DAY);
     expect(scheduled).toEqual([]);
     expect(noDate.map((p) => p.name)).toEqual(['Blank Date', 'No Link']);
+  });
+});
+
+describe('shortDate', () => {
+  it("renders 'Wed 10/07' — short weekday, no year", () => {
+    expect(shortDate('2026-10-07')).toBe('Wed 10/07');
+    expect(shortDate('2026-10-04')).toBe('Sun 10/04');
+  });
+});
+
+describe('parseUpdates', () => {
+  it('splits textarea lines, trims, drops empties', () => {
+    expect(parseUpdates('Lucille Rivas\n  Nathan Hart  \n\n\nLindsay K cooper\n')).toEqual([
+      'Lucille Rivas',
+      'Nathan Hart',
+      'Lindsay K cooper',
+    ]);
+  });
+  it('returns [] for blank input', () => {
+    expect(parseUpdates('')).toEqual([]);
+    expect(parseUpdates('  \n \n')).toEqual([]);
   });
 });
 
@@ -151,30 +155,35 @@ describe('formatDailyReport', () => {
       { project: proj({ id: 'p2', name: 'Lavon Grier' }), dateIso: '2026-10-07' },
     ];
     const noDate = [proj({ id: 'p3', name: 'Jane Smith' })];
-    expect(formatDailyReport('2026-10-04', designed, scheduled, noDate)).toBe(
+    const updates = ['Lucille Rivas', 'Nathan Hart'];
+    expect(formatDailyReport('2026-10-04', designed, scheduled, noDate, updates)).toBe(
       [
         'Daily SOW Projects Progress — Sunday, 10/04/2026',
         '',
         'Projects from Design:',
-        '- Norca Garcia',
+        '• Norca Garcia',
         '',
-        'Projects scheduled for the next 7 days:',
-        '- Lavon Grier - Scheduled Wednesday, 10/07/2026',
-        '- Jane Smith - No installation date yet',
+        'Projects scheduled (installation date):',
+        '• Lavon Grier - Wed 10/07',
+        '• Jane Smith - No installation date yet',
+        '',
+        'Updates:',
+        '• Lucille Rivas',
+        '• Nathan Hart',
       ].join('\n'),
     );
   });
 
-  it('shows "- None" for empty sections', () => {
-    expect(formatDailyReport('2026-10-04', [], [], [])).toBe(
+  it('shows "• None" for empty project sections; empty Updates is OMITTED entirely', () => {
+    expect(formatDailyReport('2026-10-04', [], [], [], [])).toBe(
       [
         'Daily SOW Projects Progress — Sunday, 10/04/2026',
         '',
         'Projects from Design:',
-        '- None',
+        '• None',
         '',
-        'Projects scheduled for the next 7 days:',
-        '- None',
+        'Projects scheduled (installation date):',
+        '• None',
       ].join('\n'),
     );
   });

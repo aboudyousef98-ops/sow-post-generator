@@ -13,7 +13,15 @@ import {
   type Table as TanTable,
   type VisibilityState,
 } from '@tanstack/react-table';
-import { memo, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+} from 'react';
 import {
   activityEntry,
   activityForPatch,
@@ -23,6 +31,7 @@ import {
   linkedPosts,
   newProject,
   patchProject,
+  positionForMove,
   type LinkedPosts,
   type ProjectPatch,
 } from '../lib/board';
@@ -199,19 +208,42 @@ function RowMenu({
   );
 }
 
+/** Row drag in flight: the held project + where the drop line sits. */
+interface RowDrag {
+  id: string;
+  overIndex: number;
+}
+
 // Body split out so it can be memoized while a column is being resized —
 // the "Performant Column Resizing" pattern: widths move via CSS variables,
 // rows do not re-render during the drag.
-function BodyInner({ table, highlightId }: { table: TanTable<BoardProject>; highlightId: string | null }) {
+function BodyInner({
+  table,
+  highlightId,
+  drag,
+  onRowPointerDown,
+  onRowClickCapture,
+}: {
+  table: TanTable<BoardProject>;
+  highlightId: string | null;
+  /** Reorder props — main table only; the Completed section keeps its order. */
+  drag?: RowDrag | null;
+  onRowPointerDown?: (e: ReactPointerEvent<HTMLTableSectionElement>) => void;
+  onRowClickCapture?: (e: ReactMouseEvent<HTMLTableSectionElement>) => void;
+}) {
+  const rows = table.getRowModel().rows;
   return (
-    <tbody>
-      {table.getRowModel().rows.map((row) => (
+    <tbody onPointerDown={onRowPointerDown} onClickCapture={onRowClickCapture}>
+      {rows.map((row, i) => (
         <tr
           key={row.id}
           data-project-id={row.original.id}
           className={[
             row.original.archivedAt ? 'board-row-archived' : '',
             row.original.id === highlightId ? 'board-row-highlight' : '',
+            drag && drag.id === row.original.id ? 'board-row-dragging' : '',
+            drag && drag.overIndex === i ? 'board-drop-before' : '',
+            drag && drag.overIndex === rows.length && i === rows.length - 1 ? 'board-drop-after' : '',
           ].join(' ')}
         >
           {row.getVisibleCells().map((cell) => (
@@ -228,7 +260,10 @@ function BodyInner({ table, highlightId }: { table: TanTable<BoardProject>; high
     </tbody>
   );
 }
-const MemoBody = memo(BodyInner, (prev, next) => prev.table.options.data === next.table.options.data) as typeof BodyInner;
+const MemoBody = memo(
+  BodyInner,
+  (prev, next) => prev.table.options.data === next.table.options.data && prev.drag === next.drag,
+) as typeof BodyInner;
 
 export default function BoardTab({
   board,
@@ -440,6 +475,76 @@ export default function BoardTab({
     return { active, completed };
   }, [visible, doneStatusIds]);
 
+  // ---- drag-to-reorder (hold a row, move it, drop — spec: monday-style) -----
+
+  const [drag, setDrag] = useState<RowDrag | null>(null);
+  const activeRef = useRef<BoardProject[]>([]);
+  activeRef.current = active;
+  const sortingRef = useRef(sorting);
+  sortingRef.current = sorting;
+  const suppressClickRef = useRef(false);
+
+  const onRowPointerDown = (e: ReactPointerEvent<HTMLTableSectionElement>) => {
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    // Typing or selecting text in an inline editor must never start a drag.
+    if (target.closest('input, textarea, select')) return;
+    const tr = target.closest('tr[data-project-id]');
+    if (!tr) return;
+    const id = tr.getAttribute('data-project-id')!;
+    const startY = e.clientY;
+    let started = false;
+
+    // Index the drop line sits at, from the live row rects (header excluded).
+    const overIndexAt = (y: number) => {
+      const rows = document.querySelectorAll<HTMLElement>('.board-table-main tbody tr[data-project-id]');
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i].getBoundingClientRect();
+        if (y < r.top + r.height / 2) return i;
+      }
+      return rows.length;
+    };
+
+    const onMove = (ev: PointerEvent) => {
+      if (!started) {
+        if (Math.abs(ev.clientY - startY) < 5) return; // still just a press
+        started = true;
+        // Manual order is what's being edited — a column sort would lie about
+        // where the row lands, so dragging returns the table to manual order.
+        if (sortingRef.current.length) setSorting([]);
+      }
+      ev.preventDefault();
+      setDrag({ id, overIndex: overIndexAt(ev.clientY) });
+    };
+
+    const onUp = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (!started) return;
+      // Swallow the click that follows the drop so no cell editor opens.
+      suppressClickRef.current = true;
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+      setDrag(null);
+      const list = activeRef.current;
+      const from = list.findIndex((p) => p.id === id);
+      if (from === -1) return;
+      const position = positionForMove(list, from, overIndexAt(ev.clientY));
+      if (position !== null) applyPatch(list[from], { position });
+    };
+
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  };
+
+  const onRowClickCapture = (e: ReactMouseEvent<HTMLTableSectionElement>) => {
+    if (suppressClickRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  };
+
   const labelSortValue = (labels: BoardLabel[], id: string | null) => labelById(labels, id)?.sortOrder;
 
   const columns = useMemo<ColumnDef<BoardProject>[]>(
@@ -554,8 +659,8 @@ export default function BoardTab({
       {
         id: 'rating',
         header: 'Rating',
-        size: 120,
-        minSize: 96,
+        size: 148,
+        minSize: 120,
         maxSize: 800,
         accessorFn: (p) => p.rating ?? undefined,
         sortUndefined: 'last',
@@ -800,7 +905,7 @@ export default function BoardTab({
 
         <div className="board-scroll">
           <table
-            className="board-table"
+            className={`board-table board-table-main ${drag ? 'board-reordering' : ''}`}
             style={{ ...columnSizeVars, width: table.getTotalSize() }}
           >
             <thead>
@@ -834,9 +939,21 @@ export default function BoardTab({
               ))}
             </thead>
             {isResizing ? (
-              <MemoBody table={table} highlightId={highlightId} />
+              <MemoBody
+                table={table}
+                highlightId={highlightId}
+                drag={drag}
+                onRowPointerDown={onRowPointerDown}
+                onRowClickCapture={onRowClickCapture}
+              />
             ) : (
-              <BodyInner table={table} highlightId={highlightId} />
+              <BodyInner
+                table={table}
+                highlightId={highlightId}
+                drag={drag}
+                onRowPointerDown={onRowPointerDown}
+                onRowClickCapture={onRowClickCapture}
+              />
             )}
           </table>
 

@@ -154,6 +154,10 @@ describe('Compose acceptance flow', () => {
               : { board: { projects: [], labels: [], activity: [] } };
           return new Response(JSON.stringify(body), { status: 200 });
         }
+        if (String(url).includes('/extrawork')) {
+          const body = init?.method === 'PUT' ? JSON.parse(String(init.body)) : { entries: [] };
+          return new Response(JSON.stringify(body), { status: 200 });
+        }
         return new Response(JSON.stringify({ ok: true, hasKey: false }), { status: 200 });
       }),
     );

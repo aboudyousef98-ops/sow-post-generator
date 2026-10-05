@@ -156,8 +156,28 @@ export function newProject(
 }
 
 export type ProjectPatch = Partial<
-  Pick<BoardProject, 'name' | 'coordinator' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'archivedAt' | 'deletedAt'>
+  Pick<BoardProject, 'name' | 'coordinator' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'position' | 'archivedAt' | 'deletedAt'>
 >;
+
+/**
+ * New `position` for a row dragged from index `from` to before index `to`,
+ * both in the DISPLAYED position-desc order (`to` may equal length = bottom).
+ * Midpoint between the new neighbours keeps every other row untouched — one
+ * row changes, one updatedAt bumps, and the merge stays conflict-free.
+ * Null = dropped where it already was.
+ */
+export function positionForMove(ordered: BoardProject[], from: number, to: number): number | null {
+  if (from < 0 || from >= ordered.length) return null;
+  const insertAt = to > from ? to - 1 : to;
+  if (insertAt === from) return null;
+  const without = ordered.filter((_, i) => i !== from);
+  const above = without[insertAt - 1];
+  const below = without[insertAt];
+  if (above && below) return (above.position + below.position) / 2;
+  if (below) return below.position + 60_000; // dropped on top
+  if (above) return above.position - 60_000; // dropped at the bottom
+  return null;
+}
 
 /** Apply a patch and stamp updatedAt/updatedBy. Never mutates. */
 export function patchProject(
@@ -203,6 +223,7 @@ export function activityForPatch(
   const changes: BoardActivity['changes'] = {};
   for (const key of Object.keys(patch) as (keyof ProjectPatch)[]) {
     if (key === 'archivedAt' || key === 'deletedAt') continue; // logged as their own actions
+    if (key === 'position') continue; // drag-reorders are not activity noise
     if (before[key] === patch[key]) continue;
     changes[key] = {
       old: displayValue(key, before[key], labels),

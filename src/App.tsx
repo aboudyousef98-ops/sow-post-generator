@@ -5,6 +5,7 @@ import AhjTab from './components/AhjTab';
 import ComposeTab from './components/ComposeTab';
 import DailyProgressTab from './components/DailyProgressTab';
 import DraftsTab from './components/DraftsTab';
+import ExtraWorkTab from './components/ExtraWorkTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
 import UsersTab from './components/UsersTab';
@@ -12,14 +13,20 @@ import { Toasts, type Toast } from './components/Toast';
 import {
   fetchSharedAhjs,
   fetchSharedBoard,
+  fetchSharedExtraWork,
   fetchSharedRecords,
   health,
   putSharedAhjs,
   putSharedBoard,
+  putSharedExtraWork,
   putSharedRecords,
 } from './lib/api';
 import { mergeAhjs } from './lib/ahj';
 import { linkedPosts, mergeBoard } from './lib/board';
+import { mergeExtraWork } from './lib/extraWork';
+import type { ExtraWorkEntry, ExtraWorkState } from './extrawork/types';
+import MobileApp from './mobile/MobileApp';
+import { useIsMobile } from './mobile/useIsMobile';
 import { titleCaseName } from './lib/nameCase';
 import { blankRecord, hasContent } from './lib/record';
 import {
@@ -27,6 +34,7 @@ import {
   loadAhjs,
   loadBoard,
   loadCurrentId,
+  loadExtraWork,
   loadLiveDraft,
   loadRecords,
   loadSettings,
@@ -34,6 +42,7 @@ import {
   saveAhjs,
   saveBoard,
   saveCurrentId,
+  saveExtraWork,
   saveLiveDraft,
   saveRecords,
   saveSettings,
@@ -44,8 +53,17 @@ import type { Ahj, PostRecord, Session, Settings } from './types';
 // Phase 9: two-level navigation. The flat Tab union stays (every old
 // setTab('compose') call site still works); each tab belongs to a main group
 // and the header renders a main strip plus the active group's sub strip.
-type Tab = 'board' | 'compose' | 'drafts' | 'history' | 'ahj' | 'settings' | 'users' | 'progress';
-type MainTab = 'board' | 'compose' | 'ahj' | 'admin';
+type Tab =
+  | 'board'
+  | 'compose'
+  | 'drafts'
+  | 'history'
+  | 'ahj'
+  | 'extrawork'
+  | 'settings'
+  | 'users'
+  | 'progress';
+type MainTab = 'board' | 'compose' | 'ahj' | 'extrawork' | 'admin';
 
 const MAIN_OF: Record<Tab, MainTab> = {
   board: 'board',
@@ -53,13 +71,20 @@ const MAIN_OF: Record<Tab, MainTab> = {
   drafts: 'compose',
   history: 'compose',
   ahj: 'ahj',
+  extrawork: 'extrawork',
   settings: 'admin',
   users: 'admin',
   progress: 'admin',
 };
 
 /** Where each main tab lands when clicked directly. */
-const MAIN_HOME: Record<MainTab, Tab> = { board: 'board', compose: 'compose', ahj: 'ahj', admin: 'settings' };
+const MAIN_HOME: Record<MainTab, Tab> = {
+  board: 'board',
+  compose: 'compose',
+  ahj: 'ahj',
+  extrawork: 'extrawork',
+  admin: 'settings',
+};
 
 interface AppProps {
   /** Absent only in tests, which render the inner app without the login gate. */
@@ -72,11 +97,13 @@ export default function App({ session, onLogout }: AppProps = {}) {
   const [records, setRecordsState] = useState<PostRecord[]>(() => loadRecords());
   const [ahjs, setAhjsState] = useState<Ahj[]>(() => loadAhjs());
   const [boardState, setBoardState] = useState<BoardState>(() => loadBoard());
+  const [extraWork, setExtraWorkState] = useState<ExtraWorkState>(() => loadExtraWork());
   const [ahjSelectedId, setAhjSelectedId] = useState<string | null>(null);
   // Default landing = Board (spec/10-project-board Q6). The gateless test
   // render keeps landing on Compose so the whole pre-board suite stays valid.
   const [tab, setTab] = useState<Tab>(session ? 'board' : 'compose');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const isMobile = useIsMobile();
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'off'>('checking');
   const [syncStatus, setSyncStatus] = useState<'checking' | 'synced' | 'local'>('checking');
 
@@ -120,16 +147,16 @@ export default function App({ session, onLogout }: AppProps = {}) {
   }, []);
 
   // Per-store sync health; the pill is green only when ALL stores are ok.
-  const storeSync = useRef<{ records: boolean; ahjs: boolean; board: boolean }>({
+  const storeSync = useRef<{ records: boolean; ahjs: boolean; board: boolean; extrawork: boolean }>({
     records: false,
     ahjs: false,
     board: false,
+    extrawork: false,
   });
-  const reportSync = useCallback((store: 'records' | 'ahjs' | 'board', ok: boolean) => {
+  const reportSync = useCallback((store: 'records' | 'ahjs' | 'board' | 'extrawork', ok: boolean) => {
     storeSync.current[store] = ok;
-    setSyncStatus(
-      storeSync.current.records && storeSync.current.ahjs && storeSync.current.board ? 'synced' : 'local',
-    );
+    const s = storeSync.current;
+    setSyncStatus(s.records && s.ahjs && s.board && s.extrawork ? 'synced' : 'local');
   }, []);
 
   // A server response is a SNAPSHOT of what we pushed, merged with the store —
@@ -178,6 +205,32 @@ export default function App({ session, onLogout }: AppProps = {}) {
       return merged;
     });
   }, []);
+  // Extra Work syncs the same way: localStorage cache + debounced push.
+  const applyServerExtraWork = useCallback((server: ExtraWorkEntry[]) => {
+    setExtraWorkState((cur) => {
+      const merged = mergeExtraWork(cur, { entries: server });
+      saveExtraWork(merged);
+      return merged;
+    });
+  }, []);
+  const extraWorkPushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const setExtraWork = useCallback(
+    (s: ExtraWorkState) => {
+      setExtraWorkState(s);
+      saveExtraWork(s);
+      clearTimeout(extraWorkPushTimer.current);
+      extraWorkPushTimer.current = setTimeout(() => {
+        putSharedExtraWork(s.entries)
+          .then((merged) => {
+            applyServerExtraWork(merged);
+            reportSync('extrawork', true);
+          })
+          .catch(() => reportSync('extrawork', false));
+      }, 1500);
+    },
+    [applyServerExtraWork, reportSync],
+  );
+
   const boardPushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const setBoard = useCallback(
     (b: BoardState) => {
@@ -207,6 +260,12 @@ export default function App({ session, onLogout }: AppProps = {}) {
           reportSync('board', true);
         })
         .catch(() => reportSync('board', false));
+      fetchSharedExtraWork()
+        .then((server) => {
+          applyServerExtraWork(server);
+          reportSync('extrawork', true);
+        })
+        .catch(() => reportSync('extrawork', false));
     };
     const interval = setInterval(pull, 15000);
     window.addEventListener('focus', pull);
@@ -214,7 +273,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
       clearInterval(interval);
       window.removeEventListener('focus', pull);
     };
-  }, [applyServerBoard, reportSync]);
+  }, [applyServerBoard, applyServerExtraWork, reportSync]);
 
   // AHJ boards sync the same way (Phase 5): debounced deep-merge push.
   const ahjPushTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -256,10 +315,19 @@ export default function App({ session, onLogout }: AppProps = {}) {
           const final = await putSharedBoard(mergeBoard(loadBoard(), server));
           applyServerBoard(final);
         })(),
+        (async () => {
+          const server = await fetchSharedExtraWork();
+          applyServerExtraWork(server);
+          const final = await putSharedExtraWork(
+            mergeExtraWork(loadExtraWork(), { entries: server }).entries,
+          );
+          applyServerExtraWork(final);
+        })(),
       ]);
       reportSync('records', results[0].status === 'fulfilled');
       reportSync('ahjs', results[1].status === 'fulfilled');
       reportSync('board', results[2].status === 'fulfilled');
+      reportSync('extrawork', results[3].status === 'fulfilled');
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
@@ -556,6 +624,37 @@ export default function App({ session, onLogout }: AppProps = {}) {
     [records],
   );
 
+  // iPhone shell (≤480px, design handoff 2026-10-06). Same state and sync as
+  // the desktop tree — only the skin changes. Gateless test renders (no
+  // session) always use the desktop tree.
+  if (isMobile && session) {
+    return (
+      <>
+        <MobileApp
+          session={session}
+          onLogout={onLogout ?? (() => {})}
+          board={boardState}
+          setBoard={setBoard}
+          records={records}
+          setRecords={setRecords}
+          drafts={allDrafts}
+          settings={settings}
+          setSettings={setSettings}
+          ahjs={ahjs}
+          setAhjs={setAhjs}
+          extraWork={extraWork}
+          setExtraWork={setExtraWork}
+          markPostedById={markPostedById}
+          duplicateDraft={duplicateDraft}
+          deleteRecord={deleteRecord}
+          syncOk={syncStatus === 'synced'}
+          toast={toast}
+        />
+        <Toasts toasts={toasts} />
+      </>
+    );
+  }
+
   return (
     <>
       <header className="topbar">
@@ -567,6 +666,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
               ['board', 'Board'],
               ['compose', 'Compose'],
               ['ahj', 'AHJ Requirements'],
+              ['extrawork', 'Extra Work'],
               // Admin is visible to admins (and to the gateless test render).
               ...(!session || session.role === 'admin' ? [['admin', 'Admin'] as [MainTab, string]] : []),
             ] as [MainTab, string][]
@@ -714,6 +814,17 @@ export default function App({ session, onLogout }: AppProps = {}) {
             setSettings={setSettings}
             toast={toast}
             lockedAuthor={session?.displayName}
+          />
+        )}
+        {tab === 'extrawork' && (
+          <ExtraWorkTab
+            state={extraWork}
+            setState={setExtraWork}
+            me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
+            myUsername={session?.username ?? ''}
+            isAdmin={!session || session.role === 'admin'}
+            roster={settings.authors}
+            toast={toast}
           />
         )}
         {tab === 'drafts' && (

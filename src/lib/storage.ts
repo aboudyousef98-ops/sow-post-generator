@@ -2,8 +2,10 @@
 // sowpost.settings, sowpost.currentId, sowpost.ahjs. No credentials are ever stored.
 
 import type { BoardState } from '../board/types';
+import type { ExtraWorkState } from '../extrawork/types';
 import type { Ahj, ExportFile, InstallNotes, PostRecord, Settings } from '../types';
 import { emptyBoard, mergeBoard } from './board';
+import { emptyExtraWork, mergeExtraWork } from './extraWork';
 import { emptyInstallNotes } from './installNotes';
 
 const KEY_RECORDS = 'sowpost.records';
@@ -268,6 +270,25 @@ export function saveBoard(board: BoardState): void {
   const onDisk = read<BoardState>(KEY_BOARD);
   const base = onDisk && Array.isArray(onDisk.projects) ? mergeBoard(emptyBoard(), onDisk) : emptyBoard();
   localStorage.setItem(KEY_BOARD, JSON.stringify(mergeBoard(base, board)));
+}
+
+// ---- Extra Work cache -------------------------------------------------------
+
+const KEY_EXTRAWORK = 'sowpost.extrawork';
+
+/** Offline cache of the shared Extra Work entries — merged on load, same contract as records. */
+export function loadExtraWork(): ExtraWorkState {
+  const stored = read<ExtraWorkState>(KEY_EXTRAWORK);
+  if (!stored || !Array.isArray(stored.entries)) return emptyExtraWork();
+  return mergeExtraWork(emptyExtraWork(), stored);
+}
+
+/** Merge-on-write, never overwrite — same rationale as saveRecords(). */
+export function saveExtraWork(state: ExtraWorkState): void {
+  const onDisk = read<ExtraWorkState>(KEY_EXTRAWORK);
+  const base =
+    onDisk && Array.isArray(onDisk.entries) ? mergeExtraWork(emptyExtraWork(), onDisk) : emptyExtraWork();
+  localStorage.setItem(KEY_EXTRAWORK, JSON.stringify(mergeExtraWork(base, state)));
 }
 
 export function loadAhjs(): Ahj[] {

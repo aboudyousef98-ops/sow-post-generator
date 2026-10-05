@@ -93,19 +93,59 @@ describe('BoardTab', () => {
     expect(screen.queryByRole('option', { name: 'Done' })).toBeNull(); // popover closed
   });
 
-  it('rating: click sets, clicking the same star clears, keyboard 3 works (T5)', () => {
+  it('rating: 5-star scale — click sets, clicking the same star clears, keyboard 1–5 works (T5)', () => {
     render(<Harness />);
     addProject('Martha Thompson');
 
-    const star2 = screen.getByRole('button', { name: '2 stars' });
-    fireEvent.click(star2);
-    expect(screen.getByRole('slider', { name: 'Rating' }).getAttribute('aria-valuenow')).toBe('2');
+    const slider = () => screen.getByRole('slider', { name: 'Rating' });
+    expect(slider().getAttribute('aria-valuemax')).toBe('5');
 
-    fireEvent.click(screen.getByRole('button', { name: '2 stars' }));
-    expect(screen.getByRole('slider', { name: 'Rating' }).getAttribute('aria-valuenow')).toBe('0');
+    fireEvent.click(screen.getByRole('button', { name: '4 stars' }));
+    expect(slider().getAttribute('aria-valuenow')).toBe('4');
 
-    fireEvent.keyDown(screen.getByRole('slider', { name: 'Rating' }), { key: '3' });
-    expect(screen.getByRole('slider', { name: 'Rating' }).getAttribute('aria-valuenow')).toBe('3');
+    fireEvent.click(screen.getByRole('button', { name: '4 stars' }));
+    expect(slider().getAttribute('aria-valuenow')).toBe('0');
+
+    fireEvent.keyDown(slider(), { key: '5' });
+    expect(slider().getAttribute('aria-valuenow')).toBe('5');
+  });
+
+  it('hold a row and drag it above another — order flips and sticks (monday-style)', () => {
+    const board = emptyBoard();
+    board.projects = [
+      { ...boardProject('Alpha Job', 'pa'), position: 3000 },
+      { ...boardProject('Beta Job', 'pb'), position: 2000 },
+    ];
+    render(<Harness initial={board} />);
+
+    const rows = () => Array.from(document.querySelectorAll<HTMLElement>('tbody tr[data-project-id]'));
+    expect(rows().map((r) => r.getAttribute('data-project-id'))).toEqual(['pa', 'pb']);
+
+    // jsdom has no layout — give each row a real rect (40px tall, stacked).
+    rows().forEach((r, i) => {
+      r.getBoundingClientRect = () =>
+        ({ top: i * 40, bottom: i * 40 + 40, height: 40, left: 0, right: 600, width: 600, x: 0, y: i * 40, toJSON: () => ({}) }) as DOMRect;
+    });
+
+    // Hold Beta anywhere on the row (y≈60) and drag it above Alpha's midpoint.
+    fireEvent(rows()[1], new MouseEvent('pointerdown', { bubbles: true, clientY: 60, button: 0 }));
+    fireEvent(window, new MouseEvent('pointermove', { bubbles: true, clientY: 10 }));
+    fireEvent(window, new MouseEvent('pointerup', { bubbles: true, clientY: 10 }));
+
+    expect(rows().map((r) => r.getAttribute('data-project-id'))).toEqual(['pb', 'pa']);
+  });
+
+  it('a short press without movement is still a click, not a drag', () => {
+    render(<Harness />);
+    addProject('Martha Thompson');
+
+    const row = screen.getByText('Martha Thompson').closest('tr')!;
+    fireEvent(row, new MouseEvent('pointerdown', { bubbles: true, clientY: 20, button: 0 }));
+    fireEvent(window, new MouseEvent('pointerup', { bubbles: true, clientY: 20 }));
+
+    // The status cell still opens its editor on a normal click afterwards.
+    fireEvent.click(screen.getByRole('button', { name: 'New project' }));
+    expect(screen.getByRole('option', { name: 'Working on it' })).toBeTruthy();
   });
 
   it('archive hides the row, Undo restores it, Show archived reveals it', () => {

@@ -218,6 +218,34 @@ export async function putSharedBoard(board: BoardState): Promise<BoardState> {
   return json.board && Array.isArray(json.board.projects) ? json.board : board;
 }
 
+// ---- Extra Work tracker (Netlify Blobs behind /api/extrawork) --------------
+
+import type { ExtraWorkEntry } from '../extrawork/types';
+
+function extraWorkPath(): string {
+  return `/api/${TOKEN}/extrawork`;
+}
+
+export async function fetchSharedExtraWork(): Promise<ExtraWorkEntry[]> {
+  const res = await fetch(extraWorkPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { entries?: ExtraWorkEntry[] };
+  if (!Array.isArray(json.entries)) throw { status: 502, message: 'Bad extrawork response' } satisfies ApiError;
+  return json.entries;
+}
+
+/** Push local entries; the server merges by id/updatedAt and returns the merged set. */
+export async function putSharedExtraWork(entries: ExtraWorkEntry[]): Promise<ExtraWorkEntry[]> {
+  const res = await fetch(extraWorkPath(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ entries }),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { entries?: ExtraWorkEntry[] };
+  return Array.isArray(json.entries) ? json.entries : entries;
+}
+
 export interface HealthResponse {
   ok: boolean;
   hasKey: boolean;

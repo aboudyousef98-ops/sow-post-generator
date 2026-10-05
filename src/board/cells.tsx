@@ -245,14 +245,16 @@ export function DateCell({
   );
 }
 
-// ---- Rating: 1–3 stars -------------------------------------------------------
+// ---- Rating: 1–5 stars -------------------------------------------------------
+
+type Rating = 1 | 2 | 3 | 4 | 5;
 
 export function RatingCell({
   value,
   onPick,
 }: {
-  value: 1 | 2 | 3 | null;
-  onPick: (rating: 1 | 2 | 3 | null) => void;
+  value: Rating | null;
+  onPick: (rating: Rating | null) => void;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const shown = hover ?? value ?? 0;
@@ -262,16 +264,16 @@ export function RatingCell({
       role="slider"
       aria-label="Rating"
       aria-valuemin={0}
-      aria-valuemax={3}
+      aria-valuemax={5}
       aria-valuenow={value ?? 0}
       tabIndex={0}
       onMouseLeave={() => setHover(null)}
       onKeyDown={(e) => {
         if (e.key === '0') onPick(null);
-        if (e.key === '1' || e.key === '2' || e.key === '3') onPick(Number(e.key) as 1 | 2 | 3);
+        if (/^[1-5]$/.test(e.key)) onPick(Number(e.key) as Rating);
       }}
     >
-      {([1, 2, 3] as const).map((n) => (
+      {([1, 2, 3, 4, 5] as const).map((n) => (
         <button
           key={n}
           type="button"

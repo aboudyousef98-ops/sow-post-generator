@@ -1,65 +1,126 @@
 // @vitest-environment jsdom
-// Regression: pressing Enter in the "one per line" roster textareas must keep
-// the newline visible (the controlled value used to strip it on every keystroke).
+// Settings v2 (design handoff 2026-10-06): roster avatar chips with inline
+// "+ Add" (Enter adds, × removes with Undo), region-lead pill pickers drawn
+// from fixedTags ∪ authors ∪ designers, live Slack phrase preview, and a
+// two-step inline "Clear all" confirm. Settings shape unchanged.
 
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultSettings } from '../lib/storage';
+import { makeRecord } from '../lib/__fixtures__/makeRecord';
 import type { PostRecord, Settings } from '../types';
 import SettingsTab from './SettingsTab';
 
-function Harness({ onSettings }: { onSettings?: (s: Settings) => void }) {
+const toasts: { text: string; action?: { label: string; fn: () => void } }[] = [];
+let latestSettings: Settings | undefined;
+let latestRecords: PostRecord[] | undefined;
+
+function Harness({ records = [] as PostRecord[] }) {
   const [settings, setSettings] = useState(defaultSettings());
-  const [records, setRecords] = useState<PostRecord[]>([]);
+  const [recs, setRecs] = useState<PostRecord[]>(records);
   return (
     <SettingsTab
       settings={settings}
       setSettings={(s) => {
+        latestSettings = s;
         setSettings(s);
-        onSettings?.(s);
       }}
-      records={records}
-      setRecords={setRecords}
+      records={recs}
+      setRecords={(r) => {
+        latestRecords = r;
+        setRecs(r);
+      }}
       ahjs={[]}
       setAhjs={() => {}}
-      toast={() => {}}
+      toast={(text, action) => toasts.push({ text, action })}
     />
   );
 }
 
-describe('SettingsTab roster editors', () => {
+function rosterRow(label: RegExp | string) {
+  return screen.getByText(label).closest('.sv2-roster-row') as HTMLElement;
+}
+
+describe('SettingsTab v2', () => {
+  beforeEach(() => {
+    toasts.length = 0;
+    latestSettings = undefined;
+    latestRecords = undefined;
+  });
   afterEach(cleanup);
 
-  it('keeps a trailing newline while typing (Enter → new row)', () => {
+  it('renders roster chips and adds a name via + Add (Enter commits)', () => {
     render(<Harness />);
-    const ta = screen.getByLabelText(/Authors \(Posting as\)/) as HTMLTextAreaElement;
-    const before = ta.value;
-
-    fireEvent.change(ta, { target: { value: before + '\n' } });
-    expect(ta.value).toBe(before + '\n');
-
-    fireEvent.change(ta, { target: { value: before + '\nNew Person' } });
-    expect(ta.value).toBe(before + '\nNew Person');
+    const row = rosterRow('Authors (Posting as)');
+    expect(within(row).getByText('Aboud Yousef')).toBeTruthy();
+    fireEvent.click(within(row).getByRole('button', { name: '+ Add' }));
+    const input = within(row).getByPlaceholderText(/Enter to add/);
+    fireEvent.change(input, { target: { value: 'New Person' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(latestSettings?.authors).toContain('New Person');
   });
 
-  it('reports the cleaned list (trimmed, no blank lines) to the parent', () => {
-    let latest: Settings | undefined;
-    render(<Harness onSettings={(s) => (latest = s)} />);
-    const ta = screen.getByLabelText(/Authors \(Posting as\)/) as HTMLTextAreaElement;
-
-    fireEvent.change(ta, { target: { value: 'Aboud Yousef\n\n  Omar Rajab \nNew Person\n' } });
-    expect(latest?.authors).toEqual(['Aboud Yousef', 'Omar Rajab', 'New Person']);
+  it('blocks case-insensitive duplicates with a toast', () => {
+    render(<Harness />);
+    const row = rosterRow('Authors (Posting as)');
+    fireEvent.click(within(row).getByRole('button', { name: '+ Add' }));
+    const input = within(row).getByPlaceholderText(/Enter to add/);
+    fireEvent.change(input, { target: { value: 'aboud yousef' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(latestSettings).toBeUndefined();
+    expect(toasts[0].text).toMatch(/already on the list/);
   });
 
-  it('picks up external settings changes (Reset to defaults)', () => {
+  it('removes a chip with Undo restoring it', () => {
     render(<Harness />);
-    const ta = screen.getByLabelText(/Authors \(Posting as\)/) as HTMLTextAreaElement;
+    const row = rosterRow('Fixed tags');
+    const chip = within(row).getByText('Tarek Abu Hseini').closest('.sv2-chip') as HTMLElement;
+    fireEvent.click(within(chip).getByRole('button', { name: 'Remove' }));
+    expect(latestSettings?.fixedTags).not.toContain('Tarek Abu Hseini');
+    const undo = toasts.find((t) => t.action)!;
+    undo.action!.fn();
+    expect(latestSettings?.fixedTags).toContain('Tarek Abu Hseini');
+  });
 
-    fireEvent.change(ta, { target: { value: 'Somebody Else' } });
-    expect(ta.value).toBe('Somebody Else');
+  it('region lead pills: pick a lead, clear with No lead', () => {
+    render(<Harness />);
+    const hou = screen.getByText('HOU').closest('.sv2-lead') as HTMLElement;
+    fireEvent.click(within(hou).getByRole('button', { name: 'Omar Rajab' }));
+    expect(latestSettings?.regionLead.HOU).toBe('Omar Rajab');
+    fireEvent.click(within(hou).getByRole('button', { name: 'No lead' }));
+    expect(latestSettings?.regionLead.HOU).toBeNull();
+  });
 
-    fireEvent.click(screen.getByText('Reset to defaults'));
-    expect(ta.value).toBe(defaultSettings().authors.join('\n'));
+  it('phrase edits show in the live Slack preview', () => {
+    render(<Harness />);
+    const input = screen.getByLabelText(/Site Survey Feedback/) as HTMLInputElement;
+    fireEvent.change(input, { target: { value: 'Roof is fine.' } });
+    const preview = screen.getByText('How it reads in Slack').parentElement as HTMLElement;
+    expect(within(preview).getByText(/Roof is fine\./)).toBeTruthy();
+  });
+
+  it('Clear all is a two-step inline confirm that tombstones every record', () => {
+    const records = [makeRecord({ id: 'r1' }), makeRecord({ id: 'r2' })];
+    render(<Harness records={records} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Clear all…' }));
+    const warning = screen.getByText(/Really clear/).closest('.sv2-armed') as HTMLElement;
+    expect(within(warning).getByText('2')).toBeTruthy(); // record count in the warning
+    fireEvent.click(screen.getByRole('button', { name: 'Yes, clear' }));
+    expect(latestRecords?.every((r) => r.deletedAt)).toBe(true);
+  });
+
+  it('Reset settings keeps lastAuthor and offers Undo', () => {
+    render(<Harness />);
+    const row = rosterRow('Authors (Posting as)');
+    fireEvent.click(within(row).getByRole('button', { name: '+ Add' }));
+    const input = within(row).getByPlaceholderText(/Enter to add/);
+    fireEvent.change(input, { target: { value: 'Temp Person' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }));
+    expect(latestSettings?.authors).toEqual(defaultSettings().authors);
+    const undo = toasts.filter((t) => t.action).pop()!;
+    undo.action!.fn();
+    expect(latestSettings?.authors).toContain('Temp Person');
   });
 });

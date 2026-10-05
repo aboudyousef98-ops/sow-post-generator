@@ -1,4 +1,32 @@
-# Checkpoint — Admin › Daily Progress (2026-10-04)
+# Checkpoint — Admin › Daily Progress (2026-10-04, revised 2026-10-06 ×2)
+
+> **Rev 2 (2026-10-06, later) — short dates + manual Updates section. NOT DEPLOYED.**
+> After seeing the report in Slack, Aboud asked for a shorter date style and a
+> manual "Updates" field:
+> - Scheduled rows are now `- Name - Wed 10/07` (`shortDate()`: 3-letter
+>   weekday + MM/DD, no year, "Scheduled" word dropped). Heading carries the
+>   meaning instead: **"Projects scheduled (installation date):"**.
+> - New **Updates** textarea in the tab (one line per update, trimmed, empties
+>   dropped via `parseUpdates()`); lines print at the end of the report under
+>   `Updates:`; empty → `- None`. Deliberately NOT persisted — daily throwaway.
+> - `formatDailyReport()` gained a 5th param `updates: string[]`.
+> Backup `_versions/v8-daily-progress-format/`. Gate green: **375/375 tests**,
+> tsc, eslint, nosecrets, build. **Aboud said "dont deploy"** mid-task — prod
+> still runs Rev 1 (deploy `6ac4130b…`). Deploy + commit both pending his word.
+
+> **Rev 2026-10-06 — "Projects scheduled" now follows the date picker.**
+> The 7-day window is gone. Section 2 now lists **Schedule-phase rows whose
+> `designedDate` equals the picked date**, each showing its linked install
+> date (`- Name - Scheduled Wednesday, 10/07/2026`); rows designed that day
+> with no install date are still flagged, never hidden. Heading renamed to
+> "Projects scheduled:" in both the UI and the copied report. `scheduledNext7`
+> and `addDaysIso` were removed, replaced by `scheduledOn(board, records,
+> dateIso)`. Old files backed up to `_versions/v7-daily-progress-filter/`.
+> Gate: 372/372 tests, tsc, eslint, nosecrets, build — all green.
+> **Deployed to production 2026-10-06** (deploy `6ac4130b…`); live bundle
+> verified to contain the new heading and no "next 7 days" string.
+> Still uncommitted to git (no commit requested).
+> The section below describes the ORIGINAL 2026-10-04 build.
 
 ## What was built
 A third Admin sub-tab, **Daily Progress** (`Settings | Users | Daily Progress`),
