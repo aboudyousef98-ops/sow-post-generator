@@ -88,36 +88,39 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
     const notes = eligibleNotes(record, ahjs);
     if (notes.length === 0) return copyNow(); // nothing on file for this project
 
-    const keyword = keywordMatches(text, notes);
-    let aiHits: NoteHit[] = [];
+    let hits: NoteHit[];
     let source: 'ai' | 'keyword' = 'ai';
     setChecking(true);
     try {
       const res = await noteCheck(
         text,
-        notes.map((n) => ({ noteId: n.noteId, text: n.text })),
+        notes.map((n) => ({ lineId: n.lineId, text: n.text })),
       );
-      const byId = new Map(notes.map((n) => [n.noteId, n]));
-      aiHits = res.hits
+      const byId = new Map(notes.map((n) => [n.lineId, n]));
+      // AI ONLY when the AI answered (Aboud 2026-10-08: "i need it as AI not
+      // only to match by keyword but to match by logic"). Unioning in keyword
+      // hits put noise like 'matched "elevation"' — from the post's own
+      // "elevation drawing" line — beside good reasoning, which made the whole
+      // list look untrustworthy.
+      hits = res.hits
         // Verify the model's EVIDENCE, not its judgement: the quoted trigger
         // must really appear in the project-specific part of the post. Without
-        // this, always-true notes ("install date set, so NTP must exist")
+        // this, always-true lines ("install date set, so NTP must exist")
         // surfaced on every routine post — see triggerIsGrounded().
         .filter((h) => triggerIsGrounded(text, h.trigger))
         .map((h) => {
-          const n = byId.get(h.noteId);
-          return n ? { ...n, why: `AI: ${h.why}` } : null;
+          const n = byId.get(h.lineId);
+          return n ? { ...n, why: h.why } : null;
         })
         .filter((h): h is NoteHit => h !== null);
     } catch {
-      // AI down → the local keyword pass still ran. Never block the post on
-      // OpenAI being up (Aboud's explicit choice).
+      // AI down → fall back to the local keyword pass so the team is never
+      // blocked by OpenAI being unavailable (Aboud's explicit choice).
       source = 'keyword';
+      hits = mergeHits(keywordMatches(text, notes), []);
     } finally {
       setChecking(false);
     }
-
-    const hits = mergeHits(keyword, aiHits);
     // Nothing to say → stay invisible, copy exactly as before.
     if (hits.length === 0) return copyNow();
     setPending({ hits, source });
@@ -131,7 +134,7 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
       postHash: postHash(text),
       source: pending.source,
       // Snapshot the text: editing the note later must not rewrite history.
-      items: pending.hits.map((h) => ({ noteId: h.noteId, board: h.board, text: h.text, why: h.why })),
+      items: pending.hits.map((h) => ({ noteId: h.lineId, board: h.board, text: h.text, why: h.why })),
     };
     update((r) => ({ ...r, noteCheck: stamp }));
     setPending(null);

@@ -136,19 +136,19 @@ describe('keywordMatches', () => {
 });
 
 describe('mergeHits', () => {
-  const k = { noteId: 'n1', board: 'AHJ: X', text: 't', why: 'matched “trench”' };
-  const a = { noteId: 'n1', board: 'AHJ: X', text: 't', why: 'AI: mentions excavation' };
+  const k = { lineId: 'n1#0', noteId: 'n1', board: 'AHJ: X', text: 't', why: 'matched “trench”' };
+  const a = { lineId: 'n1#0', noteId: 'n1', board: 'AHJ: X', text: 't', why: 'AI: mentions excavation' };
 
   it('dedupes by note id', () => {
     expect(mergeHits([k], [a])).toHaveLength(1);
   });
 
-  it('prefers the keyword reason — the reader can verify it themselves', () => {
-    expect(mergeHits([k], [a])[0].why).toBe('matched “trench”');
+  it('AI reasoning wins on collision — it explains the logic, not a word', () => {
+    expect(mergeHits([k], [a])[0].why).toBe('AI: mentions excavation');
   });
 
   it('keeps AI-only hits', () => {
-    const other = { ...a, noteId: 'n2' };
+    const other = { ...a, lineId: 'n2#0', noteId: 'n2' };
     expect(mergeHits([k], [a, other]).map((h) => h.noteId).sort()).toEqual(['n1', 'n2']);
   });
 
@@ -177,9 +177,9 @@ describe('postHash', () => {
 // first version surfaced 3 notes for a post about a trench, 2 of them noise.
 describe('keywordMatches — precision', () => {
   const notes: EligibleNote[] = [
-    { noteId: 'n-clear', board: 'Utility: CenterPoint', text: 'Meter clearance 3 ft from the gas riser.' },
-    { noteId: 'n-wall', board: 'Utility: CenterPoint', text: 'Meter must be on the south wall.' },
-    { noteId: 'n-trench', board: 'AHJ: Harris', text: 'Trench depth minimum 24 inches.' },
+    { lineId: 'n-clear#0', noteId: 'n-clear', board: 'Utility: CenterPoint', text: 'Meter clearance 3 ft from the gas riser.' },
+    { lineId: 'n-wall#0', noteId: 'n-wall', board: 'Utility: CenterPoint', text: 'Meter must be on the south wall.' },
+    { lineId: 'n-trench#0', noteId: 'n-trench', board: 'AHJ: Harris', text: 'Trench depth minimum 24 inches.' },
   ];
 
   // The template prints this on EVERY post, so matching it fires every time.
@@ -247,5 +247,58 @@ describe('dropdown-generated sentences are template, not evidence', () => {
 
   it('still accepts MPU — that genuinely distinguishes one job from another', () => {
     expect(triggerIsGrounded(routine, 'This project requires an MPU')).toBe(true);
+  });
+});
+
+// Aboud, 2026-10-08, with a screenshot: a 15-line SOW note was shown in full
+// because one incidental word matched. "sometimes we need only one row from
+// the whole thing."
+describe('notes are split into individually-matchable LINES', () => {
+  const bigNote = board('g1', 'SOW General Notes', 'general', [
+    note(
+      'n-big',
+      [
+        '7- Service wires:',
+        '- 4/0 SER for attic runs',
+        '- 2/0 CU for exterior conduit runs with bends',
+        '- 4/0 AL for straight exterior conduit runs',
+        'Trench: over 40 ft -> combine service + load in one conduit.',
+        'No PVC on roofs.',
+      ].join('\n'),
+    ),
+  ]);
+
+  it('yields one entry per line, not one per note', () => {
+    const lines = eligibleNotes(rec(), [bigNote]);
+    expect(lines.length).toBeGreaterThan(4);
+    expect(lines.every((l) => l.noteId === 'n-big')).toBe(true);
+    expect(new Set(lines.map((l) => l.lineId)).size).toBe(lines.length); // ids unique
+  });
+
+  it('each line carries only its own text, never the whole document', () => {
+    for (const l of eligibleNotes(rec(), [bigNote])) {
+      expect(l.text).not.toContain('\n');
+      expect(l.text.length).toBeLessThan(120);
+    }
+  });
+
+  it('strips the bullet marker so the line reads cleanly', () => {
+    const texts = eligibleNotes(rec(), [bigNote]).map((l) => l.text);
+    expect(texts).toContain('4/0 AL for straight exterior conduit runs');
+  });
+
+  it('surfaces ONLY the matching line, not the whole note — the screenshot bug', () => {
+    const lines = eligibleNotes(rec(), [bigNote]);
+    const hits = keywordMatches('We will trench from the meter to the array.', lines);
+    expect(hits).toHaveLength(1);
+    expect(hits[0].text).toBe('Trench: over 40 ft -> combine service + load in one conduit.');
+    // The other 5 lines of the same note stayed out of it.
+    expect(hits[0].text).not.toContain('4/0 SER');
+    expect(hits[0].text).not.toContain('No PVC');
+  });
+
+  it('drops fragments too short to be a rule', () => {
+    const tiny = board('g2', 'SOW', 'general', [note('n-t', 'ok\n\nx\nA real rule line here.')]);
+    expect(eligibleNotes(rec(), [tiny]).map((l) => l.text)).toEqual(['A real rule line here.']);
   });
 });

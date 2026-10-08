@@ -91,19 +91,19 @@ describe('pre-post note check', () => {
   });
 
   it('shows the popup with the note and WHY it surfaced, and holds the copy back', async () => {
-    noteCheckMock.mockResolvedValue({ hits: [], model: 'm', ms: 1 });
+    noteCheckMock.mockResolvedValue({ hits: [{ lineId: 'n-trench#0', why: 'post mentions trenching along the fence', trigger: 'trench along the fence' }], model: 'm', ms: 1 });
     render(<Harness initial={{ notes: { layout: '', siteSurvey: 'We will trench along the fence.', design: '', homeowner: '' } }} />);
     clickCopy();
 
     expect(await screen.findByText(/1 note may apply/)).toBeTruthy();
     expect(screen.getByText('Trench depth minimum 24 inches.')).toBeTruthy();
-    expect(screen.getByText(/matched/)).toBeTruthy();
+    expect(screen.getByText(/post mentions trenching/)).toBeTruthy();
     expect(screen.getByText('AHJ: Harris County')).toBeTruthy();
     expect(written).toEqual([]); // nothing copied yet
   });
 
   it('Confirm and copy copies AND records the confirmation on the record', async () => {
-    noteCheckMock.mockResolvedValue({ hits: [], model: 'm', ms: 1 });
+    noteCheckMock.mockResolvedValue({ hits: [{ lineId: 'n-trench#0', why: 'post mentions trenching along the fence', trigger: 'trench along the fence' }], model: 'm', ms: 1 });
     render(<Harness initial={{ notes: { layout: '', siteSurvey: 'We will trench along the fence.', design: '', homeowner: '' } }} />);
     clickCopy();
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and copy to Slack' }));
@@ -111,7 +111,7 @@ describe('pre-post note check', () => {
     await waitFor(() => expect(written.length).toBe(1));
     const nc = lastRecord!.noteCheck!;
     expect(nc.items).toHaveLength(1);
-    expect(nc.items[0].noteId).toBe('n-trench');
+    expect(nc.items[0].noteId).toBe('n-trench#0'); // the LINE, not the whole note
     // Snapshotted, so editing the note later cannot rewrite history.
     expect(nc.items[0].text).toBe('Trench depth minimum 24 inches.');
     expect(nc.source).toBe('ai');
@@ -119,7 +119,7 @@ describe('pre-post note check', () => {
   });
 
   it('Cancel copies nothing and records nothing', async () => {
-    noteCheckMock.mockResolvedValue({ hits: [], model: 'm', ms: 1 });
+    noteCheckMock.mockResolvedValue({ hits: [{ lineId: 'n-trench#0', why: 'post mentions trenching along the fence', trigger: 'trench along the fence' }], model: 'm', ms: 1 });
     render(<Harness initial={{ notes: { layout: '', siteSurvey: 'We will trench along the fence.', design: '', homeowner: '' } }} />);
     clickCopy();
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
@@ -128,7 +128,7 @@ describe('pre-post note check', () => {
   });
 
   it('does not nag twice — a second copy of the SAME post goes straight through', async () => {
-    noteCheckMock.mockResolvedValue({ hits: [], model: 'm', ms: 1 });
+    noteCheckMock.mockResolvedValue({ hits: [{ lineId: 'n-trench#0', why: 'post mentions trenching along the fence', trigger: 'trench along the fence' }], model: 'm', ms: 1 });
     render(<Harness initial={{ notes: { layout: '', siteSurvey: 'We will trench along the fence.', design: '', homeowner: '' } }} />);
     clickCopy();
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm and copy to Slack' }));
@@ -144,6 +144,7 @@ describe('pre-post note check', () => {
   it('a confirmation does NOT carry over to a different post text', async () => {
     noteCheckMock.mockResolvedValue({ hits: [], model: 'm', ms: 1 });
     // Confirmed against some OTHER post — the hash will not match this one.
+    noteCheckMock.mockResolvedValue({ hits: [{ lineId: 'n-trench#0', why: 'post mentions trenching', trigger: 'trench along the fence' }], model: 'm', ms: 1 });
     render(
       <Harness
         initial={{
@@ -170,18 +171,18 @@ describe('pre-post note check', () => {
 
   it('surfaces an AI-only hit the keyword pass would have missed', async () => {
     noteCheckMock.mockResolvedValue({
-      hits: [{ noteId: 'n-trench', why: 'post mentions excavation', trigger: 'Excavation along the fence' }],
+      hits: [{ lineId: 'n-trench#0', why: 'post mentions excavation', trigger: 'Excavation along the fence' }],
       model: 'm',
       ms: 1,
     });
     // "excavation" shares no term with the trench note.
     render(<Harness initial={{ notes: { layout: '', siteSurvey: 'Excavation along the fence.', design: '', homeowner: '' } }} />);
     clickCopy();
-    expect(await screen.findByText(/AI: post mentions excavation/)).toBeTruthy();
+    expect(await screen.findByText(/post mentions excavation/)).toBeTruthy();
   });
 
   it('ignores a note id the model invented', async () => {
-    noteCheckMock.mockResolvedValue({ hits: [{ noteId: 'does-not-exist', why: 'made up', trigger: 'nothing real' }], model: 'm', ms: 1 });
+    noteCheckMock.mockResolvedValue({ hits: [{ lineId: 'does-not-exist#0', why: 'made up', trigger: 'nothing real' }], model: 'm', ms: 1 });
     render(<Harness />);
     clickCopy();
     await waitFor(() => expect(written.length).toBe(1)); // copied, no popup
@@ -213,7 +214,7 @@ describe('AI trigger must be grounded in the post', () => {
 
   it('drops an AI hit whose quoted trigger is not in the post', () => {
     noteCheckMock.mockResolvedValue({
-      hits: [{ noteId: 'n-trench', why: 'install date set, so NTP must exist', trigger: 'install date set' }],
+      hits: [{ lineId: 'n-trench#0', why: 'install date set, so NTP must exist', trigger: 'install date set' }],
       model: 'm',
       ms: 1,
     });
@@ -227,7 +228,7 @@ describe('AI trigger must be grounded in the post', () => {
 
   it('drops a trigger quoting only the template’s own heading', () => {
     noteCheckMock.mockResolvedValue({
-      hits: [{ noteId: 'n-trench', why: 'routine', trigger: 'Site Survey Feedback' }],
+      hits: [{ lineId: 'n-trench#0', why: 'routine', trigger: 'Site Survey Feedback' }],
       model: 'm',
       ms: 1,
     });
@@ -238,12 +239,12 @@ describe('AI trigger must be grounded in the post', () => {
 
   it('keeps a hit whose trigger really is in the project-specific text', async () => {
     noteCheckMock.mockResolvedValue({
-      hits: [{ noteId: 'n-trench', why: 'post mentions excavation', trigger: 'excavation along the fence' }],
+      hits: [{ lineId: 'n-trench#0', why: 'post mentions excavation', trigger: 'excavation along the fence' }],
       model: 'm',
       ms: 1,
     });
     render(<Harness initial={{ notes: { layout: '', siteSurvey: 'Excavation along the fence.', design: '', homeowner: '' } }} />);
     clickCopy();
-    expect(await screen.findByText(/AI: post mentions excavation/)).toBeTruthy();
+    expect(await screen.findByText(/post mentions excavation/)).toBeTruthy();
   });
 });

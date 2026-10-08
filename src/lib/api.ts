@@ -268,10 +268,10 @@ export async function health(): Promise<HealthResponse> {
 export function noteCheck(
   // NOT named `post` — that would shadow the module's post() helper below.
   postText: string,
-  notes: { noteId: string; text: string }[],
-): Promise<{ hits: { noteId: string; why: string; trigger: string }[]; model: string; ms: number }> {
-  return post<{ hits: { noteId: string; why: string; trigger: string }[]; model: string; ms: number }>('notecheck', {
+  lines: { lineId: string; text: string }[],
+): Promise<{ hits: { lineId: string; why: string; trigger: string }[]; model: string; ms: number }> {
+  return post<{ hits: { lineId: string; why: string; trigger: string }[]; model: string; ms: number }>('notecheck', {
     post: postText,
-    notes,
+    lines,
   });
 }

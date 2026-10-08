@@ -11,17 +11,45 @@
 import type { Ahj, PostRecord } from '../types';
 import { boardsOfKind, livePosts, matchAhj } from './ahj';
 
-/** One note that may apply to a project, with where it came from. */
+/**
+ * ONE LINE of one note — the unit everything here works in.
+ *
+ * Why lines and not notes (Aboud, 2026-10-08, with a screenshot): the team's
+ * notes are whole reference documents. One SOW note covers trenches, conduits,
+ * roof types, disconnect heights and door offsets in fifteen lines. Treating a
+ * note as atomic meant a single incidental word surfaced the entire page, when
+ * what he needs is the one row that applies.
+ */
 export interface EligibleNote {
+  /** `${noteId}#${lineIndex}` — stable per line. */
+  lineId: string;
   noteId: string;
   /** Human label for the source board, e.g. "AHJ: Harris County". */
   board: string;
+  /** The single line, not the whole note. */
   text: string;
 }
 
-/** A surfaced note, with WHY it surfaced so the coordinator can judge it. */
+/** A surfaced line, with WHY it surfaced so the coordinator can judge it. */
 export interface NoteHit extends EligibleNote {
   why: string;
+}
+
+/** Bound the payload: notes are long, and the model is charged per token. */
+const MAX_LINES = 250;
+
+/**
+ * Split a note into its individually-matchable lines.
+ *
+ * Bare headings ("7- Service wires:") are kept — they carry meaning for the
+ * lines under them — but a line must have some substance to be matchable.
+ */
+function noteLines(noteId: string, board: string, text: string): EligibleNote[] {
+  return text
+    .split('\n')
+    .map((l, i) => ({ line: l.replace(/^\s*[-•*]\s*/, '').trim(), i }))
+    .filter(({ line }) => line.length >= 8)
+    .map(({ line, i }) => ({ lineId: `${noteId}#${i}`, noteId, board, text: line }));
 }
 
 const KIND_LABEL = { ahj: 'AHJ', utility: 'Utility', funding: 'Funding' } as const;
@@ -39,8 +67,7 @@ export function eligibleNotes(record: PostRecord, ahjs: Ahj[] | undefined): Elig
 
   const push = (board: Ahj, label: string) => {
     for (const p of livePosts(board)) {
-      const text = p.text.trim();
-      if (text) out.push({ noteId: p.id, board: label, text });
+      out.push(...noteLines(p.id, label, p.text));
     }
   };
 
@@ -61,7 +88,7 @@ export function eligibleNotes(record: PostRecord, ahjs: Ahj[] | undefined): Elig
     push(b, 'SOW Notes');
   }
 
-  return out;
+  return out.slice(0, MAX_LINES);
 }
 
 /**
@@ -202,16 +229,19 @@ export function keywordMatches(post: string, notes: EligibleNote[]): NoteHit[] {
 }
 
 /**
- * Merge the keyword and AI passes, deduped by note id.
+ * Dedupe surfaced lines, keyed by LINE.
  *
- * Keyword wins on collision: "matched ‘trench’" is checkable by the reader,
- * where the AI's reason has to be taken on trust.
+ * NOTE: the AI is now the primary matcher and keyword is only the offline
+ * fallback (Aboud 2026-10-08: "i need it as AI not only to match by keyword
+ * but to match by logic"). Unioning the two put keyword noise — "matched
+ * 'elevation'", from the post's own "elevation drawing" line — next to good
+ * AI reasoning, which made the whole list look unreliable. This is kept for
+ * the case where both are present.
  */
 export function mergeHits(keyword: NoteHit[], ai: NoteHit[]): NoteHit[] {
   const byId = new Map<string, NoteHit>();
-  for (const h of ai) byId.set(h.noteId, h);
-  for (const h of keyword) byId.set(h.noteId, h);
-  // Stable order: as the notes were listed, not as the model returned them.
+  for (const h of keyword) byId.set(h.lineId, h);
+  for (const h of ai) byId.set(h.lineId, h); // AI reasoning wins on collision
   return [...byId.values()];
 }
 

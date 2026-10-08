@@ -134,3 +134,44 @@ Same post now surfaces **1 note — the trench one, and nothing else.**
 This is the tuning dial. If real projects start producing long lists, `BOILERPLATE` and
 `DISTINCTIVE_LEN` in `src/lib/noteMatch.ts` are where to tighten it, and the saved
 `record.noteCheck.items` are the evidence of what is actually firing.
+
+---
+
+## REVISION 2 — line-level matching, AI primary (Aboud, 2026-10-08, with a screenshot)
+
+> "it literally used the whole post we have on SOW notes (because sometimes we need only one row
+> from the whole thing) also i need it as AI not only to match by keyword but to match by logic"
+
+**He was right, and it was a design flaw, not a tuning problem.** Rev 1 treated a NOTE as the atomic
+unit. The team's notes are whole reference documents — one SOW note covers trenches, conduits, roof
+types, disconnect heights and door offsets in fifteen lines — so a single incidental word surfaced
+the entire page. His screenshot showed two hits: `matched "exterior"` and `matched "elevation"`, the
+latter almost certainly from the post's own opening line "the elevation drawing".
+
+Two changes:
+
+1. **The unit is now a LINE, not a note.** `eligibleNotes()` explodes each note into its lines
+   (`lineId = noteId#index`, bullet markers stripped, fragments under 8 chars dropped, capped at 250
+   lines). Everything downstream — the AI payload, the keyword fallback, the popup, the saved audit
+   trail — works in lines. The popup shows the one row that applies.
+
+2. **The AI is the primary matcher; keyword is ONLY the offline fallback.** Rev 1 unioned the two,
+   which placed keyword noise beside good AI reasoning and made the whole list look untrustworthy.
+   When the AI answers, its hits are used alone; the keyword pass runs only when the AI is
+   unreachable. The prompt now instructs it to reason about the engineering (wire sizes, service
+   amperage, roof type, run location) and states explicitly that sharing a word like "exterior",
+   "elevation" or "conduit" is not a reason.
+
+`triggerIsGrounded` is unchanged and still applies — the model must quote the post verbatim, and the
+quote must survive boilerplate stripping.
+
+**Verified on a draft deploy against his real 13-line note.** Post: *"Service run is a straight
+exterior conduit run using 4/0 AL. Attic run to the array on a clay tile roof."* Returned exactly
+two lines:
+
+| Line | Reason |
+|---|---|
+| "4/0 AL for straight exterior conduit runs" | post mentions straight exterior conduit run |
+| "Clay tile / metal roof / no attic run: no J-box under the soffit" | post mentions attic run on clay tile roof |
+
+No heading, no trench lines, no disconnect height. Both are engineering matches, not word matches.
