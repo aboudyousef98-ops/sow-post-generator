@@ -6,9 +6,11 @@
 // see what is done as well as what is not, with the action beside the gap.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { matchAhj } from '../lib/ahj';
+import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
+import { noteCheck } from '../lib/api';
+import { eligibleNotes, keywordMatches, mergeHits, postHash, type NoteHit } from '../lib/noteMatch';
 import type { Ahj, PostRecord, Settings } from '../types';
 import TitleBlockCard from './TitleBlockCard';
 
@@ -56,8 +58,12 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
     return () => document.removeEventListener('mousedown', onDown);
   }, [menuOpen]);
 
-  const copyForSlack = useCallback(async () => {
-    if (missingRequired(record).length) return; // also blocks the Ctrl+Shift+C shortcut
+  // ---- pre-post note check (_PLAN_note_check.md) ---------------------------
+  const [checking, setChecking] = useState(false);
+  const [pending, setPending] = useState<{ hits: NoteHit[]; source: 'ai' | 'keyword' } | null>(null);
+
+  /** The copy itself, with no checking — every path ends here. */
+  const copyNow = useCallback(async () => {
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -69,7 +75,63 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
       await navigator.clipboard.writeText(text);
     }
     toast('Copied. Paste into Slack, then re-type the @mentions if they appear as plain text.');
-  }, [html, text, toast, record]);
+  }, [html, text, toast]);
+
+  const copyForSlack = useCallback(async () => {
+    if (missingRequired(record).length) return; // also blocks the Ctrl+Shift+C shortcut
+    if (checking) return;
+
+    const hash = postHash(text);
+    // Already confirmed THIS exact post — don't nag twice.
+    if (record.noteCheck?.postHash === hash) return copyNow();
+
+    const notes = eligibleNotes(record, ahjs);
+    if (notes.length === 0) return copyNow(); // nothing on file for this project
+
+    const keyword = keywordMatches(text, notes);
+    let aiHits: NoteHit[] = [];
+    let source: 'ai' | 'keyword' = 'ai';
+    setChecking(true);
+    try {
+      const res = await noteCheck(
+        text,
+        notes.map((n) => ({ noteId: n.noteId, text: n.text })),
+      );
+      const byId = new Map(notes.map((n) => [n.noteId, n]));
+      aiHits = res.hits
+        .map((h) => {
+          const n = byId.get(h.noteId);
+          return n ? { ...n, why: `AI: ${h.why}` } : null;
+        })
+        .filter((h): h is NoteHit => h !== null);
+    } catch {
+      // AI down → the local keyword pass still ran. Never block the post on
+      // OpenAI being up (Aboud's explicit choice).
+      source = 'keyword';
+    } finally {
+      setChecking(false);
+    }
+
+    const hits = mergeHits(keyword, aiHits);
+    // Nothing to say → stay invisible, copy exactly as before.
+    if (hits.length === 0) return copyNow();
+    setPending({ hits, source });
+  }, [record, ahjs, text, checking, copyNow]);
+
+  const confirmAndCopy = useCallback(async () => {
+    if (!pending) return;
+    const stamp = {
+      at: new Date().toISOString(),
+      by: record.author,
+      postHash: postHash(text),
+      source: pending.source,
+      // Snapshot the text: editing the note later must not rewrite history.
+      items: pending.hits.map((h) => ({ noteId: h.noteId, board: h.board, text: h.text, why: h.why })),
+    };
+    update((r) => ({ ...r, noteCheck: stamp }));
+    setPending(null);
+    await copyNow();
+  }, [pending, record.author, text, update, copyNow]);
 
   const copyPlain = useCallback(async () => {
     await navigator.clipboard.writeText(text);
@@ -88,7 +150,9 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
     return () => window.removeEventListener('keydown', onKey);
   }, [copyForSlack]);
 
-  const ahjMatch = matchAhj(record.sf.jurisdiction, ahjs ?? []);
+  // Narrowed to AHJ-kind boards: the store also holds Utility/Funding/General
+  // boards since 2026-10-08, and a utility must not match a Jurisdiction.
+  const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
   const checks: Check[] = [
     { label: 'Customer name', done: !missing.includes('Customer name'), action: 'Fill in' },
@@ -135,11 +199,11 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
           <button
             type="button"
             className="btn primary"
-            disabled={!ready}
+            disabled={!ready || checking}
             onClick={() => void copyForSlack()}
             title="Ctrl+Shift+C"
           >
-            Copy for Slack
+            {checking ? 'Checking notes…' : 'Copy for Slack'}
           </button>
           <button type="button" className="btn secondary" disabled={!ready} onClick={onMarkPosted}>
             Mark as posted
@@ -251,6 +315,42 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
           />
         )}
       </div>
+
+      {/* Pre-post note check. Appears ONLY when something matched — a check
+          with nothing to say must stay invisible (_PLAN_note_check.md). */}
+      {pending && (
+        <div className="modal-overlay" onClick={() => setPending(null)}>
+          <div className="modal note-check-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              Before posting — {pending.hits.length} note{pending.hits.length === 1 ? '' : 's'} may apply
+            </h3>
+            {pending.source === 'keyword' && (
+              <p className="note-check-degraded">
+                ⚠ AI unavailable — showing keyword matches only. The list may be less precise.
+              </p>
+            )}
+            <ul className="note-check-list">
+              {pending.hits.map((h) => (
+                <li key={h.noteId}>
+                  <div className="note-check-top">
+                    <span className="note-check-text">{h.text}</span>
+                    <span className="note-check-board">{h.board}</span>
+                  </div>
+                  <div className="note-check-why">{h.why}</div>
+                </li>
+              ))}
+            </ul>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setPending(null)}>
+                Cancel
+              </button>
+              <button type="button" className="btn primary" onClick={() => void confirmAndCopy()}>
+                Confirm and copy to Slack
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

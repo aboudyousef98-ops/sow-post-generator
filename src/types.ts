@@ -200,6 +200,25 @@ export interface PostRecord {
    * PolishKey, so no AI path can reach it. Both guarantees are pinned by tests.
    */
   internalNotes?: string;
+  /**
+   * The pre-post note check the coordinator confirmed (_PLAN_note_check.md).
+   *
+   * `items[].text` is a SNAPSHOT, not a reference: if the AHJ note is edited
+   * next month, this record still shows what was actually on screen at the
+   * time. That is what makes it an audit trail.
+   *
+   * `postHash` covers the post text it was confirmed against — edit the post
+   * and the confirmation is void, or the gate is defeated by confirming an
+   * empty draft and then writing the real post.
+   */
+  noteCheck?: {
+    at: string;
+    by: string;
+    postHash: string;
+    /** 'keyword' means the AI was unavailable and only the local pass ran. */
+    source: 'ai' | 'keyword';
+    items: { noteId: string; board: string; text: string; why: string }[];
+  };
   warnings: string[];
   /**
    * Designer's approval to append AHJ requirements to the post — stores the id

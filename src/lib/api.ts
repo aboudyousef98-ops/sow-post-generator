@@ -6,7 +6,7 @@ import type { PolishKey, RewriteMode } from '../types';
 
 const TOKEN = import.meta.env.VITE_API_PATH_TOKEN ?? 'changeme';
 
-function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region'): string {
+function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region' | 'notecheck'): string {
   return `/api/${TOKEN}/${endpoint}`;
 }
 
@@ -15,7 +15,7 @@ export interface ApiError {
   message: string;
 }
 
-async function post<T>(endpoint: 'rewrite' | 'extract' | 'region', body: unknown): Promise<T> {
+async function post<T>(endpoint: 'rewrite' | 'extract' | 'region' | 'notecheck', body: unknown): Promise<T> {
   const res = await fetch(apiPath(endpoint), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -255,4 +255,23 @@ export async function health(): Promise<HealthResponse> {
   const res = await fetch(apiPath('health'));
   if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
   return (await res.json()) as HealthResponse;
+}
+
+/**
+ * The semantic half of the pre-post note check (_PLAN_note_check.md).
+ *
+ * Send ONLY the notes already eligible for this project — scoping is the
+ * client's job (lib/noteMatch.eligibleNotes), not the model's. Throws on any
+ * failure; the caller is expected to fall back to the local keyword pass
+ * rather than block the post.
+ */
+export function noteCheck(
+  // NOT named `post` — that would shadow the module's post() helper below.
+  postText: string,
+  notes: { noteId: string; text: string }[],
+): Promise<{ hits: { noteId: string; why: string }[]; model: string; ms: number }> {
+  return post<{ hits: { noteId: string; why: string }[]; model: string; ms: number }>('notecheck', {
+    post: postText,
+    notes,
+  });
 }
