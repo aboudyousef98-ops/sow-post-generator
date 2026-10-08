@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
-import { emptyInstallNotes } from './installNotes';
+import { POLISH_KEYS, emptyInstallNotes } from './installNotes';
 import { defaultSettings } from './storage';
 import {
   buildPostHtml,
@@ -577,5 +577,103 @@ describe('a manually edited post replaces the generated one', () => {
     const rec = norcaRecord({ manualText: '' });
     expect(buildPostText(rec, defaultSettings())).toContain('Hello Team,');
     expect(buildPostText(rec, defaultSettings())).toContain('Norca Garcia');
+  });
+});
+
+// Internal notes (Aboud 2026-10-08): the coordinator's scratch pad. Team-visible
+// via the normal record sync, but it must NEVER reach the post or the AI.
+describe('internalNotes never leaks', () => {
+  it('post text is byte-identical with and without internal notes', () => {
+    const base = norcaRecord();
+    const withNotes = { ...base, internalNotes: 'chase Diego about the fence\nHO not answering' };
+    expect(buildPostText(withNotes, defaultSettings())).toBe(buildPostText(base, defaultSettings()));
+  });
+
+  it('does not leak through the hand-edited manualText path either', () => {
+    const base = { ...norcaRecord(), manualText: 'Typed by hand.' };
+    const withNotes = { ...base, internalNotes: 'SECRET-INTERNAL-STRING' };
+    const out = buildPostText(withNotes, defaultSettings());
+    expect(out).toBe(buildPostText(base, defaultSettings()));
+    expect(out).not.toContain('SECRET-INTERNAL-STRING');
+  });
+
+  it('is not a PolishKey, so no AI path can ever send it', () => {
+    expect(POLISH_KEYS).not.toContain('internalNotes' as never);
+  });
+});
+
+// Requirements split (Aboud 2026-10-08) — _PLAN_requirements_split.md.
+describe('Utility / Funding / General requirement sections', () => {
+  const board = (id: string, name: string, kind: Ahj['kind'], text: string): Ahj => ({
+    id,
+    name,
+    aliases: [],
+    kind,
+    posts: [
+      { id: id + '-p', text, by: 'Aboud Yousef', at: '2026-10-08T00:00:00.000Z', history: [], pinned: false, updatedAt: '2026-10-08T00:00:00.000Z' },
+    ],
+    updatedAt: '2026-10-08T00:00:00.000Z',
+    schemaVersion: 1,
+  });
+
+  const util = board('u1', 'CenterPoint Energy', 'utility', 'Meter must be on the south wall.');
+  const fund = board('f1', 'Solrite', 'funding', 'Upload the signed NTP before scheduling.');
+  const gen = board('g1', 'House rules', 'general', 'Always Title Case customer names.');
+
+  it('a utility section appears only when the Utility matches AND is approved', () => {
+    const rec = norcaRecord({ utilityApprovedId: 'u1' });
+    rec.sf.utility = 'CenterPoint Energy';
+    const text = buildPostText(rec, defaultSettings(), [util]);
+    expect(text).toContain('*Utility Requirements (CenterPoint Energy):*\n• Meter must be on the south wall.');
+  });
+
+  it('changing the Utility away silently un-approves it', () => {
+    const rec = norcaRecord({ utilityApprovedId: 'u1' });
+    rec.sf.utility = 'Oncor';
+    expect(buildPostText(rec, defaultSettings(), [util])).not.toContain('Utility Requirements');
+  });
+
+  it('funding is global — it needs no key on the record, only approval', () => {
+    const rec = norcaRecord({ fundingApprovedId: 'f1' });
+    const text = buildPostText(rec, defaultSettings(), [fund]);
+    expect(text).toContain('*Funding Requirements (Solrite):*\n• Upload the signed NTP before scheduling.');
+  });
+
+  it('funding is still absent without approval', () => {
+    expect(buildPostText(norcaRecord(), defaultSettings(), [fund])).not.toContain('Funding Requirements');
+  });
+
+  it('SOW general notes NEVER reach the post, by any route', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'g1', utilityApprovedId: 'g1', fundingApprovedId: 'g1' });
+    const text = buildPostText(rec, defaultSettings(), [gen]);
+    expect(text).not.toContain('Always Title Case customer names.');
+    expect(text).not.toContain('House rules');
+  });
+
+  it('all three sections print in the order AHJ → Utility → Funding', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'cc', utilityApprovedId: 'u1', fundingApprovedId: 'f1' });
+    rec.sf.jurisdiction = 'Corpus Christi';
+    rec.sf.utility = 'CenterPoint Energy';
+    const text = buildPostText(rec, defaultSettings(), [ccAhj, util, fund, gen]);
+    const order = ['AHJ Requirements', 'Utility Requirements', 'Funding Requirements'].map((t) => text.indexOf(t));
+    expect(order.every((i) => i > -1)).toBe(true);
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+    // Tags still land last so Slack pings keep working.
+    expect(text.trim().split('\n').at(-1)).toContain('@Tarek Abu Hseini');
+  });
+
+  it('an AHJ-only post is byte-identical to before the split', () => {
+    const rec = norcaRecord({ ahjApprovedId: 'cc' });
+    rec.sf.jurisdiction = 'Corpus Christi';
+    // Adding unrelated boards of other kinds must not change a thing.
+    expect(buildPostText(rec, defaultSettings(), [ccAhj, util, fund, gen])).toBe(
+      buildPostText(rec, defaultSettings(), [ccAhj]),
+    );
+  });
+
+  it('the HTML clipboard version carries the new sections too', () => {
+    const rec = norcaRecord({ utilityApprovedId: 'u1' });
+    rec.sf.utility = 'CenterPoint Energy';
+    expect(buildPostHtml(rec, defaultSettings(), [util])).toContain('Utility Requirements (CenterPoint Energy):');
   });
 });

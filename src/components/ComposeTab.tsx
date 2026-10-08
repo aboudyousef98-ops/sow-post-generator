@@ -5,7 +5,8 @@ import { todayIso } from '../lib/dates';
 import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { titleCaseName } from '../lib/nameCase';
-import { livePosts, matchAhj } from '../lib/ahj';
+import { boardsOfKind, livePosts, matchAhj } from '../lib/ahj';
+import { APPROVAL_FIELD, matchedBoard } from '../lib/template';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
 import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
@@ -213,9 +214,30 @@ export default function ComposeTab({
   // briefly breaks the match doesn't destroy the approval, and reopening a
   // draft keeps whatever the designer decided.
 
-  const ahjMatch = matchAhj(record.sf.jurisdiction, ahjs);
+  // Narrowed to AHJ-kind boards: since 2026-10-08 the same store also holds
+  // Utility / Funding / General boards, and a utility named "Harris" must not
+  // match a Jurisdiction of "Harris".
+  const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
   const ahjPosts = ahjMatch ? livePosts(ahjMatch.ahj) : [];
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
+
+  /** The other two postable kinds, rendered as one compact approval card. */
+  const extraKinds = (['utility', 'funding'] as const)
+    .map((kind) => {
+      const board = matchedBoard(record, ahjs, kind);
+      if (!board) return null;
+      const posts = livePosts(board);
+      const field = APPROVAL_FIELD[kind];
+      return {
+        kind,
+        board,
+        posts,
+        field,
+        label: kind === 'utility' ? 'Utility' : 'Funding',
+        approved: record[field] === board.id,
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null && x.posts.length > 0);
 
   const badge = (fieldName: string) => {
     if (record.sf.source === 'manual') return null;
@@ -514,6 +536,28 @@ export default function ComposeTab({
               onChange={(e) => setSf({ jurisdiction: e.target.value }, 'jurisdiction')}
             />
           </label>
+          {/* Utility. Until now this was filled ONLY by the Salesforce
+              extractor, with no way to set it by hand. It already drives the
+              automatic disconnect duration — a TNMP utility means 4–6 h
+              instead of 1–2 h (disconnectDurationFor, meeting 2026-10-04) —
+              and it is the key Utility requirements will match on (AHJ rules
+              match Jurisdiction; utility rules do not). */}
+          <label className="field">
+            Utility
+            <select
+              value={record.sf.utility ?? ''}
+              onChange={(e) => setSf({ utility: e.target.value || undefined }, 'utility')}
+            >
+              <option value="">—</option>
+              {/* A record saved under a utility later removed from the roster
+                  keeps showing its own value instead of silently blanking. */}
+              {[...new Set([...settings.utilities, ...(record.sf.utility ? [record.sf.utility] : [])])].map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </label>
           {ahjMatch && (
             <div className="ahj-banner">
               <div className="ahj-banner-head">
@@ -564,6 +608,42 @@ export default function ComposeTab({
               </label>
             </div>
           )}
+          {/* Utility and Solrite/Funding requirements (Aboud 2026-10-08).
+              Same approve-by-id contract as the AHJ banner above: changing the
+              Utility away from the approved board silently un-approves it. */}
+          {extraKinds.map(({ kind, board, posts, field, label, approved }) => (
+            <div key={kind} className="ahj-banner">
+              <div className="ahj-banner-head">
+                <strong style={{ color: 'var(--dyn-ink)', fontSize: 14.5 }}>
+                  ⚠ {label} requirements on file — {board.name}
+                </strong>
+                <span style={{ fontSize: 12 }}>
+                  {posts.length} requirement{posts.length === 1 ? '' : 's'}
+                </span>
+              </div>
+              <div className="ahj-banner-posts">
+                {posts.map((p) => (
+                  <div key={p.id} className="ahj-banner-post">
+                    <span className="muted" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                      <strong style={{ color: 'var(--dyn-ink)' }}>{p.by}</strong>
+                      {new Date(p.editedAt ?? p.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </span>
+                    <span style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, color: 'var(--dyn-ink)', fontSize: 13.5 }}>
+                      {p.text}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <label className="ahj-banner-include">
+                <input
+                  type="checkbox"
+                  checked={approved}
+                  onChange={(e) => update((r) => ({ ...r, [field]: e.target.checked ? board.id : undefined }))}
+                />
+                Include {label} requirements in the post
+              </label>
+            </div>
+          ))}
           {record.sf.region === 'OTHER' && (
             <>
               <label className="field">
@@ -814,6 +894,24 @@ export default function ComposeTab({
             </select>
           </label>
         </div>
+      </div>
+
+      {/* Internal notes — the coordinator's scratch pad. The team can read it
+          (it rides the normal record sync) but it NEVER reaches the post and
+          is never sent to the AI. Last card so it stays out of the way. */}
+      <div className="card">
+        <h3>Internal notes</h3>
+        <p className="muted" style={{ marginTop: -4 }}>
+          Only your team sees this — never posted to Slack.
+        </p>
+        <textarea
+          className="internal-notes"
+          rows={4}
+          aria-label="Internal notes"
+          placeholder="Notes to yourself — reminders, who to chase, what is still open."
+          value={record.internalNotes ?? ''}
+          onChange={(e) => update((r) => ({ ...r, internalNotes: e.target.value || undefined }))}
+        />
       </div>
 
         </div>

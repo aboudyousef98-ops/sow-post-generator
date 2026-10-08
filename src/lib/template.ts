@@ -1,7 +1,7 @@
 // Canonical post template + clipboard formats — spec/06-output-template.md.
 
 import type { Ahj, PostRecord, PostValue, Settings } from '../types';
-import { livePosts, matchAhj } from './ahj';
+import { boardsOfKind, livePosts, matchAhj } from './ahj';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
 import { conduitRunLines, installNoteLines } from './installNotes';
@@ -174,10 +174,61 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
  */
 export function ahjSection(record: PostRecord, ahjs: Ahj[] | undefined): { name: string; posts: string[] } | null {
   if (!record.ahjApprovedId || !ahjs?.length) return null;
-  const m = matchAhj(record.sf.jurisdiction, ahjs);
+  const m = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs, 'ahj'));
   if (!m || m.ahj.id !== record.ahjApprovedId) return null;
   const posts = livePosts(m.ahj).map((p) => p.text.trim());
   return posts.length ? { name: m.ahj.name, posts } : null;
+}
+
+/**
+ * The board of each postable kind that currently applies to this record, or
+ * null. Matching is per kind — AHJ on Jurisdiction, Utility on sf.utility,
+ * Funding globally (first live funding board).
+ * `general` is absent on purpose: SOW notes never reach a post.
+ */
+export function matchedBoard(record: PostRecord, ahjs: Ahj[] | undefined, kind: PostableKind): Ahj | null {
+  if (!ahjs?.length) return null;
+  const pool = boardsOfKind(ahjs, kind).filter((a) => !a.deleted);
+  if (kind === 'funding') return pool[0] ?? null; // global — no key to match on
+  const key = kind === 'ahj' ? record.sf.jurisdiction : record.sf.utility;
+  return matchAhj(key, pool)?.ahj ?? null;
+}
+
+export type PostableKind = 'ahj' | 'utility' | 'funding';
+
+/** Which record field holds the approval for each postable kind. */
+export const APPROVAL_FIELD: Record<PostableKind, 'ahjApprovedId' | 'utilityApprovedId' | 'fundingApprovedId'> = {
+  ahj: 'ahjApprovedId',
+  utility: 'utilityApprovedId',
+  funding: 'fundingApprovedId',
+};
+
+const SECTION_TITLE: Record<PostableKind, (name: string) => string> = {
+  ahj: (n) => `AHJ Requirements (${n})`,
+  utility: (n) => `Utility Requirements (${n})`,
+  funding: (n) => `Funding Requirements (${n})`,
+};
+
+/**
+ * Every approved requirement section, always in the order AHJ → Utility →
+ * Funding. A section appears only when its board is still the approved one AND
+ * it has live posts, so switching Jurisdiction or Utility silently drops it —
+ * the same self-un-approving contract AHJ has always had.
+ */
+export function requirementSections(
+  record: PostRecord,
+  ahjs: Ahj[] | undefined,
+): { title: string; posts: string[] }[] {
+  const out: { title: string; posts: string[] }[] = [];
+  for (const kind of ['ahj', 'utility', 'funding'] as PostableKind[]) {
+    const approvedId = record[APPROVAL_FIELD[kind]];
+    if (!approvedId) continue;
+    const board = matchedBoard(record, ahjs, kind);
+    if (!board || board.id !== approvedId) continue;
+    const posts = livePosts(board).map((p) => p.text.trim()).filter(Boolean);
+    if (posts.length) out.push({ title: SECTION_TITLE[kind](board.name), posts });
+  }
+  return out;
 }
 
 /** Slack mrkdwn version (also the plain-text clipboard fallback). Bulleted list. */
@@ -200,11 +251,10 @@ export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj
       }
     }
   }
-  const ahj = ahjSection(record, ahjs);
-  if (ahj) {
-    lines.push(`*AHJ Requirements (${ahj.name}):*`);
+  for (const sec of requirementSections(record, ahjs)) {
+    lines.push(`*${sec.title}:*`);
     // Multi-line posts keep their line breaks, indented under the bullet.
-    lines.push(...ahj.posts.map((t) => `• ${t.split('\n').filter((l) => l.trim()).join('\n   ')}`));
+    lines.push(...sec.posts.map((t) => `• ${t.split('\n').filter((l) => l.trim()).join('\n   ')}`));
   }
   if (tags.length) lines.push(tags.map((t) => `@${t}`).join(' '));
   return lines.join('\n');
@@ -292,12 +342,11 @@ export function buildPostHtml(record: PostRecord, settings: Settings, ahjs?: Ahj
     ),
     '</ul>',
   ];
-  const ahj = ahjSection(record, ahjs);
-  if (ahj) {
+  for (const sec of requirementSections(record, ahjs)) {
     parts.push(
-      `<p><strong>AHJ Requirements (${esc(ahj.name)}):</strong></p>`,
+      `<p><strong>${esc(sec.title)}:</strong></p>`,
       '<ul>',
-      ...ahj.posts.map((t) => `<li>${esc(t).replace(/\n/g, '<br>')}</li>`),
+      ...sec.posts.map((t) => `<li>${esc(t).replace(/\n/g, '<br>')}</li>`),
       '</ul>',
     );
   }

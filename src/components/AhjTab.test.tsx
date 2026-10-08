@@ -4,7 +4,7 @@
 
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../lib/storage';
 import type { Ahj } from '../types';
 import AhjTab from './AhjTab';
@@ -161,5 +161,70 @@ describe('AhjTab', () => {
     expect(screen.getByText(/1 result for/)).toBeTruthy();
     fireEvent.click(screen.getByText('Square D', { selector: 'mark' }));
     expect(screen.getByText('Requirements board').parentElement?.textContent).toContain('Corpus Christi');
+  });
+});
+
+// Export PDF (Aboud 2026-10-08): print-only block, rendered from the same data
+// as the screen so the PDF can never drift from the board.
+describe('Export PDF', () => {
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const board = (over: Partial<Ahj> = {}): Ahj => ({
+    id: 'b1',
+    name: 'Harris County',
+    aliases: ['City of Harris'],
+    posts: [
+      { id: 'p1', text: 'Use Square D for the AC disconnect.', by: 'Aboud Yousef', at: '2026-10-08T09:00:00.000Z', history: [], pinned: false, updatedAt: '2026-10-08T09:00:00.000Z' },
+      { id: 'p2', text: 'A deleted rule.', by: 'Aboud Yousef', at: '2026-10-08T09:00:00.000Z', history: [], pinned: false, updatedAt: '2026-10-08T09:00:00.000Z', deleted: { at: '2026-10-08T10:00:00.000Z', by: 'Aboud Yousef' } },
+    ],
+    updatedAt: '2026-10-08T09:00:00.000Z',
+    schemaVersion: 1,
+    ...over,
+  });
+
+  /** Pick the board from the sidebar (its name also appears in the header). */
+  const selectBoard = () => fireEvent.click(document.querySelector('.ahj-sidebar-item')!);
+  const exportBtn = () => screen.getByRole('button', { name: 'Export PDF' }) as HTMLButtonElement;
+
+  it('is disabled until a board with requirements is selected', () => {
+    render(<Harness initial={[board()]} />);
+    expect(exportBtn().disabled).toBe(true);
+    selectBoard();
+    expect(exportBtn().disabled).toBe(false);
+  });
+
+  it('stays disabled for a board whose only requirement is deleted', () => {
+    render(<Harness initial={[board({ posts: [board().posts[1]] })]} />);
+    selectBoard();
+    expect(exportBtn().disabled).toBe(true);
+  });
+
+  it('the print block exists ONLY while printing — it must not duplicate the page', () => {
+    let snapshot = '';
+    vi.stubGlobal('print', () => {
+      snapshot = document.querySelector('.req-print')?.textContent ?? '';
+    });
+    render(<Harness initial={[board()]} />);
+    selectBoard();
+    expect(document.querySelector('.req-print')).toBeNull(); // not mounted on screen
+    fireEvent.click(exportBtn());
+    expect(snapshot).toContain('Harris County');
+    expect(snapshot).toContain('Use Square D for the AC disconnect.');
+    expect(snapshot).toContain('City of Harris'); // aliases carried over
+    expect(snapshot).not.toContain('A deleted rule.'); // deleted posts omitted
+    expect(document.querySelector('.req-print')).toBeNull(); // unmounted again
+  });
+
+  it('prints with req-printing on the body, and clears it afterwards', () => {
+    const seen: boolean[] = [];
+    vi.stubGlobal('print', () => seen.push(document.body.classList.contains('req-printing')));
+    render(<Harness initial={[board()]} />);
+    selectBoard();
+    fireEvent.click(exportBtn());
+    expect(seen).toEqual([true]);
+    expect(document.body.classList.contains('req-printing')).toBe(false);
   });
 });

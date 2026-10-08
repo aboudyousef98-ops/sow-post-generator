@@ -78,7 +78,9 @@ Salary is stored **locally only** (`sowpost.ewSalary.<username>`), never synced.
 
 ## Pending / owed
 - **Deploy + git commit — Aboud's word only.**
-- Anas Yaghmour + Ya'rob Alnabelsi accounts (Admin → Users) before they can log.
+- ~~Anas Yaghmour + Ya'rob Alnabelsi accounts (Admin → Users) before they can log.~~
+  **Not needed — both accounts already existed** (`ayaghmour`, `yalnabelsi`,
+  created 2026-10-02); verified against the live `sowpost/users` blob 2026-10-08.
 - Old Excel history NOT imported (question was never answered) — October starts
   fresh; an import can be added later.
 - Visual pass on the real phone + Claude Design re-skin feedback loop.

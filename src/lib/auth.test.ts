@@ -4,6 +4,7 @@ import type { TeamUser } from '../types';
 import {
   activeUsers,
   clearSession,
+  extraWorkRoster,
   findUser,
   hashPassword,
   isLastAdmin,
@@ -107,5 +108,57 @@ describe('session + cache storage', () => {
     expect(loadCachedUsers()).toEqual([]);
     saveCachedUsers([user('a')]);
     expect(loadCachedUsers()).toHaveLength(1);
+  });
+});
+
+// Settings.authors is device-local and shipped with only 3 of the 5 real
+// people in it, so Anas and Ya'rob were absent from the Extra Work roster on
+// their own devices (2026-10-08). The roster must come from the synced users
+// blob instead — these tests pin that.
+describe('extraWorkRoster', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('lists every account by display name, alphabetically', () => {
+    saveCachedUsers([
+      user('yalnabelsi', { displayName: "Ya'rob Alnabelsi" }),
+      user('aboudyousef', { displayName: 'Aboud Yousef', role: 'admin' }),
+      user('ayaghmour', { displayName: 'Anas Yaghmour' }),
+    ]);
+    expect(extraWorkRoster()).toEqual(['Aboud Yousef', 'Anas Yaghmour', "Ya'rob Alnabelsi"]);
+  });
+
+  it('excludes deleted users', () => {
+    saveCachedUsers([
+      user('a', { displayName: 'Active One' }),
+      user('b', { displayName: 'Gone', deletedAt: '2026-10-08T00:00:00.000Z' }),
+    ]);
+    expect(extraWorkRoster()).toEqual(['Active One']);
+  });
+
+  it('always includes the signed-in user, even if the cache missed them', () => {
+    saveCachedUsers([user('a', { displayName: 'Active One' })]);
+    expect(extraWorkRoster('Anas Yaghmour')).toEqual(['Active One', 'Anas Yaghmour']);
+  });
+
+  it('never duplicates the signed-in user', () => {
+    saveCachedUsers([user('ayaghmour', { displayName: 'Anas Yaghmour' })]);
+    expect(extraWorkRoster('Anas Yaghmour')).toEqual(['Anas Yaghmour']);
+  });
+
+  it('falls back to the given roster when no users are cached (offline/first run)', () => {
+    expect(extraWorkRoster('', ['Aboud Yousef', 'Omar Rajab'])).toEqual(['Aboud Yousef', 'Omar Rajab']);
+  });
+
+  it('prefers the users blob over the fallback once it exists', () => {
+    saveCachedUsers([user('ayaghmour', { displayName: 'Anas Yaghmour' })]);
+    expect(extraWorkRoster('', ['Aboud Yousef'])).toEqual(['Anas Yaghmour']);
+  });
+
+  it('ignores blank display names and trims', () => {
+    saveCachedUsers([
+      user('a', { displayName: '  Padded Name  ' }),
+      user('b', { displayName: '   ' }),
+    ]);
+    expect(extraWorkRoster()).toEqual(['Padded Name']);
   });
 });

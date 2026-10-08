@@ -4314,6 +4314,20 @@ tr:hover .board-label-cell.empty {
   gap: 12px;
 }
 
+/**
+ * Every child keeps its natural height.
+ *
+ * This is a flex column that scrolls, so its children inherit flex-shrink: 1
+ * and the browser SQUASHES them all once the content is taller than the
+ * screen — then `.m-card { overflow: hidden }` clips the squashed content.
+ * On a short list nothing overflows and it looks fine, which is why it
+ * survived review; on Aboud's phone with 83 drafts every name and level pill
+ * was sliced in half (reported 2026-10-08, Safari/iPhone).
+ */
+.m-list-scroll > * {
+  flex-shrink: 0;
+}
+
 .m-empty {
   padding: 24px 16px;
   text-align: center;
@@ -6003,3 +6017,231 @@ tr:hover .board-label-cell.empty {
   }
 }
 
+
+/* ===========================================================================
+   Board Tier 1 — view presets, group by, aging marker, bulk bar, install date
+   (_STUDY_board_benchmark.md). Additive: nothing above this block changed.
+   =========================================================================== */
+
+/* --- view presets + group by (one calm row above the filter toolbar) ------ */
+.board-presets {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dyn-line);
+  background: var(--dyn-subtle);
+}
+.board-groupby {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--dyn-muted);
+  white-space: nowrap;
+}
+.board-groupby select {
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+  padding: 5px 8px;
+  font: inherit;
+  background: var(--dyn-surface);
+  /* Never inherit width:100% from the global select rule — that is what made
+     the tab strip vanish once before (Phase 8). */
+  width: auto;
+}
+
+/* --- select column + aging marker ---------------------------------------- */
+.board-select-cell {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 16px;
+}
+.board-th-plain {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+}
+.board-aging-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.board-aging-dot.stale {
+  background: var(--dyn-orange);
+}
+.board-aging-dot.overdue {
+  background: var(--dyn-danger);
+}
+/* Tint is deliberately faint — a signal, not an alarm. */
+.board-row-aging-stale td {
+  background: #fffaf3;
+}
+.board-row-aging-overdue td {
+  background: #fdf3f3;
+}
+.board-row-selected td {
+  background: var(--dyn-teal-soft) !important;
+}
+
+/* --- group rows ----------------------------------------------------------- */
+.board-group-row td {
+  background: var(--dyn-subtle);
+  border-top: 1px solid var(--dyn-border);
+  padding: 0 !important;
+}
+.board-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--dyn-navy);
+  cursor: pointer;
+  padding: 9px 12px;
+  text-align: left;
+}
+.board-group-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  flex: none;
+}
+.board-group-title {
+  color: var(--dyn-ink);
+}
+.board-group-row .board-done-count {
+  background: var(--dyn-border);
+  color: var(--dyn-text);
+}
+
+/* --- bulk action bar (sticky, bottom — reachable, never hovering content) -- */
+.board-bulk-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--dyn-navy);
+  border-radius: var(--radius-card, 10px);
+  box-shadow: 0 6px 20px rgb(4 61 79 / 25%);
+}
+.board-bulk-count {
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.board-bulk-bar .btn.small.secondary {
+  background: rgb(255 255 255 / 12%);
+  border-color: rgb(255 255 255 / 30%);
+  color: #fff;
+}
+.board-bulk-bar .btn.small.secondary:hover {
+  background: rgb(255 255 255 / 20%);
+}
+
+/* --- install date (read-only mirror of the linked post) ------------------- */
+/* Mirrors .board-date exactly so the two date columns sit on one baseline —
+   it is NOT a button, because this value is owned by Compose. */
+.board-install-cell {
+  display: block;
+  width: 100%;
+  padding: 2px 0;
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: default;
+}
+.board-install-cell.empty {
+  color: var(--dyn-muted);
+}
+.board-install-cell.past {
+  color: var(--dyn-danger);
+  font-weight: 600;
+}
+
+/* Internal notes (Compose) — the coordinator's scratch pad, never posted. */
+.internal-notes {
+  width: 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+  font: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* Requirements board → PDF (Aboud 2026-10-08). Same technique as .ew-print:
+   visibility toggling, NOT display:none on ancestors — that blanked the
+   nested report once already (2026-10-07). */
+.req-print {
+  display: none;
+}
+
+@media print {
+  body.req-printing * {
+    visibility: hidden;
+  }
+  body.req-printing .req-print,
+  body.req-printing .req-print * {
+    visibility: visible;
+  }
+  body.req-printing .req-print {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    padding: 0 8px;
+    box-sizing: border-box;
+    color: #111;
+  }
+  /* The invisible app would still occupy pages — collapse it. */
+  body.req-printing #root {
+    height: 0;
+    overflow: hidden;
+  }
+  .req-print h1 {
+    font-size: 18px;
+    margin: 0 0 4px;
+  }
+  .req-print-meta {
+    font-size: 11px;
+    color: #555;
+    margin: 0 0 14px;
+    border-bottom: 1px solid #ccc;
+    padding-bottom: 8px;
+  }
+  .req-print-list {
+    margin: 0;
+    padding-left: 18px;
+    font-size: 12px;
+  }
+  .req-print-list li {
+    /* Never split one requirement across two pages. */
+    break-inside: avoid;
+    page-break-inside: avoid;
+    margin-bottom: 12px;
+  }
+  .req-print-text {
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  .req-print-byline {
+    font-size: 10px;
+    color: #666;
+    margin-top: 3px;
+  }
+}

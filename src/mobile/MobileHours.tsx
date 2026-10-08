@@ -9,6 +9,7 @@
 
 import { useMemo, useState } from 'react';
 import type { DayType, ExtraWorkEntry, ExtraWorkState } from '../extrawork/types';
+import { loadCachedUsers } from '../lib/auth';
 import { isoToUs, parseIsoLocal, todayIso, weekdayName } from '../lib/dates';
 import {
   canEditEntry,
@@ -144,14 +145,24 @@ export default function MobileHours({ state, setState, me, myUsername, isAdmin, 
     const auto = dayTypeFor(form.date, null);
     const effective: DayType = form.type || auto;
     const overridden = form.type !== '' && form.type !== auto;
-    const logged = new Set(liveEntries(state.entries).filter((e) => e.person === me).map((e) => e.dateIso));
+    /**
+     * WHO the entry belongs to. An admin who has drilled into a teammate's log
+     * is logging FOR that teammate — this used to be hardcoded to the signed-in
+     * user, so an admin's entries silently landed on their own log instead
+     * (found by review, 2026-10-08). Members can only ever log for themselves,
+     * the same rule the desktop tab applies.
+     */
+    const target = isAdmin ? (who || me) : me;
+    const targetUsername =
+      target === me ? myUsername : (loadCachedUsers().find((u) => u.displayName === target)?.username ?? '');
+    const logged = new Set(liveEntries(state.entries).filter((e) => e.person === target).map((e) => e.dateIso));
     // 14-day strip, today first (Aboud: "order the strip today → oldest").
     const strip = Array.from({ length: 14 }, (_, i) => addDays(today, -i));
     const valid = !!form.desc.trim() && isValidHours(form.hours);
 
     const chips = (() => {
       const past = liveEntries(state.entries)
-        .filter((e) => e.person === me)
+        .filter((e) => e.person === target)
         .sort((a, b) => b.dateIso.localeCompare(a.dateIso));
       const seen: string[] = [];
       for (const e of past) {
@@ -172,7 +183,7 @@ export default function MobileHours({ state, setState, me, myUsername, isAdmin, 
         return;
       }
       const entry = newEntry(
-        { username: myUsername, person: me },
+        { username: targetUsername, person: target },
         {
           dateIso: form.date,
           hours: form.hours,
@@ -184,7 +195,7 @@ export default function MobileHours({ state, setState, me, myUsername, isAdmin, 
       setFormOpen(false);
       setForm({ date: today, type: '', hours: 2, desc: '' });
       setMonth(monthKey(entry.dateIso));
-      setWho(me);
+      setWho(target);
       setView('mine');
       // Undo tombstones rather than filters, so the removal survives sync.
       toast(`Logged ${entry.hours} h on ${isoToUs(entry.dateIso)}.`, {

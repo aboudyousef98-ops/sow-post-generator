@@ -10,18 +10,20 @@ import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
 import UsersTab from './components/UsersTab';
 import { Toasts, type Toast } from './components/Toast';
+import { extraWorkRoster, saveCachedUsers } from './lib/auth';
 import {
   fetchSharedAhjs,
   fetchSharedBoard,
   fetchSharedExtraWork,
   fetchSharedRecords,
+  fetchSharedUsers,
   health,
   putSharedAhjs,
   putSharedBoard,
   putSharedExtraWork,
   putSharedRecords,
 } from './lib/api';
-import { mergeAhjs } from './lib/ahj';
+import { boardsOfKind, mergeAhjs, replaceKind } from './lib/ahj';
 import { linkedPosts, mergeBoard } from './lib/board';
 import { mergeExtraWork } from './lib/extraWork';
 import type { ExtraWorkEntry, ExtraWorkState } from './extrawork/types';
@@ -48,7 +50,7 @@ import {
   saveSettings,
 } from './lib/storage';
 import { buildPostHtml, buildPostText } from './lib/template';
-import type { Ahj, PostRecord, Session, Settings } from './types';
+import type { Ahj, PostRecord, RequirementKind, Session, Settings } from './types';
 
 // Phase 9: two-level navigation. The flat Tab union stays (every old
 // setTab('compose') call site still works); each tab belongs to a main group
@@ -59,11 +61,14 @@ type Tab =
   | 'drafts'
   | 'history'
   | 'ahj'
+  | 'utility'
+  | 'funding'
+  | 'sownotes'
   | 'extrawork'
   | 'settings'
   | 'users'
   | 'progress';
-type MainTab = 'board' | 'compose' | 'ahj' | 'extrawork' | 'admin';
+type MainTab = 'board' | 'compose' | 'ahj' | 'sownotes' | 'extrawork' | 'admin';
 
 const MAIN_OF: Record<Tab, MainTab> = {
   board: 'board',
@@ -71,10 +76,52 @@ const MAIN_OF: Record<Tab, MainTab> = {
   drafts: 'compose',
   history: 'compose',
   ahj: 'ahj',
+  utility: 'ahj',
+  funding: 'ahj',
+  sownotes: 'sownotes',
   extrawork: 'extrawork',
   settings: 'admin',
   users: 'admin',
   progress: 'admin',
+};
+
+/** Which requirement kind each board tab edits. */
+const TAB_KIND = {
+  ahj: 'ahj',
+  utility: 'utility',
+  funding: 'funding',
+  sownotes: 'general',
+} as const satisfies Record<string, RequirementKind>;
+
+const KIND_LABELS: Record<
+  RequirementKind,
+  { heading: string; itemNoun: string; itemPlural: string; subtitle: string }
+> = {
+  ahj: {
+    heading: 'AHJ Requirements',
+    itemNoun: 'AHJ',
+    itemPlural: 'AHJs',
+    subtitle: 'Compose shows a board automatically when the Jurisdiction matches',
+  },
+  utility: {
+    heading: 'Utility Requirements',
+    itemNoun: 'Utility',
+    itemPlural: 'Utilities',
+    subtitle: 'Compose shows a board automatically when the Utility matches',
+  },
+  funding: {
+    heading: 'Solrite / Funding Requirements',
+    itemNoun: 'Funding source',
+    itemPlural: 'Funding sources',
+    subtitle: 'Offered on every project — no matching needed',
+  },
+  // Team reference only — never reaches a post (Aboud 2026-10-08).
+  general: {
+    heading: 'SOW General Notes',
+    itemNoun: 'Note group',
+    itemPlural: 'Note groups',
+    subtitle: 'Shared reference for the team — never added to a post',
+  },
 };
 
 /** Where each main tab lands when clicked directly. */
@@ -82,6 +129,7 @@ const MAIN_HOME: Record<MainTab, Tab> = {
   board: 'board',
   compose: 'compose',
   ahj: 'ahj',
+  sownotes: 'sownotes',
   extrawork: 'extrawork',
   admin: 'settings',
 };
@@ -104,6 +152,43 @@ export default function App({ session, onLogout }: AppProps = {}) {
   const [tab, setTab] = useState<Tab>(session ? 'board' : 'compose');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const isMobile = useIsMobile();
+  // Extra Work lists everyone with an ACCOUNT, not Settings.authors — that list
+  // is device-local, so Anas and Ya'rob were missing from their own hours
+  // screen (2026-10-08). See extraWorkRoster().
+  //
+  // `usersStamp` is bumped whenever the shared user list is refetched. Without
+  // it this memo would never recompute: extraWorkRoster() reads localStorage,
+  // which React cannot track, so a member kept whatever roster existed at their
+  // last LOGIN — sessions never expire, so that could be weeks stale and a
+  // reload did not fix it (found by review, 2026-10-08).
+  const [usersStamp, setUsersStamp] = useState(0);
+  const ewRoster = useMemo(
+    () => extraWorkRoster(session?.displayName, settings.authors),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session?.displayName, settings.authors, usersStamp],
+  );
+
+  // Refresh the shared roster on mount and whenever the tab regains focus.
+  // Deliberately NOT on the 15 s poll — the team list changes a few times a
+  // year, unlike the board.
+  useEffect(() => {
+    if (!session) return;
+    const pullUsers = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchSharedUsers()
+        .then((users) => {
+          if (users.length === 0) return; // never cache an empty roster over a good one
+          saveCachedUsers(users);
+          setUsersStamp((n) => n + 1);
+        })
+        .catch(() => {
+          /* offline — the cached roster from login still works */
+        });
+    };
+    pullUsers();
+    window.addEventListener('focus', pullUsers);
+    return () => window.removeEventListener('focus', pullUsers);
+  }, [session]);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'off'>('checking');
   const [syncStatus, setSyncStatus] = useState<'checking' | 'synced' | 'local'>('checking');
 
@@ -644,6 +729,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
           setAhjs={setAhjs}
           extraWork={extraWork}
           setExtraWork={setExtraWork}
+          ewRoster={ewRoster}
           markPostedById={markPostedById}
           duplicateDraft={duplicateDraft}
           deleteRecord={deleteRecord}
@@ -665,7 +751,8 @@ export default function App({ session, onLogout }: AppProps = {}) {
             [
               ['board', 'Board'],
               ['compose', 'Compose'],
-              ['ahj', 'AHJ Requirements'],
+              ['ahj', 'Requirements'],
+              ['sownotes', 'SOW Notes'],
               ['extrawork', 'Extra Work'],
               // Admin is visible to admins (and to the gateless test render).
               ...(!session || session.role === 'admin' ? [['admin', 'Admin'] as [MainTab, string]] : []),
@@ -735,7 +822,32 @@ export default function App({ session, onLogout }: AppProps = {}) {
         )}
       </header>
 
-      {/* Sub strip for the active main tab (AHJ has no sub-tabs). */}
+      {/* Requirements: one sub-tab per kind. Each is the SAME board UI over a
+          different slice of the `ahjs` store — see _PLAN_requirements_split.md. */}
+      {MAIN_OF[tab] === 'ahj' && (
+        <nav className="subnav">
+          {(
+            [
+              ['ahj', 'AHJ'],
+              ['utility', 'Utility'],
+              ['funding', 'Solrite / Funding'],
+            ] as [Tab, string][]
+          ).map(([key, label]) => (
+            <button
+              key={key}
+              className={tab === key ? 'active' : ''}
+              onClick={() => {
+                setTab(key);
+                setAhjSelectedId(null); // ids are per-kind; keeping one would select nothing
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
+
+      {/* Sub strip for the active main tab. */}
       {MAIN_OF[tab] === 'compose' && (
         <nav className="subnav">
           {(
@@ -804,16 +916,25 @@ export default function App({ session, onLogout }: AppProps = {}) {
             onOpenBoard={openBoardAt}
           />
         )}
-        {tab === 'ahj' && (
+        {(['ahj', 'utility', 'funding', 'sownotes'] as const).includes(
+          tab as 'ahj' | 'utility' | 'funding' | 'sownotes',
+        ) && (
           <AhjTab
-            ahjs={ahjs}
-            setAhjs={setAhjs}
+            // Keyed so switching kind remounts with clean local state rather
+            // than carrying the previous kind's search/composer across.
+            key={tab}
+            ahjs={boardsOfKind(ahjs, TAB_KIND[tab as keyof typeof TAB_KIND])}
+            setAhjs={(next) => setAhjs(replaceKind(ahjs, TAB_KIND[tab as keyof typeof TAB_KIND], next))}
             selectedId={ahjSelectedId}
             onSelect={setAhjSelectedId}
             settings={settings}
             setSettings={setSettings}
             toast={toast}
             lockedAuthor={session?.displayName}
+            heading={KIND_LABELS[TAB_KIND[tab as keyof typeof TAB_KIND]].heading}
+            itemNoun={KIND_LABELS[TAB_KIND[tab as keyof typeof TAB_KIND]].itemNoun}
+            itemPlural={KIND_LABELS[TAB_KIND[tab as keyof typeof TAB_KIND]].itemPlural}
+            subtitle={KIND_LABELS[TAB_KIND[tab as keyof typeof TAB_KIND]].subtitle}
           />
         )}
         {tab === 'extrawork' && (
@@ -823,7 +944,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
             me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
             myUsername={session?.username ?? ''}
             isAdmin={!session || session.role === 'admin'}
-            roster={settings.authors}
+            roster={ewRoster}
             toast={toast}
           />
         )}

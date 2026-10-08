@@ -4,7 +4,7 @@
 // Kept dependency-free so the Netlify function (`ahjs.mts`) can import the
 // same merge the client uses — one merge algorithm, tested once.
 
-import type { Ahj, AhjPost } from '../types';
+import type { Ahj, AhjPost, RequirementKind } from '../types';
 
 /** Case/whitespace-insensitive canonical form of a jurisdiction name. */
 export function normName(s: string): string {
@@ -17,7 +17,39 @@ export interface AhjMatch {
   via: string;
 }
 
-/** Match free-text Jurisdiction (from Salesforce) against live AHJ names/aliases. */
+/**
+ * A board's kind. ABSENT means 'ahj' — every board created before 2026-10-08
+ * predates the split and must keep landing in the AHJ tab.
+ */
+export function kindOf(a: Ahj): RequirementKind {
+  return a.kind ?? 'ahj';
+}
+
+/** Live boards of one kind, in their stored order. */
+export function boardsOfKind(ahjs: Ahj[], kind: RequirementKind): Ahj[] {
+  return ahjs.filter((a) => kindOf(a) === kind);
+}
+
+/**
+ * Replace every board of ONE kind, leaving the other kinds untouched.
+ *
+ * The Requirements tab is rendered per kind, so it only ever receives (and
+ * returns) its own slice. Writing that slice straight back would delete every
+ * other kind — this stitches it back together and stamps the kind on anything
+ * newly created.
+ */
+export function replaceKind(all: Ahj[], kind: RequirementKind, next: Ahj[]): Ahj[] {
+  const stamped = next.map((a) => (kindOf(a) === kind ? { ...a, kind } : { ...a, kind }));
+  return [...all.filter((a) => kindOf(a) !== kind), ...stamped];
+}
+
+/**
+ * Match a free-text key against live board names/aliases.
+ *
+ * `ahjs` must already be narrowed to ONE kind — matching is per kind, since an
+ * AHJ named "Harris County" and a utility named "Harris Electric" live in the
+ * same store.
+ */
 export function matchAhj(jurisdiction: string | undefined, ahjs: Ahj[]): AhjMatch | null {
   const n = normName(jurisdiction ?? '');
   if (!n) return null;

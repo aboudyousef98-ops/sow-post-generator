@@ -3,6 +3,7 @@
 // pin, inline edit with full version history, tombstone Trash with restore.
 
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
   ahjLastActivity,
   clip,
@@ -24,6 +25,18 @@ interface Props {
   toast: (text: string, action?: Toast['action']) => void;
   /** Phase 9: when signed in, the session name is the author — no picker. */
   lockedAuthor?: string;
+  /**
+   * Which requirement kind this instance edits (Aboud 2026-10-08). The parent
+   * passes ONLY this kind's boards and a setter that stitches them back, so
+   * the other kinds can never be clobbered — see lib/ahj.ts `replaceKind`.
+   */
+  heading?: string;
+  /** Singular noun for this kind: "AHJ", "Utility", "Funding source", "Note group". */
+  itemNoun?: string;
+  /** Plural of itemNoun — given explicitly because "Utilitys" is not a word. */
+  itemPlural?: string;
+  /** One line under the heading explaining how this kind reaches a post. */
+  subtitle?: string;
 }
 
 const fmt = (iso: string) =>
@@ -43,7 +56,20 @@ const parseAliases = (s: string) => s.split('\n').map((x) => x.trim()).filter(Bo
 
 type Modal = null | 'add' | 'rename' | 'delete' | 'history';
 
-export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, setSettings, toast, lockedAuthor }: Props) {
+export default function AhjTab({
+  ahjs,
+  setAhjs,
+  selectedId,
+  onSelect,
+  settings,
+  setSettings,
+  toast,
+  lockedAuthor,
+  heading = 'AHJ Requirements',
+  itemNoun = 'AHJ',
+  itemPlural = `${itemNoun}s`,
+  subtitle = 'Compose shows a board automatically when the Jurisdiction matches',
+}: Props) {
   const author = lockedAuthor ?? settings.lastAuthor ?? settings.authors[0] ?? '';
 
   const [globalQuery, setGlobalQuery] = useState('');
@@ -61,6 +87,8 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
   const [histIndex, setHistIndex] = useState(0);
   const [trashOpen, setTrashOpen] = useState(false);
   const [flashId, setFlashId] = useState<string | null>(null);
+  /** True only during the print call — see printPdf(). */
+  const [printing, setPrinting] = useState(false);
 
   const pickerInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -163,7 +191,7 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
       return true;
     });
     if (!name) {
-      setFormError('Enter an AHJ name.');
+      setFormError(`Enter a ${itemNoun} name.`);
       return;
     }
     const c = nameConflict([name, ...aliases], ahjs, modal === 'rename' ? (selectedId ?? undefined) : undefined);
@@ -300,14 +328,50 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
     : [];
   const histView = versions[histIndex] ?? versions[0];
 
+  /**
+   * Print the selected board to PDF (Aboud 2026-10-08).
+   *
+   * Same technique as the Extra Work report: a print-only block plus
+   * `visibility` toggling. It must NOT be `display:none` on the ancestors —
+   * hiding an ancestor that way blanked the nested report once already
+   * (Aboud 2026-10-07).
+   */
+  const printPdf = () => {
+    if (!sel || livePosts(sel).length === 0) {
+      toast('Nothing to export on this board yet.');
+      return;
+    }
+    // Mounted ONLY while printing. Leaving it in the DOM permanently would
+    // duplicate every requirement for screen readers (and for any query that
+    // looks the page up by text).
+    flushSync(() => setPrinting(true));
+    document.body.classList.add('req-printing');
+    const done = () => {
+      document.body.classList.remove('req-printing');
+      setPrinting(false);
+    };
+    window.addEventListener('afterprint', done, { once: true });
+    window.print();
+    done();
+  };
+
   // ---- render ---------------------------------------------------------------
 
   return (
     <div className="ahj-page">
       <div className="list-head">
-        <h1>AHJ Requirements</h1>
-        <span className="muted">Compose shows a board automatically when the Jurisdiction matches</span>
+        <h1>{heading}</h1>
+        <span className="muted">{subtitle}</span>
         <span style={{ flex: 1 }} />
+        <button
+          type="button"
+          className="btn secondary"
+          disabled={!sel || livePosts(sel).length === 0}
+          title={sel ? `Print ${sel.name} to PDF` : `Pick a ${itemNoun} first`}
+          onClick={printPdf}
+        >
+          Export PDF
+        </button>
         <button
           type="button"
           className="btn primary"
@@ -319,7 +383,7 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
             setFormError('');
           }}
         >
-          + Add AHJ
+          + Add {itemNoun}
         </button>
       </div>
 
@@ -336,8 +400,8 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
                 setPickerQuery(e.target.value);
                 setGlobalQuery(e.target.value);
               }}
-              placeholder="Search AHJs and posts…"
-              aria-label="Search AHJs and posts"
+              placeholder={`Search ${itemPlural} and posts…`}
+              aria-label={`Search ${itemPlural} and posts`}
             />
           </div>
           <div className="sort-toggle ahj-sidebar-sort">
@@ -461,7 +525,7 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
                 Rename / aliases
               </button>
               <button type="button" className="btn danger small" onClick={() => setModal('delete')}>
-                Move AHJ to Trash
+                Move {itemNoun} to Trash
               </button>
             </div>
           </div>
@@ -770,6 +834,34 @@ export default function AhjTab({ ahjs, setAhjs, selectedId, onSelect, settings, 
               </div>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Print-only. Hidden on screen; `body.req-printing` makes it the only
+          visible thing on the page. Rendered from the SAME data the screen
+          shows, so the PDF can never drift from the board. */}
+      {printing && sel && (
+        <div className="req-print">
+          <h1>
+            {heading} — {sel.name}
+          </h1>
+          <p className="req-print-meta">
+            {sel.aliases.length > 0 && <>Also known as: {sel.aliases.join(', ')} · </>}
+            {livePosts(sel).length} requirement{livePosts(sel).length === 1 ? '' : 's'} · Exported{' '}
+            {fmtShort(new Date().toISOString())}
+          </p>
+          <ol className="req-print-list">
+            {livePosts(sel).map((p) => (
+              <li key={p.id}>
+                <div className="req-print-text">{p.text}</div>
+                <div className="req-print-byline">
+                  {p.pinned ? 'Pinned · ' : ''}
+                  {lastBy(p)} · {fmtShort(lastAct(p))}
+                  {p.editedAt ? ' · edited' : ''}
+                </div>
+              </li>
+            ))}
+          </ol>
         </div>
       )}
     </div>

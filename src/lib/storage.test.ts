@@ -1,8 +1,9 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
-import type { ExportFile, PostRecord } from '../types';
+import type { ExportFile, PostRecord, Settings } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
 import { emptyInstallNotes } from './installNotes';
-import { defaultSettings, exportFileName, mergeImport, mergeRecords, migrateRecord } from './storage';
+import { defaultSettings, exportFileName, loadSettings, mergeImport, mergeRecords, migrateRecord } from './storage';
 
 function rec(id: string, updatedAt: string, customer: string): PostRecord {
   return makeRecord({
@@ -173,3 +174,27 @@ describe('migrateRecord — malformed records never reach the UI', () => {
     expect(migrateRecord(good)).toBe(good);
   });
 })
+
+// Utility picker (2026-10-08). sf.utility already existed and was filled ONLY
+// by the Salesforce extractor; Compose now offers it from Settings.utilities.
+describe('utilities roster', () => {
+  it('ships a starter list', () => {
+    expect(defaultSettings().utilities).toContain('CenterPoint Energy');
+    expect(defaultSettings().utilities).toContain('TNMP');
+  });
+
+  it('settings stored before the roster existed still get it (no migration needed)', () => {
+    const old = { ...defaultSettings() } as Partial<Settings>;
+    delete old.utilities;
+    localStorage.setItem('sowpost.settings', JSON.stringify(old));
+    expect(loadSettings().utilities).toEqual(defaultSettings().utilities);
+  });
+
+  it('an edited roster wins over the default', () => {
+    localStorage.setItem(
+      'sowpost.settings',
+      JSON.stringify({ ...defaultSettings(), utilities: ['Oncor'] }),
+    );
+    expect(loadSettings().utilities).toEqual(['Oncor']);
+  });
+});

@@ -35,7 +35,21 @@ import {
   type LinkedPosts,
   type ProjectPatch,
 } from '../lib/board';
-import { relativeTime } from '../lib/dates';
+import {
+  GROUP_OPTIONS,
+  NO_FILTERS,
+  agingState,
+  agingTitle,
+  groupProjects,
+  installDateOf,
+  isPresetActive,
+  selectedRows,
+  viewPresets,
+  type AgingState,
+  type Filters,
+  type GroupKey,
+} from '../lib/boardViews';
+import { relativeTime, isoToUs, todayIso } from '../lib/dates';
 import type { PostRecord } from '../types';
 import type { Toast } from '../components/Toast';
 import type { BoardActivity, BoardLabel, BoardProject, BoardState, LabelColumnKey } from './types';
@@ -48,29 +62,10 @@ const KEY_WIDTHS = 'sowpost.board.colWidths.v1';
 const KEY_VISIBILITY = 'sowpost.board.colVisibility.v1';
 const KEY_FILTERS = 'sowpost.board.filters.v1';
 const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
+const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
 
-interface Filters {
-  search: string;
-  coordinators: string[];
-  statusIds: string[];
-  phaseIds: string[];
-  mine: boolean;
-  showArchived: boolean;
-  /** Designed-date range, ISO 'YYYY-MM-DD' ('' = no bound). */
-  dateFrom: string;
-  dateTo: string;
-}
-
-const NO_FILTERS: Filters = {
-  search: '',
-  coordinators: [],
-  statusIds: [],
-  phaseIds: [],
-  mine: false,
-  showArchived: false,
-  dateFrom: '',
-  dateTo: '',
-};
+// Filters / NO_FILTERS now live in lib/boardViews so the view presets can be
+// unit-tested without a DOM.
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -98,17 +93,23 @@ interface Props {
   onFocusHandled?: () => void;
 }
 
-/** Multi-select checkbox filter in a popover (coordinator / status / phase). */
+/**
+ * Multi-select checkbox filter in a popover (coordinator / status / phase).
+ * `single` turns it into a pick-one-and-close menu, which is what the bulk
+ * action bar needs — one tap applies, no "Apply" button to hunt for.
+ */
 function FilterSelect({
   label,
   options,
   selected,
   onChange,
+  single = false,
 }: {
   label: string;
   options: { id: string; name: string }[];
   selected: string[];
   onChange: (ids: string[]) => void;
+  single?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -123,19 +124,34 @@ function FilterSelect({
       }
     >
       <div className="board-menu">
-        {options.map((o) => (
-          <label key={o.id} className="board-menu-item">
-            <input
-              type="checkbox"
-              checked={selected.includes(o.id)}
-              onChange={(e) =>
-                onChange(e.target.checked ? [...selected, o.id] : selected.filter((x) => x !== o.id))
-              }
-            />
-            {o.name}
-          </label>
-        ))}
-        {selected.length > 0 && (
+        {options.length === 0 && <span className="board-menu-item muted">Nothing to pick</span>}
+        {options.map((o) =>
+          single ? (
+            <button
+              key={o.id}
+              type="button"
+              className="board-menu-item"
+              onClick={() => {
+                setOpen(false);
+                onChange([o.id]);
+              }}
+            >
+              {o.name}
+            </button>
+          ) : (
+            <label key={o.id} className="board-menu-item">
+              <input
+                type="checkbox"
+                checked={selected.includes(o.id)}
+                onChange={(e) =>
+                  onChange(e.target.checked ? [...selected, o.id] : selected.filter((x) => x !== o.id))
+                }
+              />
+              {o.name}
+            </label>
+          ),
+        )}
+        {!single && selected.length > 0 && (
           <button type="button" className="board-menu-item muted" onClick={() => onChange([])}>
             Clear
           </button>
@@ -223,6 +239,12 @@ function BodyInner({
   drag,
   onRowPointerDown,
   onRowClickCapture,
+  groupBy = 'none',
+  labels = [],
+  collapsed = {},
+  onToggleGroup,
+  agingOf,
+  selectedIds,
 }: {
   table: TanTable<BoardProject>;
   highlightId: string | null;
@@ -230,39 +252,105 @@ function BodyInner({
   drag?: RowDrag | null;
   onRowPointerDown?: (e: ReactPointerEvent<HTMLTableSectionElement>) => void;
   onRowClickCapture?: (e: ReactMouseEvent<HTMLTableSectionElement>) => void;
+  groupBy?: GroupKey;
+  labels?: BoardLabel[];
+  collapsed?: Record<string, boolean>;
+  onToggleGroup?: (key: string) => void;
+  agingOf?: (p: BoardProject) => AgingState;
+  selectedIds?: Record<string, boolean>;
 }) {
   const rows = table.getRowModel().rows;
+
+  const rowClass = (row: (typeof rows)[number], i: number) =>
+    [
+      row.original.archivedAt ? 'board-row-archived' : '',
+      row.original.id === highlightId ? 'board-row-highlight' : '',
+      selectedIds?.[row.original.id] ? 'board-row-selected' : '',
+      agingOf ? `board-row-aging-${agingOf(row.original)}` : '',
+      drag && drag.id === row.original.id ? 'board-row-dragging' : '',
+      drag && drag.overIndex === i ? 'board-drop-before' : '',
+      drag && drag.overIndex === rows.length && i === rows.length - 1 ? 'board-drop-after' : '',
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+  const cells = (row: (typeof rows)[number]) =>
+    row.getVisibleCells().map((cell) => (
+      <td
+        key={cell.id}
+        className={cell.column.id === 'name' ? 'board-sticky' : ''}
+        style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
+      >
+        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+      </td>
+    ));
+
+  if (groupBy === 'none') {
+    return (
+      <tbody onPointerDown={onRowPointerDown} onClickCapture={onRowClickCapture}>
+        {rows.map((row, i) => (
+          <tr key={row.id} data-project-id={row.original.id} className={rowClass(row, i)}>
+            {cells(row)}
+          </tr>
+        ))}
+      </tbody>
+    );
+  }
+
+  // Group the rows the table already sorted, so sort order survives grouping.
+  const byId = new Map(rows.map((r) => [r.original.id, r]));
+  const groups = groupProjects(
+    rows.map((r) => r.original),
+    groupBy,
+    labels,
+  );
+  const colSpan = table.getVisibleLeafColumns().length;
+
   return (
-    <tbody onPointerDown={onRowPointerDown} onClickCapture={onRowClickCapture}>
-      {rows.map((row, i) => (
-        <tr
-          key={row.id}
-          data-project-id={row.original.id}
-          className={[
-            row.original.archivedAt ? 'board-row-archived' : '',
-            row.original.id === highlightId ? 'board-row-highlight' : '',
-            drag && drag.id === row.original.id ? 'board-row-dragging' : '',
-            drag && drag.overIndex === i ? 'board-drop-before' : '',
-            drag && drag.overIndex === rows.length && i === rows.length - 1 ? 'board-drop-after' : '',
-          ].join(' ')}
-        >
-          {row.getVisibleCells().map((cell) => (
-            <td
-              key={cell.id}
-              className={cell.column.id === 'name' ? 'board-sticky' : ''}
-              style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
-            >
-              {flexRender(cell.column.columnDef.cell, cell.getContext())}
-            </td>
-          ))}
-        </tr>
-      ))}
-    </tbody>
+    <>
+      {groups.map((g) => {
+        const shut = Boolean(collapsed[g.key]);
+        return (
+          <tbody key={g.key} className="board-group" onClickCapture={onRowClickCapture}>
+            <tr className="board-group-row">
+              <td colSpan={colSpan}>
+                <button
+                  type="button"
+                  className="board-group-head"
+                  aria-expanded={!shut}
+                  onClick={() => onToggleGroup?.(g.key)}
+                >
+                  <span className={`board-done-caret ${shut ? '' : 'open'}`}>▸</span>
+                  {g.color && <span className="board-group-swatch" style={{ background: g.color }} />}
+                  <span className="board-group-title">{g.title}</span>
+                  <span className="board-done-count">{g.rows.length}</span>
+                </button>
+              </td>
+            </tr>
+            {!shut &&
+              g.rows.map((p) => {
+                const row = byId.get(p.id);
+                if (!row) return null;
+                return (
+                  <tr key={row.id} data-project-id={p.id} className={rowClass(row, -1)}>
+                    {cells(row)}
+                  </tr>
+                );
+              })}
+          </tbody>
+        );
+      })}
+    </>
   );
 }
 const MemoBody = memo(
   BodyInner,
-  (prev, next) => prev.table.options.data === next.table.options.data && prev.drag === next.drag,
+  (prev, next) =>
+    prev.table.options.data === next.table.options.data &&
+    prev.drag === next.drag &&
+    prev.groupBy === next.groupBy &&
+    prev.collapsed === next.collapsed &&
+    prev.selectedIds === next.selectedIds,
 ) as typeof BodyInner;
 
 export default function BoardTab({
@@ -293,6 +381,15 @@ export default function BoardTab({
   // Completed section: out of sight by default, one click away.
   const [doneOpen, setDoneOpen] = useState(() => localStorage.getItem(KEY_DONE_OPEN) === '1');
   const addRef = useRef<HTMLInputElement>(null);
+  // Tier 1: group by, collapsed groups, and bulk selection.
+  const [groupBy, setGroupBy] = useState<GroupKey>(
+    () => (localStorage.getItem(KEY_GROUP_BY) as GroupKey | null) ?? 'none',
+  );
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
+  // Fixed for the lifetime of the render pass, so every row is aged against
+  // the same "today" (and a test can't straddle midnight).
+  const today = todayIso();
 
   // Persist viewer preferences (D7: per-browser, never shared).
   useEffect(() => {
@@ -308,6 +405,9 @@ export default function BoardTab({
   useEffect(() => {
     localStorage.setItem(KEY_DONE_OPEN, doneOpen ? '1' : '0');
   }, [doneOpen]);
+  useEffect(() => {
+    localStorage.setItem(KEY_GROUP_BY, groupBy);
+  }, [groupBy]);
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -343,6 +443,19 @@ export default function BoardTab({
     return map;
   }, [records]);
 
+  /**
+   * projectId → install date, mirrored READ-ONLY from the linked post.
+   * The board never writes back to Compose (Aboud's locked rule, 2026-10-02).
+   */
+  const installByProject = useMemo(() => {
+    const map = new Map<string, string | null>();
+    for (const [id, lp] of postsByProject) map.set(id, installDateOf(lp));
+    return map;
+  }, [postsByProject]);
+
+  const agingFor = (p: BoardProject): AgingState =>
+    agingState(p, installByProject.get(p.id) ?? null, today);
+
   // ---- writes ---------------------------------------------------------------
 
   /** One-field optimistic write + activity entry. Single source of mutation. */
@@ -354,6 +467,42 @@ export default function BoardTab({
       ...cur,
       projects: cur.projects.map((p) => (p.id === project.id ? next : p)),
       activity: entry ? [entry, ...cur.activity] : cur.activity,
+    });
+  };
+
+  /**
+   * One patch across many rows in ONE write. Calling applyPatch in a loop would
+   * lose every change but the last — boardRef only catches up on re-render.
+   * Undo restores each row's own previous value, not a single shared one.
+   */
+  const bulkApply = (rows: BoardProject[], patch: ProjectPatch, describe: string) => {
+    if (rows.length === 0) return;
+    const cur = boardRef.current;
+    const now = new Date().toISOString();
+    const ids = new Set(rows.map((r) => r.id));
+    const entries = rows
+      .map((r) => activityForPatch(r, patch, me, cur.labels))
+      .filter((e): e is BoardActivity => Boolean(e));
+    setBoard({
+      ...cur,
+      projects: cur.projects.map((p) => (ids.has(p.id) ? patchProject(p, patch, me, now) : p)),
+      activity: [...entries, ...cur.activity],
+    });
+    const field = Object.keys(patch)[0] as keyof BoardProject;
+    const previous = rows.map((r) => ({ id: r.id, value: r[field] }));
+    toast(`${rows.length} project${rows.length === 1 ? '' : 's'} → ${describe}.`, {
+      label: 'Undo',
+      fn: () => {
+        const now2 = new Date().toISOString();
+        const back = boardRef.current;
+        const byId = new Map(previous.map((x) => [x.id, x.value]));
+        setBoard({
+          ...back,
+          projects: back.projects.map((p) =>
+            byId.has(p.id) ? patchProject(p, { [field]: byId.get(p.id) } as ProjectPatch, me, now2) : p,
+          ),
+        });
+      },
     });
   };
 
@@ -457,8 +606,10 @@ export default function BoardTab({
             (!filters.dateTo || p.designedDate <= filters.dateTo)
           : true,
       )
+      // "Needs attention": install date passed, or untouched for STALE_DAYS.
+      .filter((p) => (filters.staleOnly ? agingState(p, installByProject.get(p.id) ?? null, today) !== 'none' : true))
       .sort((a, b) => b.position - a.position);
-  }, [board.projects, filters, me]);
+  }, [board.projects, filters, me, installByProject, today]);
 
   // A project whose status label "counts as done" leaves the main board and
   // lands in the Completed projects section below (Aboud, 2026-10-02).
@@ -547,8 +698,102 @@ export default function BoardTab({
 
   const labelSortValue = (labels: BoardLabel[], id: string | null) => labelById(labels, id)?.sortOrder;
 
+  // ---- bulk selection -------------------------------------------------------
+  // Selection spans everything currently shown, Completed rows included, so a
+  // bulk change can reopen finished work.
+  /**
+   * "Visible" has THREE independent hiding mechanisms and a bulk action may
+   * only ever touch rows that pass all three:
+   *   1. the filters (already applied — `active` / `completed`),
+   *   2. the Completed section being collapsed (`doneOpen`),
+   *   3. a COLLAPSED GROUP when grouping is on.
+   * (3) was missed first time round, so select-all could write a teammate's
+   * collapsed group (found by review, 2026-10-08).
+   */
+  const shown = useMemo(() => {
+    const base = doneOpen ? [...active, ...completed] : active;
+    if (groupBy === 'none') return base;
+    const hidden = new Set<string>();
+    for (const g of groupProjects(base, groupBy, board.labels)) {
+      if (collapsed[g.key]) for (const p of g.rows) hidden.add(p.id);
+    }
+    return hidden.size ? base.filter((p) => !hidden.has(p.id)) : base;
+  }, [active, completed, doneOpen, groupBy, collapsed, board.labels]);
+
+  const picked = useMemo(() => selectedRows(shown, selected), [shown, selected]);
+  const allShownSelected = shown.length > 0 && picked.length === shown.length;
+  const someShownSelected = picked.length > 0;
+
+  /**
+   * Read through a ref, NOT the closure.
+   *
+   * This is called from the select-column header, which lives inside the
+   * `columns` useMemo — and that memo deliberately omits volatile values. A
+   * plain closure over `shown` therefore went stale: after changing a filter,
+   * select-all wrote the PREVIOUS row set (rows no longer on screen) and the
+   * prune effect below could not undo it (found by review, 2026-10-08).
+   */
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const toggleAllShown = (on: boolean) => {
+    setSelected(on ? Object.fromEntries(shownRef.current.map((p) => [p.id, true])) : {});
+  };
+  const clearSelection = () => setSelected({});
+
+  // A row that scrolls out of the filter must not stay secretly selected.
+  useEffect(() => {
+    setSelected((s) => {
+      const live = new Set(shown.map((p) => p.id));
+      const next = Object.fromEntries(Object.entries(s).filter(([id, on]) => on && live.has(id)));
+      return Object.keys(next).length === Object.keys(s).length ? s : next;
+    });
+  }, [shown]);
+
   const columns = useMemo<ColumnDef<BoardProject>[]>(
     () => [
+      {
+        id: 'select',
+        // Doubles as the aging marker — the left edge is where the eye lands,
+        // and it needs no extra column of its own.
+        header: () => (
+          <input
+            type="checkbox"
+            aria-label="Select all shown"
+            checked={allShownSelected}
+            ref={(el) => {
+              if (el) el.indeterminate = someShownSelected && !allShownSelected;
+            }}
+            onChange={(e) => toggleAllShown(e.target.checked)}
+          />
+        ),
+        size: 40,
+        minSize: 40,
+        maxSize: 40,
+        enableSorting: false,
+        enableResizing: false,
+        cell: ({ row }) => {
+          const state = agingFor(row.original);
+          return (
+            <span className="board-select-cell">
+              <input
+                type="checkbox"
+                aria-label={`Select ${row.original.name}`}
+                checked={Boolean(selected[row.original.id])}
+                onChange={(e) =>
+                  setSelected((s) => ({ ...s, [row.original.id]: e.target.checked }))
+                }
+              />
+              {state !== 'none' && (
+                <span
+                  className={`board-aging-dot ${state}`}
+                  title={agingTitle(state, row.original, installByProject.get(row.original.id) ?? null, today)}
+                  aria-label={agingTitle(state, row.original, installByProject.get(row.original.id) ?? null, today)}
+                />
+              )}
+            </span>
+          );
+        },
+      },
       {
         id: 'name',
         header: 'Project name',
@@ -639,6 +884,37 @@ export default function BoardTab({
         ),
       },
       {
+        id: 'installDate',
+        header: 'Install date',
+        size: 140,
+        minSize: 110,
+        maxSize: 800,
+        accessorFn: (p) => installByProject.get(p.id) ?? undefined, // ISO sorts as text
+        sortUndefined: 'last',
+        // READ-ONLY on purpose: this value belongs to the linked post. Letting
+        // the board write it would invert "the board controls Compose, never
+        // the opposite" (Aboud, 2026-10-02).
+        cell: ({ row }) => {
+          const iso = installByProject.get(row.original.id) ?? null;
+          if (!iso) {
+            return (
+              <span className="board-install-cell empty" title="No install date — comes from the linked post">
+                —
+              </span>
+            );
+          }
+          const past = iso < today;
+          return (
+            <span
+              className={`board-install-cell ${past ? 'past' : ''}`}
+              title={`From the linked post — edit it in Compose${past ? ' · date has passed' : ''}`}
+            >
+              {isoToUs(iso)}
+            </span>
+          );
+        },
+      },
+      {
         id: 'phase',
         header: 'Design/Schedule',
         size: 150,
@@ -717,7 +993,7 @@ export default function BoardTab({
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh
     // when the data they RENDER changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board.labels, authors, me, isAdmin, postsByProject],
+    [board.labels, authors, me, isAdmin, postsByProject, installByProject, today, selected, allShownSelected, someShownSelected],
   );
 
   const table = useReactTable({
@@ -763,6 +1039,26 @@ export default function BoardTab({
 
   const isResizing = Boolean(table.getState().columnSizingInfo.isResizingColumn);
 
+  const toggleGroup = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
+
+  // Grouping rearranges the rows, so a manual drag would land somewhere the
+  // user did not point at — reordering is only offered in ungrouped order,
+  // the same reason a drag clears a column sort.
+  const canReorder = groupBy === 'none';
+  const mainBodyProps = {
+    table,
+    highlightId,
+    drag,
+    onRowPointerDown: canReorder ? onRowPointerDown : undefined,
+    onRowClickCapture,
+    groupBy,
+    labels: board.labels,
+    collapsed,
+    onToggleGroup: toggleGroup,
+    agingOf: agingFor,
+    selectedIds: selected,
+  };
+
   const openDuplicate = () => {
     if (!duplicate) return;
     setFilters((f) => ({ ...f, search: '', mine: false }));
@@ -782,6 +1078,7 @@ export default function BoardTab({
     (p) => !p.deletedAt && !p.archivedAt && !(p.statusId && doneStatusIds.has(p.statusId)),
   ).length;
   const dupStatus = duplicate ? labelById(board.labels, duplicate.statusId)?.name : '';
+  const presets = useMemo(() => viewPresets(board.labels), [board.labels]);
 
   return (
     <div className="list-page board-page">
@@ -799,6 +1096,31 @@ export default function BoardTab({
       </div>
 
       <div className="card list-card">
+        <div className="board-presets">
+          {presets.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              className={`btn small secondary ${isPresetActive(filters, v) ? 'board-filter-on' : ''}`}
+              title={v.title}
+              onClick={() => setFilters({ ...NO_FILTERS, ...v.patch })}
+            >
+              {v.label}
+            </button>
+          ))}
+          <span style={{ flex: 1 }} />
+          <label className="board-groupby">
+            Group by
+            <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} aria-label="Group by">
+              {GROUP_OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+
         <div className="board-toolbar">
           <input
             type="search"
@@ -882,7 +1204,7 @@ export default function BoardTab({
             <div className="board-menu">
               {table
                 .getAllLeafColumns()
-                .filter((c) => c.id !== 'name')
+                .filter((c) => c.id !== 'name' && c.id !== 'select')
                 .map((c) => (
                   <label key={c.id} className="board-menu-item">
                     <input type="checkbox" checked={c.getIsVisible()} onChange={c.getToggleVisibilityHandler()} />
@@ -917,43 +1239,42 @@ export default function BoardTab({
                       className={header.column.id === 'name' ? 'board-sticky' : ''}
                       style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
                     >
-                      <button
-                        type="button"
-                        className="board-th"
-                        onClick={header.column.getToggleSortingHandler()}
-                        title="Sort"
-                      >
-                        {flexRender(header.column.columnDef.header, header.getContext())}
-                        {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
-                      </button>
-                      <div
-                        className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
-                        onMouseDown={header.getResizeHandler()}
-                        onTouchStart={header.getResizeHandler()}
-                        onDoubleClick={() => header.column.resetSize()}
-                        title="Drag to resize · double-click to reset"
-                      />
+                      {/* The select column holds a checkbox — it must not be
+                          wrapped in the sort button (invalid, and every click
+                          would sort instead of select). */}
+                      {header.column.id === 'select' ? (
+                        <span className="board-th-plain">
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            className="board-th"
+                            onClick={header.column.getToggleSortingHandler()}
+                            title="Sort"
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
+                          </button>
+                          <div
+                            className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
+                            onMouseDown={header.getResizeHandler()}
+                            onTouchStart={header.getResizeHandler()}
+                            onDoubleClick={() => header.column.resetSize()}
+                            title="Drag to resize · double-click to reset"
+                          />
+                        </>
+                      )}
                     </th>
                   ))}
                 </tr>
               ))}
             </thead>
             {isResizing ? (
-              <MemoBody
-                table={table}
-                highlightId={highlightId}
-                drag={drag}
-                onRowPointerDown={onRowPointerDown}
-                onRowClickCapture={onRowClickCapture}
-              />
+              <MemoBody {...mainBodyProps} />
             ) : (
-              <BodyInner
-                table={table}
-                highlightId={highlightId}
-                drag={drag}
-                onRowPointerDown={onRowPointerDown}
-                onRowClickCapture={onRowClickCapture}
-              />
+              <BodyInner {...mainBodyProps} />
             )}
           </table>
 
@@ -1030,25 +1351,79 @@ export default function BoardTab({
                           className={header.column.id === 'name' ? 'board-sticky' : ''}
                           style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
                         >
-                          <button
-                            type="button"
-                            className="board-th"
-                            onClick={header.column.getToggleSortingHandler()}
-                            title="Sort"
-                          >
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                            {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
-                          </button>
+                          {header.column.id === 'select' ? null : (
+                            <button
+                              type="button"
+                              className="board-th"
+                              onClick={header.column.getToggleSortingHandler()}
+                              title="Sort"
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
+                            </button>
+                          )}
                         </th>
                       ))}
                     </tr>
                   ))}
                 </thead>
-                <BodyInner table={doneTable} highlightId={highlightId} />
+                <BodyInner
+                  table={doneTable}
+                  highlightId={highlightId}
+                  agingOf={agingFor}
+                  selectedIds={selected}
+                />
               </table>
             </div>
           ))}
       </div>
+
+      {picked.length > 0 && (
+        <div className="board-bulk-bar" role="region" aria-label="Bulk actions">
+          <span className="board-bulk-count">
+            {picked.length} selected
+          </span>
+          <FilterSelect
+            label="Set status"
+            single
+            options={statusOptions.map((l) => ({ id: l.id, name: l.name }))}
+            selected={[]}
+            onChange={(ids) => {
+              const label = labelById(board.labels, ids[0] ?? null);
+              if (!label) return;
+              bulkApply(picked, { statusId: label.id }, label.name);
+              clearSelection();
+            }}
+          />
+          <FilterSelect
+            label="Set coordinator"
+            single
+            options={authors.map((a) => ({ id: a, name: a }))}
+            selected={[]}
+            onChange={(ids) => {
+              if (!ids[0]) return;
+              bulkApply(picked, { coordinator: ids[0] }, ids[0]);
+              clearSelection();
+            }}
+          />
+          <FilterSelect
+            label="Set Design/Schedule"
+            single
+            options={phaseOptions.map((l) => ({ id: l.id, name: l.name }))}
+            selected={[]}
+            onChange={(ids) => {
+              const label = labelById(board.labels, ids[0] ?? null);
+              if (!label) return;
+              bulkApply(picked, { phaseId: label.id }, label.name);
+              clearSelection();
+            }}
+          />
+          <span style={{ flex: 1 }} />
+          <button type="button" className="btn small secondary" onClick={clearSelection}>
+            Clear selection
+          </button>
+        </div>
+      )}
 
       {editLabels && (
         <EditLabelsModal

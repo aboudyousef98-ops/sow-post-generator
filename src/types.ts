@@ -38,6 +38,12 @@ export interface SfFields {
   siteAddress?: string;
   systemSizeKw?: number;
   projectStatus?: string;
+  /**
+   * Electric utility for the site (CenterPoint, Oncor, TNMP…). Filled by the
+   * Salesforce extractor, and from 2026-10-08 also pickable by hand in Compose
+   * from Settings.utilities — it is the key Utility requirements match on
+   * (AHJ requirements match Jurisdiction; utility rules do not).
+   */
   utility?: string;
   lender?: string;
   fundingStage?: string;
@@ -186,6 +192,14 @@ export interface PostRecord {
   clrAgentTag?: string;
   /** Project manager (SF "Fulfillment Coordinator") tagged on the post. */
   pmTag?: string;
+  /**
+   * The coordinator's own scratch notes about this project (Aboud 2026-10-08).
+   *
+   * Visible to the TEAM (it rides the normal record sync) but NEVER part of the
+   * post and NEVER sent to the AI — `internalNotes` is deliberately not a
+   * PolishKey, so no AI path can reach it. Both guarantees are pinned by tests.
+   */
+  internalNotes?: string;
   warnings: string[];
   /**
    * Designer's approval to append AHJ requirements to the post — stores the id
@@ -194,6 +208,15 @@ export interface PostRecord {
    * automatically un-approves (and switching back restores the approval).
    */
   ahjApprovedId?: string;
+  /**
+   * Same contract as ahjApprovedId, for the other two postable kinds
+   * (Aboud 2026-10-08). Each stores the id of the SPECIFIC board approved, so
+   * changing Utility away from it un-approves automatically, and changing back
+   * restores it. Three explicit fields rather than one map, because a map
+   * would have forced a migration of the existing ahjApprovedId.
+   */
+  utilityApprovedId?: string;
+  fundingApprovedId?: string;
   /**
    * The post, typed by hand in the preview (Aboud, 2026-09-30).
    *
@@ -252,12 +275,28 @@ export interface AhjPost {
   updatedAt: string;
 }
 
+/**
+ * Which kind of requirement board this is (Aboud 2026-10-08). Each kind is
+ * matched on a DIFFERENT key, which is why they are not all keyed by
+ * Jurisdiction — see `_PLAN_requirements_split.md`:
+ *   ahj      → matched against sf.jurisdiction
+ *   utility  → matched against sf.utility
+ *   funding  → global (Solrite / funding), no matching
+ *   general  → SOW general notes: team reference, NEVER posted
+ */
+export type RequirementKind = 'ahj' | 'utility' | 'funding' | 'general';
+
 export interface Ahj {
   id: string; // uuid
   name: string;
   aliases: string[]; // alternate jurisdiction spellings, e.g. "City of Corpus Christi"
   posts: AhjPost[];
   deleted?: { at: string; by: string };
+  /**
+   * ABSENT means 'ahj' — every board that existed before 2026-10-08 has no
+   * kind, and must keep behaving exactly as it did. Read it via kindOf().
+   */
+  kind?: RequirementKind;
   /** Meta merge key — bumped on name/aliases/deleted changes only. Posts merge individually. */
   updatedAt: string;
   schemaVersion: 1;
@@ -304,6 +343,8 @@ export interface Settings {
   clrAgents: string[];
   /** Project manager roster (SF "Fulfillment Coordinator"). */
   projectManagers: string[];
+  /** Electric utilities offered in the Compose "Utility" dropdown. */
+  utilities: string[];
   defaults: { siteSurvey: string; design: string; homeowner: string };
   chips: Partial<Record<PolishKey, string[]>>;
   lastAuthor?: string;

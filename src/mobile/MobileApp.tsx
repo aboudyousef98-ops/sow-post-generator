@@ -8,6 +8,7 @@ import type { BoardState } from '../board/types';
 import type { ExtraWorkState } from '../extrawork/types';
 import type { Ahj, PostRecord, Session, Settings } from '../types';
 import MobileAdmin from './MobileAdmin';
+import { boardsOfKind, replaceKind } from '../lib/ahj';
 import MobileAhj from './MobileAhj';
 import MobileBoard from './MobileBoard';
 import MobileDrafts from './MobileDrafts';
@@ -29,6 +30,8 @@ interface Props {
   setAhjs: (a: Ahj[]) => void;
   extraWork: ExtraWorkState;
   setExtraWork: (s: ExtraWorkState) => void;
+  /** Everyone with an account — NOT settings.authors. See extraWorkRoster(). */
+  ewRoster: string[];
   markPostedById: (id: string) => void;
   duplicateDraft: (id: string) => void;
   deleteRecord: (id: string) => void;
@@ -82,8 +85,16 @@ export default function MobileApp(props: Props) {
           toast={props.toast}
         />
       )}
+      {/* AHJ boards only — the same store now also holds Utility / Funding /
+          General boards, which are desktop-managed (2026-10-08). The setter
+          stitches this slice back so the other kinds survive. */}
       {screen === 'ahj' && (
-        <MobileAhj ahjs={props.ahjs} setAhjs={props.setAhjs} me={session.displayName} toast={props.toast} />
+        <MobileAhj
+          ahjs={boardsOfKind(props.ahjs, 'ahj')}
+          setAhjs={(next) => props.setAhjs(replaceKind(props.ahjs, 'ahj', next))}
+          me={session.displayName}
+          toast={props.toast}
+        />
       )}
       {screen === 'hours' && (
         <MobileHours
@@ -92,7 +103,7 @@ export default function MobileApp(props: Props) {
           me={session.displayName}
           myUsername={session.username}
           isAdmin={isAdmin}
-          roster={props.settings.authors}
+          roster={props.ewRoster}
           toast={props.toast}
         />
       )}

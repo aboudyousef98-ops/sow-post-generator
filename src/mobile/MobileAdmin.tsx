@@ -27,7 +27,7 @@ interface Props {
   toast: (text: string, action?: { label: string; fn: () => void }) => void;
 }
 
-type RosterKey = 'authors' | 'fixedTags' | 'designers' | 'clrAgents' | 'projectManagers';
+type RosterKey = 'authors' | 'fixedTags' | 'designers' | 'clrAgents' | 'projectManagers' | 'utilities';
 
 const ROSTERS: [RosterKey, string, string][] = [
   ['authors', 'Authors (Posting as)', 'Everyone who can sign in and post.'],
@@ -35,6 +35,7 @@ const ROSTERS: [RosterKey, string, string][] = [
   ['designers', 'Designers / installers', 'The Designer / Installer dropdown in Compose.'],
   ['clrAgents', 'CLR agents', 'The CLR Agent dropdown in Compose.'],
   ['projectManagers', 'Project managers', 'The Project Manager dropdown in Compose.'],
+  ['utilities', 'Utilities', 'The Utility dropdown in Compose.'],
 ];
 
 const PHRASES: [keyof Settings['defaults'], string][] = [

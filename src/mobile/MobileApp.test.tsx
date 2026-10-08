@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BoardState } from '../board/types';
 import type { ExtraWorkState } from '../extrawork/types';
 import type { Ahj, PostRecord, Session, Settings } from '../types';
+import { extraWorkRoster } from '../lib/auth';
 import { emptyBoard, newProject } from '../lib/board';
 import { defaultSettings } from '../lib/storage';
 import { makeRecord } from '../lib/__fixtures__/makeRecord';
@@ -40,6 +41,7 @@ function Harness({
     <MobileApp
       session={who}
       onLogout={() => {}}
+      ewRoster={extraWorkRoster(who.displayName, settings.authors)}
       board={board}
       setBoard={(b) => {
         lastBoard = b;
@@ -130,6 +132,59 @@ describe('MobileApp shell', () => {
     expect(lastExtra!.entries).toHaveLength(1);
     expect(lastExtra!.entries[0].hours).toBe(4);
     expect(lastExtra!.entries[0].username).toBe('aboudyousef');
+  });
+
+  // Regression (review, 2026-10-08): an admin who drilled into a teammate's
+  // log and tapped "+ Log hours" had the entry recorded on their OWN log —
+  // the submit hardcoded the signed-in user instead of the selected person.
+  it('hours: an admin logging from a teammate’s log records it for that teammate', () => {
+    localStorage.setItem(
+      'sowpost.users',
+      JSON.stringify([
+        { username: 'aboudyousef', displayName: 'Aboud Yousef', role: 'admin', salt: 's', passHash: 'h', createdAt: '2026-10-02T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z', schemaVersion: 1 },
+        { username: 'orajab', displayName: 'Omar Rajab', role: 'member', salt: 's', passHash: 'h', createdAt: '2026-10-02T00:00:00.000Z', updatedAt: '2026-10-02T00:00:00.000Z', schemaVersion: 1 },
+      ]),
+    );
+    render(<Harness />); // signed in as Aboud Yousef, admin
+    fireEvent.click(screen.getByRole('button', { name: /^Hours/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Team' }));
+    fireEvent.click(screen.getByText('Omar Rajab')); // drill into his log
+    fireEvent.click(screen.getByRole('button', { name: '+ Log hours' }));
+    fireEvent.click(screen.getByRole('button', { name: '4h' }));
+    fireEvent.change(screen.getByLabelText('What you worked on'), { target: { value: 'Night cutover' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Log 4 hours' }));
+
+    expect(lastExtra!.entries).toHaveLength(1);
+    expect(lastExtra!.entries[0].person).toBe('Omar Rajab');
+    expect(lastExtra!.entries[0].username).toBe('orajab');
+  });
+
+  // Regression (2026-10-08): Anas opened Hours and saw nothing. The roster came
+  // from Settings.authors — device-local, shipped with only 3 names — so the
+  // two people added later were absent from their own screen. It now comes
+  // from the synced users blob.
+  it('hours: a member missing from Settings.authors still appears on their own Team list', () => {
+    const anas: Session = { username: 'ayaghmour', displayName: 'Anas Yaghmour', role: 'member' };
+    expect(defaultSettings().authors).not.toContain('Anas Yaghmour'); // the trap that caused it
+    localStorage.setItem(
+      'sowpost.users',
+      JSON.stringify([
+        {
+          username: 'ayaghmour',
+          displayName: 'Anas Yaghmour',
+          role: 'member',
+          salt: 's',
+          passHash: 'h',
+          createdAt: '2026-10-02T00:00:00.000Z',
+          updatedAt: '2026-10-02T00:00:00.000Z',
+          schemaVersion: 1,
+        },
+      ]),
+    );
+    render(<Harness who={anas} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Hours/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Team' }));
+    expect(screen.getByText('Anas Yaghmour')).toBeTruthy();
   });
 
   it('drafts: review blocks Copy for Slack while fields are missing', async () => {

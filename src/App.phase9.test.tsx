@@ -28,13 +28,16 @@ describe('Phase 9 navigation and sessions', () => {
     vi.unstubAllGlobals();
   });
 
-  it('shows main tabs with Compose sub-tabs, and AHJ has no sub strip', () => {
+  // The AHJ tab became "Requirements" with a sub-tab per kind on 2026-10-08
+  // (AHJ / Utility / Solrite-Funding), and SOW Notes became its own main tab.
+  it('shows main tabs with Compose sub-tabs, and Requirements has a sub strip per kind', () => {
     render(<App session={ADMIN} />);
 
     // Main strip. Signed in, the app lands on the Board (project-board Q6).
     expect(screen.getByRole('button', { name: 'Board' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Board' }).className).toContain('active');
-    expect(screen.getByRole('button', { name: 'AHJ Requirements' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Requirements' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'SOW Notes' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Admin' })).toBeTruthy();
     // Compose sub strip.
     fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
@@ -42,9 +45,29 @@ describe('Phase 9 navigation and sessions', () => {
     expect(screen.getByRole('button', { name: /^Drafts/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /^History/ })).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'AHJ Requirements' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Requirements' }));
     expect(screen.queryByRole('button', { name: 'New Post' })).toBeNull();
-    expect(document.querySelector('.subnav')).toBeNull();
+    expect(screen.getByRole('button', { name: 'AHJ' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Utility' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Solrite / Funding' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'AHJ Requirements' })).toBeTruthy();
+  });
+
+  it('each Requirements sub-tab is its own board, and SOW Notes is separate', () => {
+    render(<App session={ADMIN} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Requirements' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Utility' }));
+    expect(screen.getByRole('heading', { name: 'Utility Requirements' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '+ Add Utility' })).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Solrite / Funding' }));
+    expect(screen.getByRole('heading', { name: 'Solrite / Funding Requirements' })).toBeTruthy();
+
+    // SOW Notes is a main tab, not a Requirements sub-tab.
+    fireEvent.click(screen.getByRole('button', { name: 'SOW Notes' }));
+    expect(screen.getByRole('heading', { name: 'SOW General Notes' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Solrite / Funding' })).toBeNull();
   });
 
   it('a member does not see the Admin tab at all', () => {

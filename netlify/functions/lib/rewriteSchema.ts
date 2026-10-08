@@ -41,6 +41,16 @@ export const RewriteResponse = z
   .object({ items: z.array(z.object({ id: z.enum(POLISH_KEYS), text: z.string() }).strict()) })
   .strict();
 
+/**
+ * What the MODEL returns. Ids here are per-line indices ("0", "1", …), not
+ * POLISH_KEYS — each bullet is sent as its own item so the model can never
+ * flatten a note into a paragraph (see lib/rewriteLines.ts). The keyed
+ * RewriteResponse shape above is what the API still hands back to the client.
+ */
+export const LineResponse = z
+  .object({ items: z.array(z.object({ id: z.string(), text: z.string() }).strict()) })
+  .strict();
+
 /** OpenAI structured-output schema. `strict: true` requires named properties. */
 export const REWRITE_JSON_SCHEMA = {
   type: 'object',

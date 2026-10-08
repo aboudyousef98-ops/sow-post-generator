@@ -112,3 +112,25 @@ export function loadCachedUsers(): TeamUser[] {
 export function saveCachedUsers(users: TeamUser[]): void {
   localStorage.setItem(KEY_USERS, JSON.stringify(users));
 }
+
+/**
+ * The Extra Work roster: display names of everyone who has an account.
+ *
+ * Do NOT source this from Settings.authors — Settings lives in localStorage and
+ * is never synced, so the shipped 3-name default ('Aboud Yousef', 'Omar Rajab',
+ * 'Mohammad Refai') was all that Anas and Ya'rob ever saw on their own devices,
+ * leaving them absent from their own hours screen (found 2026-10-08). The users
+ * blob is the real, synced team list.
+ *
+ * `me` is always present even if the cache missed them; `fallback` covers the
+ * offline/first-run case where no user list has been received yet.
+ */
+export function extraWorkRoster(me?: string, fallback: string[] = []): string[] {
+  const cached = activeUsers(loadCachedUsers())
+    .map((u) => (u.displayName ?? '').trim())
+    .filter(Boolean);
+  const names = new Set(cached.length > 0 ? cached : fallback.map((n) => n.trim()).filter(Boolean));
+  const mine = (me ?? '').trim();
+  if (mine) names.add(mine);
+  return [...names].sort((a, b) => a.localeCompare(b));
+}

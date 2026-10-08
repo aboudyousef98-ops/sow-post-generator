@@ -4,10 +4,13 @@ import { describe, expect, it } from 'vitest';
 import type { Ahj, AhjPost } from '../types';
 import {
   ahjLastActivity,
+  boardsOfKind,
+  kindOf,
   livePosts,
   matchAhj,
   mergeAhjs,
   nameConflict,
+  replaceKind,
   normName,
   searchAhjs,
 } from './ahj';
@@ -200,5 +203,56 @@ describe('searchAhjs', () => {
   it('never searches deleted AHJs or deleted posts', () => {
     expect(searchAhjs('sugar', ALL)).toEqual([]);
     expect(searchAhjs('old rule', ALL)).toEqual([]);
+  });
+});
+
+// Requirement kinds (Aboud 2026-10-08) — _PLAN_requirements_split.md.
+describe('requirement kinds', () => {
+  it('a board with no kind is an AHJ — every board in production predates the split', () => {
+    expect(kindOf(ahj({ id: 'a', name: 'Harris County' }))).toBe('ahj');
+  });
+
+  it('boardsOfKind separates the kinds, and un-kinded boards land in ahj', () => {
+    const all = [
+      ahj({ id: 'a', name: 'Harris County' }),
+      ahj({ id: 'u', name: 'CenterPoint', kind: 'utility' }),
+      ahj({ id: 'f', name: 'Solrite', kind: 'funding' }),
+      ahj({ id: 'g', name: 'House rules', kind: 'general' }),
+    ];
+    expect(boardsOfKind(all, 'ahj').map((b) => b.id)).toEqual(['a']);
+    expect(boardsOfKind(all, 'utility').map((b) => b.id)).toEqual(['u']);
+    expect(boardsOfKind(all, 'funding').map((b) => b.id)).toEqual(['f']);
+    expect(boardsOfKind(all, 'general').map((b) => b.id)).toEqual(['g']);
+  });
+
+  it('replaceKind never clobbers the other kinds', () => {
+    const all = [
+      ahj({ id: 'a', name: 'Harris County' }),
+      ahj({ id: 'u', name: 'CenterPoint', kind: 'utility' }),
+      ahj({ id: 'f', name: 'Solrite', kind: 'funding' }),
+    ];
+    const next = replaceKind(all, 'utility', [ahj({ id: 'u2', name: 'Oncor', kind: 'utility' })]);
+    expect(next.filter((b) => kindOf(b) === 'ahj').map((b) => b.id)).toEqual(['a']);
+    expect(next.filter((b) => kindOf(b) === 'funding').map((b) => b.id)).toEqual(['f']);
+    expect(next.filter((b) => kindOf(b) === 'utility').map((b) => b.id)).toEqual(['u2']);
+  });
+
+  it('replaceKind stamps the kind on a board created without one', () => {
+    const next = replaceKind([], 'utility', [ahj({ id: 'new', name: 'TNMP' })]);
+    expect(kindOf(next[0])).toBe('utility');
+  });
+
+  it('deleting every board of a kind leaves the others intact', () => {
+    const all = [ahj({ id: 'a', name: 'Harris' }), ahj({ id: 'u', name: 'Oncor', kind: 'utility' })];
+    expect(replaceKind(all, 'utility', []).map((b) => b.id)).toEqual(['a']);
+  });
+
+  it('an AHJ and a utility may share a name without colliding', () => {
+    const all = [
+      ahj({ id: 'a', name: 'Harris' }),
+      ahj({ id: 'u', name: 'Harris', kind: 'utility' }),
+    ];
+    expect(matchAhj('Harris', boardsOfKind(all, 'ahj'))?.ahj.id).toBe('a');
+    expect(matchAhj('Harris', boardsOfKind(all, 'utility'))?.ahj.id).toBe('u');
   });
 });

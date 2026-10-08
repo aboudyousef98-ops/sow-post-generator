@@ -35,6 +35,32 @@ function Harness({ initial, records = [] }: { initial?: BoardState; records?: Po
   );
 }
 
+/**
+ * Same as Harness, but with prop identities that are STABLE across renders —
+ * which is what App.tsx actually does (`settings.authors` and `records` come
+ * from useState). The plain Harness recreates `authors` every render, which
+ * silently invalidates BoardTab's `columns` useMemo and can mask stale-closure
+ * bugs. Use this one for anything touching memoized callbacks.
+ */
+const STABLE_AUTHORS = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai'];
+const STABLE_RECORDS: PostRecord[] = [];
+
+function StableHarness({ initial }: { initial?: BoardState }) {
+  const [board, setBoard] = useState<BoardState>(initial ?? emptyBoard());
+  return (
+    <BoardTab
+      board={board}
+      setBoard={setBoard}
+      me="Aboud Yousef"
+      isAdmin
+      authors={STABLE_AUTHORS}
+      toast={(text, action) => toasts.push({ text, action })}
+      records={STABLE_RECORDS}
+      onOpenCompose={(p) => opened.push(p)}
+    />
+  );
+}
+
 function boardProject(name: string, id: string): BoardProject {
   return { ...newProject(name, 'Aboud Yousef', seedLabels(), '2026-10-01T00:00:00.000Z'), id };
 }
@@ -299,5 +325,216 @@ describe('BoardTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'My projects' }));
     expect(screen.getByText('Martha Thompson')).toBeTruthy();
     expect(screen.queryByText('Patrick Lingwall')).toBeNull();
+  });
+});
+
+// ---- Tier 1 (_STUDY_board_benchmark.md) ------------------------------------
+
+describe('BoardTab — Tier 1', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  function withRows() {
+    const board = emptyBoard();
+    board.projects = [
+      { ...boardProject('Martha Thompson', 'pj-1'), coordinator: 'Omar Rajab', statusId: 'status-new' },
+      { ...boardProject('Patrick Lingwall', 'pj-2'), coordinator: 'Aboud Yousef', statusId: 'status-working' },
+      { ...boardProject('Carla Nunez', 'pj-3'), coordinator: 'Omar Rajab', statusId: 'status-new' },
+    ];
+    return board;
+  }
+
+  it('group by status: a header per label, in label order, with counts', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'status' } });
+
+    const heads = screen.getAllByRole('button', { expanded: true });
+    const titles = heads.map((h) => h.textContent);
+    expect(titles.some((t) => t?.includes('New project') && t?.includes('2'))).toBe(true);
+    expect(titles.some((t) => t?.includes('Working on it') && t?.includes('1'))).toBe(true);
+    // All three rows are still on screen.
+    for (const n of ['Martha Thompson', 'Patrick Lingwall', 'Carla Nunez']) {
+      expect(screen.getByText(n)).toBeTruthy();
+    }
+  });
+
+  it('group by coordinator, and collapsing a group hides only its rows', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'coordinator' } });
+
+    const omar = screen.getAllByRole('button', { expanded: true }).find((h) => h.textContent?.includes('Omar Rajab'))!;
+    fireEvent.click(omar);
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    expect(screen.queryByText('Carla Nunez')).toBeNull();
+    expect(screen.getByText('Patrick Lingwall')).toBeTruthy(); // Aboud's group, untouched
+  });
+
+  it('the group choice survives a remount', () => {
+    const board = withRows();
+    const { unmount } = render(<Harness initial={board} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'status' } });
+    unmount();
+    render(<Harness initial={board} />);
+    expect((screen.getByLabelText('Group by') as HTMLSelectElement).value).toBe('status');
+  });
+
+  it('install date is mirrored from the linked post — posted wins over draft', () => {
+    const board = withRows();
+    const records = [
+      { id: 'd1', status: 'draft', author: 'Omar Rajab', projectId: 'pj-1', updatedAt: '2026-10-02T10:00:00Z', sf: { installScheduledDate: '2026-12-24' } },
+      { id: 'po1', status: 'posted', author: 'Aboud Yousef', projectId: 'pj-1', postedAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z', sf: { installScheduledDate: '2026-11-05' } },
+    ] as unknown as PostRecord[];
+    render(<Harness initial={board} records={records} />);
+    expect(screen.getByText('11/05/2026')).toBeTruthy();
+    expect(screen.queryByText('12/24/2026')).toBeNull();
+  });
+
+  it('install date is read-only — no button, no input, in the cell', () => {
+    const board = withRows();
+    const records = [
+      { id: 'po1', status: 'posted', author: 'Aboud Yousef', projectId: 'pj-1', postedAt: '2026-10-01T10:00:00Z', updatedAt: '2026-10-01T10:00:00Z', sf: { installScheduledDate: '2026-11-05' } },
+    ] as unknown as PostRecord[];
+    render(<Harness initial={board} records={records} />);
+    const cell = screen.getByText('11/05/2026').closest('td')!;
+    expect(cell.querySelector('button')).toBeNull();
+    expect(cell.querySelector('input')).toBeNull();
+  });
+
+  it('bulk edit: set status on two rows in one write, then Undo restores each row', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByLabelText('Select Martha Thompson'));
+    fireEvent.click(screen.getByLabelText('Select Patrick Lingwall'));
+    expect(screen.getByText('2 selected')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+
+    // Both landed in Completed projects, so neither is on the main board.
+    expect(toasts.at(-1)!.text).toBe('2 projects → Done.');
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    expect(screen.queryByText('Patrick Lingwall')).toBeNull();
+    expect(screen.getByText('Carla Nunez')).toBeTruthy();
+
+    // Undo puts each row back where IT was — not a single shared value.
+    act(() => toasts.at(-1)!.action!.fn());
+    const martha = screen.getByText('Martha Thompson').closest('tr')!;
+    const patrick = screen.getByText('Patrick Lingwall').closest('tr')!;
+    expect(within(martha).getByText('New project')).toBeTruthy();
+    expect(within(patrick).getByText('Working on it')).toBeTruthy();
+  });
+
+  it('bulk edit: select-all checkbox, and the bar disappears once cleared', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByLabelText('Select all shown'));
+    expect(screen.getByText('3 selected')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Set coordinator/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mohammad Refai' }));
+    expect(toasts.at(-1)!.text).toBe('3 projects → Mohammad Refai.');
+    expect(screen.queryByText('3 selected')).toBeNull(); // selection cleared after applying
+  });
+
+  // Regression (review, 2026-10-08): the select-all header lives inside the
+  // `columns` useMemo, so it closed over a STALE `shown`. After narrowing a
+  // filter, select-all wrote the previous row set — rows that were no longer
+  // on screen — and a bulk edit then hit projects the user never selected.
+  //
+  // NOTE: this must render through StableHarness. The normal Harness passes
+  // `authors` as a fresh array literal on every render, which invalidates the
+  // columns memo each time and accidentally HIDES this bug. App.tsx passes a
+  // stable `settings.authors`, so the real app was affected.
+  it('select-all under a filter never selects rows that were off screen', () => {
+    render(<StableHarness initial={withRows()} />);
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'martha' } });
+    fireEvent.click(screen.getByLabelText('Select all shown'));
+    expect(screen.getByText('1 selected')).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: '' } });
+    // Must still be just Martha — not all three.
+    expect(screen.getByText('1 selected')).toBeTruthy();
+  });
+
+  it('select-all ignores rows hidden inside a collapsed group', () => {
+    render(<StableHarness initial={withRows()} />);
+    fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'coordinator' } });
+
+    const omar = screen.getAllByRole('button', { expanded: true }).find((h) => h.textContent?.includes('Omar Rajab'))!;
+    fireEvent.click(omar); // Martha + Carla are Omar's — now hidden
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+
+    fireEvent.click(screen.getByLabelText('Select all shown'));
+    // Only Patrick (Aboud's, still visible) may be selected.
+    expect(screen.getByText('1 selected')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(toasts.at(-1)!.text).toBe('1 project → Done.');
+  });
+
+  it('filtering a selected row away drops it from the selection', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByLabelText('Select Martha Thompson'));
+    fireEvent.click(screen.getByLabelText('Select Patrick Lingwall'));
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'martha' } });
+    expect(screen.getByText('1 selected')).toBeTruthy();
+  });
+
+  it('aging: a row untouched for 14+ days is flagged, a fresh one is not', () => {
+    const board = emptyBoard();
+    board.projects = [
+      { ...boardProject('Old Job', 'pj-old'), updatedAt: '2026-01-01T00:00:00.000Z' },
+      { ...boardProject('Fresh Job', 'pj-new'), updatedAt: new Date().toISOString() },
+    ];
+    render(<Harness initial={board} />);
+    const old = screen.getByText('Old Job').closest('tr')!;
+    const fresh = screen.getByText('Fresh Job').closest('tr')!;
+    expect(old.className).toContain('board-row-aging-stale');
+    expect(fresh.className).toContain('board-row-aging-none');
+    expect(within(old).getByTitle(/No change in \d+ days/)).toBeTruthy();
+  });
+
+  it('aging: a passed install date reads as overdue and beats stale', () => {
+    const board = emptyBoard();
+    board.projects = [{ ...boardProject('Missed It', 'pj-1'), updatedAt: '2026-01-01T00:00:00.000Z' }];
+    const records = [
+      { id: 'po1', status: 'posted', author: 'Aboud Yousef', projectId: 'pj-1', postedAt: '2026-02-01T10:00:00Z', updatedAt: '2026-02-01T10:00:00Z', sf: { installScheduledDate: '2026-02-10' } },
+    ] as unknown as PostRecord[];
+    render(<Harness initial={board} records={records} />);
+    const row = screen.getByText('Missed It').closest('tr')!;
+    expect(row.className).toContain('board-row-aging-overdue');
+    expect(row.className).not.toContain('board-row-aging-stale');
+  });
+
+  it('Needs attention preset keeps only flagged rows; All active clears it', () => {
+    const board = emptyBoard();
+    board.projects = [
+      { ...boardProject('Old Job', 'pj-old'), updatedAt: '2026-01-01T00:00:00.000Z' },
+      { ...boardProject('Fresh Job', 'pj-new'), updatedAt: new Date().toISOString() },
+    ];
+    render(<Harness initial={board} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Needs attention' }));
+    expect(screen.getByText('Old Job')).toBeTruthy();
+    expect(screen.queryByText('Fresh Job')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All active' }));
+    expect(screen.getByText('Fresh Job')).toBeTruthy();
+  });
+
+  it('a preset replaces the previous filters rather than stacking on them', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'martha' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Mine' }));
+    // 'Mine' cleared the search, so Aboud's row shows and Martha's (Omar's) does not.
+    expect(screen.getByText('Patrick Lingwall')).toBeTruthy();
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    expect((screen.getByLabelText('Search projects') as HTMLInputElement).value).toBe('');
   });
 });

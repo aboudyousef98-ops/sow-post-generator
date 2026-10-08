@@ -7,6 +7,7 @@ import { useMemo, useState } from 'react';
 import type { BoardState } from '../board/types';
 import type { PostRecord } from '../types';
 import { designedOn, formatDailyReport, parseUpdates, scheduledOn, shortDate } from '../lib/dailyProgress';
+import { loadUpdates, saveUpdates } from '../lib/dailyUpdates';
 import { isoToUs, todayIso, weekdayName } from '../lib/dates';
 
 interface Props {
@@ -17,8 +18,24 @@ interface Props {
 
 export default function DailyProgressTab({ board, records, toast }: Props) {
   const [designDate, setDesignDate] = useState<string>(() => todayIso());
-  // Daily throwaway note — deliberately not persisted anywhere.
-  const [updatesText, setUpdatesText] = useState('');
+  // Kept per day, on this device only. This tab unmounts on every tab switch,
+  // so without storage everything typed here was lost (Aboud, 2026-10-08).
+  const [updatesText, setUpdatesText] = useState(() => loadUpdates(todayIso()));
+
+  // Written synchronously on every keystroke — NOT debounced. The tab can
+  // unmount at any moment (any tab switch), and a pending timer would take the
+  // last characters with it. It is a short string in localStorage.
+  const editUpdates = (text: string) => {
+    setUpdatesText(text);
+    saveUpdates(designDate, text);
+  };
+
+  // Each day keeps its own notes, so moving the picker swaps them in.
+  const pickDate = (iso: string) => {
+    const next = iso || todayIso();
+    setDesignDate(next);
+    setUpdatesText(loadUpdates(next));
+  };
 
   const designed = useMemo(() => designedOn(board, designDate), [board, designDate]);
   const { scheduled, noDate } = useMemo(
@@ -52,7 +69,7 @@ export default function DailyProgressTab({ board, records, toast }: Props) {
           <input
             type="date"
             value={designDate}
-            onChange={(e) => setDesignDate(e.target.value || todayIso())}
+            onChange={(e) => pickDate(e.target.value)}
           />
         </label>
 
@@ -91,7 +108,7 @@ export default function DailyProgressTab({ board, records, toast }: Props) {
           rows={4}
           placeholder="One update per line — added to the report as typed."
           value={updatesText}
-          onChange={(e) => setUpdatesText(e.target.value)}
+          onChange={(e) => editUpdates(e.target.value)}
         />
 
         <button className="btn primary" onClick={() => void copyReport()}>

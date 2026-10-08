@@ -32,8 +32,10 @@ hours `0.0`, name in A1, stats rows 5–6, table header row 7).
   no Summary sheet — matched exactly).
 - **No import of the old Excel history** (question asked, unanswered) — site
   starts fresh; an import step can be added later.
-- Anas Yaghmour and Yarob Alnabelsi need accounts (Admin → Users) before they
-  can log entries. Not seeded in code.
+- ~~Anas Yaghmour and Yarob Alnabelsi need accounts (Admin → Users) before they
+  can log entries. Not seeded in code.~~ **WRONG assumption — both accounts
+  already existed in prod** (`ayaghmour`, `yalnabelsi`, created 2026-10-02 by
+  Aboud); confirmed against the live `sowpost/users` blob 2026-10-08.
 
 ## Data model (`src/extrawork/types.ts`)
 ```ts
