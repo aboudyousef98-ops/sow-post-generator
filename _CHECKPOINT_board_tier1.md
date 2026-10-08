@@ -201,8 +201,14 @@ Design and rationale: **`_PLAN_requirements_split.md`**. Built as designed:
 - Post prints up to three sections in order AHJ → Utility → Funding. **An AHJ-only post is
   byte-identical to before the split** (pinned by a test).
 - UI: `AHJ Requirements` → **`Requirements`** with sub-tabs AHJ / Utility / Solrite-Funding, plus a
-  new **`SOW Notes`** main tab. One component parameterised by kind (heading, item noun, plural,
-  subtitle), fed a per-kind slice with a `replaceKind` setter.
+  new **`SOW Notes`** main tab. The three requirement kinds share one component parameterised by
+  kind (heading, item noun, plural, subtitle), fed a per-kind slice with a `replaceKind` setter.
+- **SOW Notes is ONE panel, not a set of boards** (Aboud, after first seeing it): its own
+  `SowNotesTab` — composer + note list (edit / pin / delete-with-undo) + Export PDF, no sidebar, no
+  board names or aliases. It still rides the `Ahj` entity (`kind: general`, fixed id
+  `sow-general-notes`) so it needs no new store or sync. The fixed id means two people writing the
+  first note at once converge on one board; if several general boards ever exist, the first live
+  one wins and the rest lie dormant rather than erroring.
 - **Clobbering risk verified live**: posting on the Utility tab left the AHJ, Funding and General
   boards intact, and the legacy un-kinded board kept its absent kind.
 - Mobile's AHJ tab narrowed to AHJ-kind boards only.

@@ -8,6 +8,7 @@ import DraftsTab from './components/DraftsTab';
 import ExtraWorkTab from './components/ExtraWorkTab';
 import HistoryTab from './components/HistoryTab';
 import SettingsTab from './components/SettingsTab';
+import SowNotesTab from './components/SowNotesTab';
 import UsersTab from './components/UsersTab';
 import { Toasts, type Toast } from './components/Toast';
 import { extraWorkRoster, saveCachedUsers } from './lib/auth';
@@ -90,7 +91,6 @@ const TAB_KIND = {
   ahj: 'ahj',
   utility: 'utility',
   funding: 'funding',
-  sownotes: 'general',
 } as const satisfies Record<string, RequirementKind>;
 
 const KIND_LABELS: Record<
@@ -916,9 +916,19 @@ export default function App({ session, onLogout }: AppProps = {}) {
             onOpenBoard={openBoardAt}
           />
         )}
-        {(['ahj', 'utility', 'funding', 'sownotes'] as const).includes(
-          tab as 'ahj' | 'utility' | 'funding' | 'sownotes',
-        ) && (
+        {/* SOW Notes is ONE panel, not a set of boards (Aboud 2026-10-08) —
+            it gets its own component rather than the per-board AhjTab. */}
+        {tab === 'sownotes' && (
+          <SowNotesTab
+            ahjs={ahjs}
+            setAhjs={setAhjs}
+            settings={settings}
+            setSettings={setSettings}
+            toast={toast}
+            lockedAuthor={session?.displayName}
+          />
+        )}
+        {(['ahj', 'utility', 'funding'] as const).includes(tab as 'ahj' | 'utility' | 'funding') && (
           <AhjTab
             // Keyed so switching kind remounts with clean local state rather
             // than carrying the previous kind's search/composer across.

@@ -70,6 +70,36 @@ describe('Phase 9 navigation and sessions', () => {
     expect(screen.queryByRole('button', { name: 'Solrite / Funding' })).toBeNull();
   });
 
+  // Aboud 2026-10-08: "we dont need to divide them into categories, we just
+  // need one general notes panel".
+  it('SOW Notes is ONE panel — no board picker, no "+ Add" anything', () => {
+    render(<App session={ADMIN} />);
+    fireEvent.click(screen.getByRole('button', { name: 'SOW Notes' }));
+
+    expect(screen.getByLabelText('New note')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add note' })).toBeTruthy();
+    // None of the per-board machinery belongs here.
+    expect(document.querySelector('.ahj-sidebar')).toBeNull();
+    expect(screen.queryByRole('button', { name: /^\+ Add/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Move .* to Trash/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Rename/ })).toBeNull();
+  });
+
+  it('SOW Notes: adding a note shows it, and Export PDF unlocks', () => {
+    render(<App session={ADMIN} />);
+    fireEvent.click(screen.getByRole('button', { name: 'SOW Notes' }));
+    expect((screen.getByRole('button', { name: 'Export PDF' }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.change(screen.getByLabelText('New note'), {
+      target: { value: 'Always Title Case customer names.' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add note' }));
+
+    expect(screen.getByText('Always Title Case customer names.')).toBeTruthy();
+    expect(screen.getByText('Notes (1)')).toBeTruthy();
+    expect((screen.getByRole('button', { name: 'Export PDF' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
   it('a member does not see the Admin tab at all', () => {
     render(<App session={MEMBER} />);
     expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();
