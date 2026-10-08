@@ -269,8 +269,8 @@ export function noteCheck(
   // NOT named `post` — that would shadow the module's post() helper below.
   postText: string,
   notes: { noteId: string; text: string }[],
-): Promise<{ hits: { noteId: string; why: string }[]; model: string; ms: number }> {
-  return post<{ hits: { noteId: string; why: string }[]; model: string; ms: number }>('notecheck', {
+): Promise<{ hits: { noteId: string; why: string; trigger: string }[]; model: string; ms: number }> {
+  return post<{ hits: { noteId: string; why: string; trigger: string }[]; model: string; ms: number }>('notecheck', {
     post: postText,
     notes,
   });

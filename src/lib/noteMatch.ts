@@ -141,12 +141,41 @@ const BOILERPLATE = [
 function projectText(post: string): string {
   let out = post.toLowerCase();
   out = out.replace(/\*[^*\n]{0,40}:\*/g, ' '); // *Label:* bullet headings
+  // Sentences generated from the Installation Notes dropdowns. Every job has a
+  // wall count, so "Installation on one wall." is template, not something the
+  // coordinator wrote — and gpt-4o-mini kept using it to justify unrelated
+  // notes on routine posts even when given it as a worked counter-example
+  // (draft-deploy testing, 2026-10-08). MPU/FSU/FTP and roof ratings are NOT
+  // stripped: those genuinely distinguish one job from another.
+  out = out.replace(/installation on (one|two|three|four|five) walls?[^.]*\./g, ' ');
   for (const phrase of BOILERPLATE) out = out.split(phrase).join(' ');
   return out;
 }
 
 /** A term long enough that sharing it alone is real evidence. */
 const DISTINCTIVE_LEN = 6;
+
+/**
+ * Is the model's quoted trigger real, and is it project-specific?
+ *
+ * We do not trust the model's judgement about relevance — we check its
+ * EVIDENCE. The trigger must be a verbatim quote that survives boilerplate
+ * stripping, which means it came from something the coordinator actually wrote
+ * about this job, not from the template.
+ *
+ * Why this exists (draft-deploy testing, 2026-10-08): told only in the prompt
+ * to skip notes that "fire on every post", gpt-4o-mini still surfaced
+ * always-true notes ("install date set, so NTP must exist") on a completely
+ * routine post. Those would have appeared on EVERY post forever. Checking the
+ * quote is deterministic where the prompt was not.
+ */
+export function triggerIsGrounded(post: string, trigger: string): boolean {
+  const quote = trigger.trim().toLowerCase().replace(/\s+/g, ' ');
+  // Too short to be evidence of anything specific.
+  if (quote.length < 8) return false;
+  const hay = projectText(post).replace(/\s+/g, ' ');
+  return hay.includes(quote);
+}
 
 /**
  * Notes whose distinctive terms appear in the post.

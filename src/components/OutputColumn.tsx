@@ -10,7 +10,7 @@ import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import { noteCheck } from '../lib/api';
-import { eligibleNotes, keywordMatches, mergeHits, postHash, type NoteHit } from '../lib/noteMatch';
+import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
 import type { Ahj, PostRecord, Settings } from '../types';
 import TitleBlockCard from './TitleBlockCard';
 
@@ -99,6 +99,11 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
       );
       const byId = new Map(notes.map((n) => [n.noteId, n]));
       aiHits = res.hits
+        // Verify the model's EVIDENCE, not its judgement: the quoted trigger
+        // must really appear in the project-specific part of the post. Without
+        // this, always-true notes ("install date set, so NTP must exist")
+        // surfaced on every routine post — see triggerIsGrounded().
+        .filter((h) => triggerIsGrounded(text, h.trigger))
         .map((h) => {
           const n = byId.get(h.noteId);
           return n ? { ...n, why: `AI: ${h.why}` } : null;

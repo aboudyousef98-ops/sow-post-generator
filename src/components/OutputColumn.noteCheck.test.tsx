@@ -170,7 +170,7 @@ describe('pre-post note check', () => {
 
   it('surfaces an AI-only hit the keyword pass would have missed', async () => {
     noteCheckMock.mockResolvedValue({
-      hits: [{ noteId: 'n-trench', why: 'post mentions excavation' }],
+      hits: [{ noteId: 'n-trench', why: 'post mentions excavation', trigger: 'Excavation along the fence' }],
       model: 'm',
       ms: 1,
     });
@@ -181,10 +181,69 @@ describe('pre-post note check', () => {
   });
 
   it('ignores a note id the model invented', async () => {
-    noteCheckMock.mockResolvedValue({ hits: [{ noteId: 'does-not-exist', why: 'made up' }], model: 'm', ms: 1 });
+    noteCheckMock.mockResolvedValue({ hits: [{ noteId: 'does-not-exist', why: 'made up', trigger: 'nothing real' }], model: 'm', ms: 1 });
     render(<Harness />);
     clickCopy();
     await waitFor(() => expect(written.length).toBe(1)); // copied, no popup
     expect(screen.queryByText(/may apply/)).toBeNull();
+  });
+});
+
+// Draft-deploy finding (2026-10-08): told only in the prompt to skip notes that
+// "fire on every post", gpt-4o-mini still returned always-true notes on a
+// completely routine post. So we verify its EVIDENCE, not its judgement.
+describe('AI trigger must be grounded in the post', () => {
+  beforeEach(() => {
+    written = [];
+    lastRecord = undefined;
+    noteCheckMock.mockReset();
+    vi.stubGlobal('ClipboardItem', class {});
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      clipboard: {
+        write: vi.fn(async () => { written.push('rich'); }),
+        writeText: vi.fn(async () => { written.push('plain'); }),
+      },
+    });
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('drops an AI hit whose quoted trigger is not in the post', () => {
+    noteCheckMock.mockResolvedValue({
+      hits: [{ noteId: 'n-trench', why: 'install date set, so NTP must exist', trigger: 'install date set' }],
+      model: 'm',
+      ms: 1,
+    });
+    render(<Harness />); // routine post — 'install date set' appears nowhere in it
+    clickCopy();
+    return waitFor(() => {
+      expect(written.length).toBe(1); // copied straight through
+      expect(screen.queryByText(/may apply/)).toBeNull();
+    });
+  });
+
+  it('drops a trigger quoting only the template’s own heading', () => {
+    noteCheckMock.mockResolvedValue({
+      hits: [{ noteId: 'n-trench', why: 'routine', trigger: 'Site Survey Feedback' }],
+      model: 'm',
+      ms: 1,
+    });
+    render(<Harness />);
+    clickCopy();
+    return waitFor(() => expect(written.length).toBe(1));
+  });
+
+  it('keeps a hit whose trigger really is in the project-specific text', async () => {
+    noteCheckMock.mockResolvedValue({
+      hits: [{ noteId: 'n-trench', why: 'post mentions excavation', trigger: 'excavation along the fence' }],
+      model: 'm',
+      ms: 1,
+    });
+    render(<Harness initial={{ notes: { layout: '', siteSurvey: 'Excavation along the fence.', design: '', homeowner: '' } }} />);
+    clickCopy();
+    expect(await screen.findByText(/AI: post mentions excavation/)).toBeTruthy();
   });
 });

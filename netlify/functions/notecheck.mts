@@ -25,7 +25,7 @@ const NoteCheckRequest = z
 
 const NoteCheckResponse = z
   .object({
-    hits: z.array(z.object({ noteId: z.string(), why: z.string() }).strict()),
+    hits: z.array(z.object({ noteId: z.string(), why: z.string(), trigger: z.string() }).strict()),
   })
   .strict();
 
@@ -38,8 +38,8 @@ const JSON_SCHEMA = {
       items: {
         type: 'object',
         additionalProperties: false,
-        properties: { noteId: { type: 'string' }, why: { type: 'string' } },
-        required: ['noteId', 'why'],
+        properties: { noteId: { type: 'string' }, why: { type: 'string' }, trigger: { type: 'string' } },
+        required: ['noteId', 'why', 'trigger'],
       },
     },
   },
@@ -57,10 +57,15 @@ Your ONLY job: decide which of those notes the coordinator should double-check b
 
 Be STRICT. Returning an empty list is a perfectly good answer and is often the right one. A coordinator who is shown five notes reads them; one shown fifteen stops reading, and then the check is worthless. Only include a note when the post gives a CONCRETE reason to think it applies to THIS project.
 
+THE MOST IMPORTANT TEST — apply it to every note before including it:
+"Would this note fire on EVERY post this team writes?"
+If yes, LEAVE IT OUT. Every post has an install date, a jurisdiction, a site address, a classification level and standard installation work — those are the template, not a signal. A note about filing paperwork before scheduling, or posting a permit before work starts, is true of every single job; surfacing it every time teaches the coordinator to ignore the whole list, which destroys the feature. Such a note belongs in the list ONLY when the post says something unusual about that specific topic — for example the post mentions the permit is still pending, or that scheduling is being rushed.
+
+What you are looking for is the NON-ROUTINE: something in this post that is not true of a standard job.
+
 Include a note when:
 - the post describes work the note governs (the post mentions trenching and the note is about trench depth), OR
-- the post states a fact that triggers the note (the post has an install date and the note says paperwork must be filed before scheduling), OR
-- the post describes something the note forbids or constrains.
+- the post describes something unusual that the note forbids or constrains.
 
 Do NOT include a note when:
 - it is generic good practice with nothing in the post pointing at it,
@@ -68,9 +73,33 @@ Do NOT include a note when:
 - it is about a different scope of work than the post describes,
 - you are only guessing. If in doubt, leave it out.
 
+REAL EXAMPLES OF WRONG ANSWERS — never produce these:
+
+1. Post line: "Installation on one wall."
+   Note: "Permit card must be posted on site before any work starts."
+   WRONG. Describing ordinary installation work does not trigger a permit note.
+   EVERY job has work starting, so this would appear on every post forever.
+
+2. Post line: "Expected power disconnect duration: 1-2 hours."
+   Note: "Upload the signed NTP before scheduling."
+   WRONG. That line is printed on every post. Having an install date is not
+   news; it is the template.
+
+3. Post line: "Level 1 – Standard Installation."
+   Note: anything at all.
+   WRONG. A standard classification is the absence of a signal, not a signal.
+
+A RIGHT ANSWER looks like this:
+
+   Post line: "Crew will need excavation along the north fence to reach the array."
+   Note: "Trench depth minimum 24 inches..."
+   CORRECT — the post describes digging, which is exactly what the note governs,
+   and this is NOT true of a standard job.
+
 Rules:
 - Return ONLY noteIds from the list you were given. NEVER invent an id. NEVER return an id you did not receive.
-- "why" must be ONE short clause, under 12 words, saying what in the post triggered it — e.g. "post mentions trenching along the fence", "install date set, so NTP must exist". Never restate the note back.
+- "trigger" MUST be a VERBATIM quote, copied character for character from the post, of the specific words that made you include this note — e.g. "excavation along the north fence". It must be 3 to 12 words of the post's own project-specific wording. Do NOT quote the template headings ("Installation Date & Day", "Site Survey Feedback", "Project Classification", "Clearance"), and do NOT paraphrase. If you cannot point at specific words in the post, that note does NOT belong in the list — leave it out.
+- "why" must be ONE short clause, under 12 words — e.g. "post mentions trenching along the fence". Never restate the note back.
 - Do not rewrite, correct or comment on the post itself. You are not editing it.
 - Never add a note that is not in the list, even if you believe the post needs one.`;
 

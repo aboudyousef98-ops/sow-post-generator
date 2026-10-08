@@ -7,6 +7,7 @@ import {
   keywordMatches,
   mergeHits,
   postHash,
+  triggerIsGrounded,
   type EligibleNote,
 } from './noteMatch';
 
@@ -205,5 +206,46 @@ describe('keywordMatches — precision', () => {
   it('the real-world case: a trench post surfaces ONLY the trench note', () => {
     const post = `${boilerplate}\n• *Site Survey Feedback:* We will trench along the north fence.`;
     expect(keywordMatches(post, notes).map((h) => h.noteId)).toEqual(['n-trench']);
+  });
+});
+
+describe('triggerIsGrounded', () => {
+  const post = 'Hello Team,\n• *Site Survey Feedback:* We will trench along the north fence.\n• *Clearance:* All required clearance requirements have been met.';
+
+  it('accepts a real quote from the project-specific text', () => {
+    expect(triggerIsGrounded(post, 'trench along the north fence')).toBe(true);
+  });
+
+  it('rejects a paraphrase the model invented', () => {
+    expect(triggerIsGrounded(post, 'install date set, so NTP must exist')).toBe(false);
+  });
+
+  it('rejects a quote of the template’s own heading', () => {
+    expect(triggerIsGrounded(post, 'Site Survey Feedback')).toBe(false);
+  });
+
+  it('rejects boilerplate every post contains', () => {
+    expect(triggerIsGrounded(post, 'All required clearance requirements have been met')).toBe(false);
+  });
+
+  it('rejects a trigger too short to be evidence', () => {
+    expect(triggerIsGrounded(post, 'trench')).toBe(false);
+  });
+
+  it('is case- and whitespace-insensitive', () => {
+    expect(triggerIsGrounded(post, '  TRENCH   along the north   fence ')).toBe(true);
+  });
+});
+
+describe('dropdown-generated sentences are template, not evidence', () => {
+  const routine = 'Hello Team,\n• *Installation Notes:* Installation on one wall (South-East). This project requires an MPU.';
+
+  it('rejects a trigger quoting the wall-count sentence', () => {
+    // gpt-4o-mini kept citing this to justify a permit note on routine posts.
+    expect(triggerIsGrounded(routine, 'Installation on one wall')).toBe(false);
+  });
+
+  it('still accepts MPU — that genuinely distinguishes one job from another', () => {
+    expect(triggerIsGrounded(routine, 'This project requires an MPU')).toBe(true);
   });
 });
