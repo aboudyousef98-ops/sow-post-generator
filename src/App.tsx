@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import BoardTab from './board/BoardTab';
+import NotificationBell from './components/NotificationBell';
 import type { BoardProject, BoardState } from './board/types';
 import AhjTab from './components/AhjTab';
 import ComposeTab from './components/ComposeTab';
@@ -792,6 +793,15 @@ export default function App({ session, onLogout }: AppProps = {}) {
             AI
           </span>
         </span>
+        {/* Aboud 2026-10-17 #10 — see lib/notifications.ts for the decision. */}
+        <NotificationBell
+          board={boardState}
+          me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
+          onOpen={(project) => {
+            setBoardFocusId(project.id);
+            setTab('board');
+          }}
+        />
         {session ? (
           // Signed in: identity comes from the login — nobody picks a name.
           <>
