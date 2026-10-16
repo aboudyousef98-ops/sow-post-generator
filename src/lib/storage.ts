@@ -7,6 +7,7 @@ import type { Ahj, ExportFile, InstallNotes, PostRecord, Settings } from '../typ
 import { emptyBoard, mergeBoard } from './board';
 import { emptyExtraWork, mergeExtraWork } from './extraWork';
 import { emptyInstallNotes } from './installNotes';
+import { renameLegacyNames } from './renames';
 
 const KEY_RECORDS = 'sowpost.records';
 const KEY_SETTINGS = 'sowpost.settings';
@@ -322,10 +323,10 @@ export function mergeRecords(
   current: PostRecord[],
   incoming: PostRecord[],
 ): { records: PostRecord[]; added: number; updated: number } {
-  const byId = new Map(current.map((r) => [r.id, r]));
+  const byId = new Map(renameLegacyNames(current).map((r) => [r.id, r]));
   let added = 0;
   let updated = 0;
-  for (const rec of incoming ?? []) {
+  for (const rec of renameLegacyNames(incoming ?? [])) {
     if (!rec?.id) continue;
     const existing = byId.get(rec.id);
     if (!existing) {

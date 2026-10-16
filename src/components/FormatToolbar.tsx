@@ -136,7 +136,7 @@ export default function FormatToolbar({ taRef, value, onChange, label }: Props) 
       <B on={() => toggleMark('italic')} title="Italic (Ctrl+I)"><em>I</em></B>
       <B on={() => toggleMark('strike')} title="Strikethrough"><s>S</s></B>
       <span className="fmt-sep" />
-      <B on={() => toggleLeader('bullet')} title="Bulleted list">•&#8203;—</B>
+      <B on={() => toggleLeader('bullet')} title="Bulleted list">•</B>
       <B on={() => toggleLeader('number')} title="Numbered list">1.</B>
       <B on={toggleDone} title="Checkbox">☐</B>
     </div>

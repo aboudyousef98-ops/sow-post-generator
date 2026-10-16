@@ -4,6 +4,7 @@
 // board converge no matter the push order.
 
 import type { BoardActivity, BoardLabel, BoardProject, BoardState, LabelColumnKey } from '../board/types';
+import { renameLegacyNames } from './renames';
 
 // ---- labels -----------------------------------------------------------------
 
@@ -52,7 +53,7 @@ export function seedLabels(): BoardLabel[] {
 }
 
 export function emptyBoard(): BoardState {
-  return { projects: [], labels: seedLabels(), activity: [] };
+  return { projects: [], labels: seedLabels(), activity: [], updates: [] };
 }
 
 export function labelsFor(labels: BoardLabel[], columnKey: LabelColumnKey): BoardLabel[] {
@@ -88,7 +89,13 @@ function mergeById<T extends { id: string; updatedAt: string }>(current: T[], in
  * Activity: append-only union by id, newest first, capped so the store can
  * never grow without bound.
  */
-export function mergeBoard(current: BoardState, incoming: Partial<BoardState>): BoardState {
+export function mergeBoard(rawCurrent: BoardState, rawIncoming: Partial<BoardState>): BoardState {
+  // Legacy display names are normalised on the way in, on BOTH sides. Every
+  // load — cache and server alike — passes through here, and a rename does not
+  // move `updatedAt`, so without this the merge would keep returning the old
+  // spelling forever. See lib/renames.ts.
+  const current = renameLegacyNames(rawCurrent);
+  const incoming = renameLegacyNames(rawIncoming);
   const activityById = new Map(current.activity.map((a) => [a.id, a]));
   for (const a of incoming.activity ?? []) {
     if (a?.id && !activityById.has(a.id)) activityById.set(a.id, a);
@@ -105,6 +112,10 @@ export function mergeBoard(current: BoardState, incoming: Partial<BoardState>): 
     projects: mergeById(current.projects, incoming.projects ?? []),
     labels,
     activity,
+    // `updates` post-dates the first boards, so both sides may be undefined.
+    // Newer `updatedAt` per id wins, exactly like projects — that is what lets
+    // an edit or a delete tombstone propagate between people.
+    updates: mergeById(current.updates ?? [], incoming.updates ?? []),
   };
 }
 

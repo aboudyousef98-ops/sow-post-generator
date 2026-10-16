@@ -6,7 +6,7 @@ import type { PolishKey, RewriteMode } from '../types';
 
 const TOKEN = import.meta.env.VITE_API_PATH_TOKEN ?? 'changeme';
 
-function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region' | 'notecheck'): string {
+function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region' | 'notecheck' | 'updatesearch'): string {
   return `/api/${TOKEN}/${endpoint}`;
 }
 
@@ -15,7 +15,7 @@ export interface ApiError {
   message: string;
 }
 
-async function post<T>(endpoint: 'rewrite' | 'extract' | 'region' | 'notecheck', body: unknown): Promise<T> {
+async function post<T>(endpoint: 'rewrite' | 'extract' | 'region' | 'notecheck' | 'updatesearch', body: unknown): Promise<T> {
   const res = await fetch(apiPath(endpoint), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -273,5 +273,20 @@ export function noteCheck(
   return post<{ hits: { lineId: string; why: string; trigger: string }[]; model: string; ms: number }>('notecheck', {
     post: postText,
     lines,
+  });
+}
+
+/**
+ * Natural-language search over the project Updates threads (Aboud 2026-10-17
+ * #3). Rejects with ApiError when the key is missing or the model misbehaves;
+ * the caller falls back to its local keyword pass rather than showing an error.
+ */
+export function updateSearch(
+  query: string,
+  updates: { projectId: string; projectName: string; by: string; at: string; kind: string; text: string }[],
+): Promise<{ hits: { projectId: string; why: string }[]; model: string; ms: number }> {
+  return post<{ hits: { projectId: string; why: string }[]; model: string; ms: number }>('updatesearch', {
+    query,
+    updates,
   });
 }

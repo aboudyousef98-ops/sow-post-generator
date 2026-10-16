@@ -4,6 +4,7 @@
 
 import type { DayType, ExtraWorkEntry, ExtraWorkState } from '../extrawork/types';
 import { parseIsoLocal, weekdayName } from './dates';
+import { renameLegacyNames } from './renames';
 
 export function emptyExtraWork(): ExtraWorkState {
   return { entries: [] };
@@ -111,7 +112,14 @@ export function mergeExtraWork(
   current: ExtraWorkState,
   incoming: Partial<ExtraWorkState>,
 ): ExtraWorkState {
-  return { entries: mergeById(current.entries, incoming.entries ?? []) };
+  // `person` is a display name — normalise legacy spellings here, for the same
+  // reason as mergeBoard. See lib/renames.ts.
+  return {
+    entries: mergeById(
+      renameLegacyNames(current.entries),
+      renameLegacyNames(incoming.entries ?? []),
+    ),
+  };
 }
 
 // ---- months -----------------------------------------------------------------

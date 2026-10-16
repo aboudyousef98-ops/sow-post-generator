@@ -126,14 +126,78 @@ describe('BoardTab', () => {
     const slider = () => screen.getByRole('slider', { name: 'Rating' });
     expect(slider().getAttribute('aria-valuemax')).toBe('5');
 
-    fireEvent.click(screen.getByRole('button', { name: '4 stars' }));
-    expect(slider().getAttribute('aria-valuenow')).toBe('4');
+    // 1–3 land immediately; 4 and 5 are gated (see the rating-reason tests).
+    fireEvent.click(screen.getByRole('button', { name: '3 stars' }));
+    expect(slider().getAttribute('aria-valuenow')).toBe('3');
 
-    fireEvent.click(screen.getByRole('button', { name: '4 stars' }));
+    fireEvent.click(screen.getByRole('button', { name: '3 stars' }));
     expect(slider().getAttribute('aria-valuenow')).toBe('0');
 
-    fireEvent.keyDown(slider(), { key: '5' });
-    expect(slider().getAttribute('aria-valuenow')).toBe('5');
+    fireEvent.keyDown(slider(), { key: '2' });
+    expect(slider().getAttribute('aria-valuenow')).toBe('2');
+  });
+
+  // Aboud 2026-10-17 #3: "when the project is rated 4 or 5 the user must fill
+  // out a small note saying why this project is 4 or 5 stars ... and btw I want
+  // this comment to be inside the updates feature".
+  describe('a 4- or 5-star rating must say why', () => {
+    const rate = (stars: number) => fireEvent.click(screen.getByRole('button', { name: `${stars} stars` }));
+    const slider = () => screen.getByRole('slider', { name: 'Rating' });
+
+    it('asks for a reason and does NOT apply the rating until one is given', () => {
+      render(<Harness />);
+      addProject('Martha Thompson');
+
+      rate(5);
+      expect(screen.getByText('Why is this 5 stars?')).toBeTruthy();
+      // The star has not moved yet — the gate holds the patch.
+      expect(slider().getAttribute('aria-valuenow')).toBe('0');
+    });
+
+    it('cancelling abandons the rating entirely', () => {
+      render(<Harness />);
+      addProject('Martha Thompson');
+
+      rate(4);
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByText('Why is this 4 stars?')).toBeNull();
+      expect(slider().getAttribute('aria-valuenow')).toBe('0');
+    });
+
+    it('cannot be confirmed empty', () => {
+      render(<Harness />);
+      addProject('Martha Thompson');
+
+      rate(5);
+      expect(screen.getByRole('button', { name: /Rate 5/ }).hasAttribute('disabled')).toBe(true);
+    });
+
+    it('applies the rating and posts the reason to Updates', () => {
+      render(<Harness />);
+      addProject('Martha Thompson');
+
+      rate(5);
+      fireEvent.change(screen.getByLabelText('Reason'), {
+        target: { value: 'this project has trench and external long run' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Rate 5/ }));
+
+      expect(slider().getAttribute('aria-valuenow')).toBe('5');
+
+      // The reason is on the project's Updates thread, tagged and searchable.
+      fireEvent.click(screen.getAllByTitle(/open the thread/)[0]);
+      expect(screen.getByText(/trench and external long run/)).toBeTruthy();
+      expect(screen.getByText(/Rating reason/)).toBeTruthy();
+    });
+
+    it('1–3 stars are not gated', () => {
+      render(<Harness />);
+      addProject('Martha Thompson');
+
+      rate(3);
+      expect(screen.queryByLabelText('Reason')).toBeNull();
+      expect(slider().getAttribute('aria-valuenow')).toBe('3');
+    });
   });
 
   it('hold a row and drag it above another — order flips and sticks (monday-style)', () => {
@@ -479,13 +543,37 @@ describe('BoardTab — Tier 1', () => {
     expect(toasts.at(-1)!.text).toBe('1 project → Done.');
   });
 
-  it('filtering a selected row away drops it from the selection', () => {
+  // REVERSED on 2026-10-17. This used to assert that filtering a selected row
+  // away silently DROPPED it. That was the most plausible cause of Aboud's
+  // report: "I select multi project and change the status it does not do the
+  // action for all projects" — rows he had ticked quietly left the selection,
+  // so the bulk action hit fewer rows than the bar implied.
+  //
+  // Now an explicitly ticked row stays ticked, and the bar says how many are
+  // hidden. "Select all shown" still only takes visible rows — the test above
+  // ("select-all ignores rows hidden inside a collapsed group") still holds.
+  it('a selected row hidden by a filter stays selected, and is reported', () => {
     render(<Harness initial={withRows()} />);
     fireEvent.click(screen.getByLabelText('Select Martha Thompson'));
     fireEvent.click(screen.getByLabelText('Select Patrick Lingwall'));
     fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'martha' } });
-    expect(screen.getByText('1 selected')).toBeTruthy();
+
+    expect(screen.getByText('2 selected')).toBeTruthy();
+    expect(screen.getByText(/1 hidden/)).toBeTruthy();
   });
+
+  it('a bulk action still applies to a selected row the filter hides', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByLabelText('Select Martha Thompson'));
+    fireEvent.click(screen.getByLabelText('Select Patrick Lingwall'));
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'martha' } });
+
+    fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    // Both — the hidden Patrick included. This is the actual bug fix.
+    expect(toasts.at(-1)!.text).toBe('2 projects → Done.');
+  });
+
 
   it('aging: a row untouched for 14+ days is flagged, a fresh one is not', () => {
     const board = emptyBoard();
@@ -536,5 +624,156 @@ describe('BoardTab — Tier 1', () => {
     expect(screen.getByText('Patrick Lingwall')).toBeTruthy();
     expect(screen.queryByText('Martha Thompson')).toBeNull();
     expect((screen.getByLabelText('Search projects') as HTMLInputElement).value).toBe('');
+  });
+});
+
+// Aboud 2026-10-17 #6: "whenever a person put the status to 'Pending additional
+// information' the system also must open the updates window and ask him to
+// write what information is he missing. This is a must".
+//
+// NOTE: that label is one Aboud created himself — it is NOT in seedLabels() —
+// so the gate matches it BY NAME (case/space-insensitive). Renaming the label
+// in Admin → Labels would stop the gate firing. See lib/updates.ts.
+describe('Pending Additional Information must say what is missing', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const PENDING = {
+    id: 'status-pending-info',
+    columnKey: 'status' as const,
+    name: 'Pending Additional Information',
+    color: '#FDAB3D',
+    sortOrder: 50,
+    isDefault: false,
+    isDone: false,
+    isSystem: false,
+    archived: false,
+    updatedAt: '2026-10-01T00:00:00.000Z',
+  };
+
+  const withPending = () => {
+    const b = emptyBoard();
+    b.labels = [...b.labels, PENDING];
+    b.projects = [boardProject('Martha Thompson', 'pm')];
+    return b;
+  };
+
+  const setStatusToPending = () => {
+    fireEvent.click(screen.getAllByRole('button', { name: 'New project' })[0]);
+    fireEvent.click(screen.getByRole('option', { name: 'Pending Additional Information' }));
+  };
+
+  /** The board renders two table bodies (sticky header clone) — take the first. */
+  const openThread = () => fireEvent.click(screen.getAllByTitle(/open the thread|Post the first update/)[0]);
+
+  it('asks what is missing, and does not change the status yet', () => {
+    render(<Harness initial={withPending()} />);
+    setStatusToPending();
+
+    expect(screen.getByText('What information is missing?')).toBeTruthy();
+    // Still the default status — the gate holds the patch.
+    expect(screen.getAllByRole('button', { name: 'New project' }).length).toBeGreaterThan(0);
+  });
+
+  it('cancelling leaves the status alone', () => {
+    render(<Harness initial={withPending()} />);
+    setStatusToPending();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getAllByRole('button', { name: 'New project' }).length).toBeGreaterThan(0);
+  });
+
+  it('cannot be confirmed empty', () => {
+    render(<Harness initial={withPending()} />);
+    setStatusToPending();
+    expect(screen.getByRole('button', { name: /Set status and post/ }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('applies the status and posts what is missing to Updates', () => {
+    render(<Harness initial={withPending()} />);
+    setStatusToPending();
+
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'need the signed utility interconnection letter' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Set status and post/ }));
+
+    expect(screen.getAllByRole('button', { name: 'Pending Additional Information' }).length).toBeGreaterThan(0);
+
+    openThread();
+    expect(screen.getByText(/signed utility interconnection letter/)).toBeTruthy();
+    expect(screen.getByText(/Missing info/)).toBeTruthy();
+  });
+
+  it('an ordinary status change is not gated', () => {
+    render(<Harness initial={withPending()} />);
+    fireEvent.click(screen.getAllByRole('button', { name: 'New project' })[0]);
+    fireEvent.click(screen.getByRole('option', { name: 'Working on it' }));
+
+    expect(screen.queryByLabelText('Reason')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Working on it' }).length).toBeGreaterThan(0);
+  });
+});
+
+// Aboud 2026-10-17 #2 — the thread itself.
+describe('Updates thread', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const withRow = () => {
+    const b = emptyBoard();
+    b.projects = [boardProject('Martha Thompson', 'pm')];
+    return b;
+  };
+
+  it('posts an update and shows it in the thread and the column badge', () => {
+    render(<Harness initial={withRow()} />);
+    fireEvent.click(screen.getAllByTitle('Post the first update')[0]);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'New update' }), { target: { value: 'waiting on the AHJ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+
+    expect(screen.getByText('waiting on the AHJ')).toBeTruthy();
+    expect(screen.getByText('1 update')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getAllByTitle('1 update — open the thread').length).toBeGreaterThan(0);
+  });
+
+  it('renders the formatting marks as real elements, like the notes panels', () => {
+    render(<Harness initial={withRow()} />);
+    fireEvent.click(screen.getAllByTitle('Post the first update')[0]);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'New update' }), { target: { value: '• one\n• two' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+
+    expect(document.querySelectorAll('.upd-item ul li')).toHaveLength(2);
+  });
+
+  it('deletes an update', () => {
+    render(<Harness initial={withRow()} />);
+    fireEvent.click(screen.getAllByTitle('Post the first update')[0]);
+    fireEvent.change(screen.getByRole('textbox', { name: 'New update' }), { target: { value: 'oops' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    expect(screen.queryByText('oops')).toBeNull();
+    expect(screen.getByText('0 updates')).toBeTruthy();
   });
 });

@@ -6398,3 +6398,178 @@ tr:hover .board-label-cell.empty {
 .rich.req-print-text {
   white-space: normal;
 }
+
+/* Selected-but-filtered-out count in the bulk bar (Aboud 2026-10-17 #7). */
+.board-bulk-hidden {
+  opacity: 0.75;
+  font-weight: 500;
+}
+
+/* Column sort affordance (Aboud 2026-10-17 #1). Dimmed until the column is
+   actually sorted, so the header reads as clickable without shouting. */
+.board-sort {
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.3;
+  transition: opacity 0.12s;
+}
+
+.board-th:hover .board-sort {
+  opacity: 0.6;
+}
+
+.board-sort.on {
+  opacity: 1;
+  color: var(--dyn-teal);
+}
+
+/* ---- Project Updates (Aboud 2026-10-17 #2/#3/#6) ------------------------ */
+
+.board-upd-cell {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  padding: 3px 8px;
+  font-size: 13px;
+  color: var(--dyn-muted);
+  cursor: pointer;
+  width: 100%;
+  text-align: left;
+}
+
+.board-upd-cell:hover {
+  background: var(--dyn-bg);
+  border-color: var(--dyn-line);
+}
+
+.board-upd-cell.has {
+  color: var(--dyn-ink);
+  font-weight: 600;
+}
+
+.upd-composer {
+  border: 1px solid var(--dyn-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--dyn-bg);
+}
+
+.upd-composer-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.upd-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin: 16px 2px 8px;
+}
+
+.upd-head h4 {
+  margin: 0;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dyn-navy);
+}
+
+.upd-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 46vh;
+  overflow: auto;
+}
+
+.upd-item {
+  border: 1px solid var(--dyn-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.upd-item-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.upd-item-who {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1;
+}
+
+.upd-actions {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+/* Tagged updates written by a gate, so they stand out in a long thread. */
+.upd-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.upd-badge-rating {
+  background: #fff3e0;
+  color: #9a5b00;
+}
+
+.upd-badge-pending-info {
+  background: #e8f1ff;
+  color: #1c4f91;
+}
+
+/* "Ask the updates" — AI + keyword search across all threads (#3). */
+.upd-search-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 12px 0 6px;
+}
+
+.upd-search-bar input {
+  flex: 1;
+  margin-top: 0;
+}
+
+.upd-search-note {
+  min-height: 18px;
+  font-size: 12.5px;
+  margin-bottom: 8px;
+}
+
+.upd-search-name {
+  border: none;
+  background: none;
+  padding: 0;
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--dyn-navy);
+  cursor: pointer;
+  text-align: left;
+  flex: 1;
+}
+
+.upd-search-name:hover {
+  text-decoration: underline;
+}
+
+.upd-search-quote {
+  border-left: 3px solid var(--dyn-line);
+  padding-left: 10px;
+  margin-top: 6px;
+}

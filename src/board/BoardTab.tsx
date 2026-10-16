@@ -50,10 +50,28 @@ import {
   type GroupKey,
 } from '../lib/boardViews';
 import { relativeTime, isoToUs, todayIso } from '../lib/dates';
+import { matchesSearch } from '../lib/boardSearch';
+import {
+  isPendingInfoLabel,
+  needsRatingReason,
+  newUpdate,
+  putUpdate,
+  updateCounts,
+} from '../lib/updates';
 import type { PostRecord } from '../types';
 import type { Toast } from '../components/Toast';
-import type { BoardActivity, BoardLabel, BoardProject, BoardState, LabelColumnKey } from './types';
+import type {
+  BoardActivity,
+  BoardLabel,
+  BoardProject,
+  BoardState,
+  LabelColumnKey,
+  ProjectUpdate,
+} from './types';
 import ActivityModal from './ActivityModal';
+import UpdatesModal from './UpdatesModal';
+import UpdateSearchModal from './UpdateSearchModal';
+import RequireNoteModal, { type NoteGate } from './RequireNoteModal';
 import EditLabelsModal from './EditLabelsModal';
 import Popover from './Popover';
 import { DateCell, LabelCell, NameCell, PersonCell, RatingCell, UpdatedCell, initialsOf } from './cells';
@@ -91,6 +109,20 @@ interface Props {
   /** Row to highlight/scroll to when arriving from a Compose chip. */
   focusId?: string | null;
   onFocusHandled?: () => void;
+}
+
+/**
+ * Sort affordance on a column header. Columns were always sortable, but the
+ * arrow only appeared AFTER you had already clicked — so nobody knew (Aboud
+ * 2026-10-17 #1: "these column needs ... a small arrow at the header to sort").
+ * A dimmed ↕ sits there permanently and resolves to ↑ / ↓ once sorted.
+ */
+function SortArrow({ dir }: { dir: false | 'asc' | 'desc' }) {
+  return (
+    <span className={`board-sort${dir ? ' on' : ''}`} aria-hidden="true">
+      {dir === 'asc' ? '↑' : dir === 'desc' ? '↓' : '↕'}
+    </span>
+  );
 }
 
 /**
@@ -167,6 +199,7 @@ function RowMenu({
   onOpenCompose,
   onCopyName,
   onActivity,
+  onUpdates,
   onArchive,
   onRestore,
   onDelete,
@@ -176,6 +209,7 @@ function RowMenu({
   onOpenCompose: () => void;
   onCopyName: () => void;
   onActivity: () => void;
+  onUpdates: () => void;
   onArchive: () => void;
   onRestore: () => void;
   onDelete: () => void;
@@ -201,6 +235,9 @@ function RowMenu({
         </button>
         <button type="button" role="menuitem" className="board-menu-item" onClick={act(onCopyName)}>
           Copy name
+        </button>
+        <button type="button" role="menuitem" className="board-menu-item" onClick={act(onUpdates)}>
+          Updates
         </button>
         <button type="button" role="menuitem" className="board-menu-item" onClick={act(onActivity)}>
           View activity
@@ -373,6 +410,16 @@ export default function BoardTab({
   );
   const [editLabels, setEditLabels] = useState<LabelColumnKey | null>(null);
   const [activityFor, setActivityFor] = useState<BoardProject | null>(null);
+  const [updatesFor, setUpdatesFor] = useState<BoardProject | null>(null);
+  const [askOpen, setAskOpen] = useState(false);
+  /** A patch held hostage until the user explains it (#3 rating, #6 pending). */
+  const [gate, setGate] = useState<{
+    project: BoardProject;
+    patch: ProjectPatch;
+    gate: NoteGate;
+    kind: 'rating' | 'pending-info';
+    rating?: 1 | 2 | 3 | 4 | 5;
+  } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BoardProject | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [addName, setAddName] = useState('');
@@ -453,20 +500,108 @@ export default function BoardTab({
     return map;
   }, [postsByProject]);
 
+  /** projectId → live update count, for the Updates column badge. */
+  const updateCountById = useMemo(() => updateCounts(board.updates), [board.updates]);
+
   const agingFor = (p: BoardProject): AgingState =>
     agingState(p, installByProject.get(p.id) ?? null, today);
 
   // ---- writes ---------------------------------------------------------------
 
   /** One-field optimistic write + activity entry. Single source of mutation. */
-  const applyPatch = (project: BoardProject, patch: ProjectPatch, extraActivity?: BoardActivity) => {
+  const applyPatch = (
+    project: BoardProject,
+    patch: ProjectPatch,
+    extraActivity?: BoardActivity,
+    /** The explanation a gate collected, written to Updates with the patch. */
+    withUpdate?: ProjectUpdate,
+    /** A second entry logged alongside the field change (e.g. the gate post). */
+    alsoLog?: BoardActivity,
+  ) => {
     const cur = boardRef.current;
     const next = patchProject(project, patch, me);
     const entry = extraActivity ?? activityForPatch(project, patch, me, cur.labels);
+    const added = [entry, alsoLog].filter((e): e is BoardActivity => Boolean(e));
     setBoard({
       ...cur,
       projects: cur.projects.map((p) => (p.id === project.id ? next : p)),
-      activity: entry ? [entry, ...cur.activity] : cur.activity,
+      activity: added.length ? [...added, ...cur.activity] : cur.activity,
+      updates: withUpdate ? putUpdate(cur.updates, withUpdate) : (cur.updates ?? []),
+    });
+  };
+
+  /**
+   * applyPatch, but some edits have to be justified first (#3, #6). Returning
+   * early here means the row does NOT change until the note is written —
+   * cancelling leaves everything exactly as it was, which is the point.
+   */
+  const guardedPatch = (project: BoardProject, patch: ProjectPatch) => {
+    if ('rating' in patch && needsRatingReason(patch.rating as number | null)) {
+      const stars = patch.rating as 1 | 2 | 3 | 4 | 5;
+      setGate({
+        project,
+        patch,
+        kind: 'rating',
+        rating: stars,
+        gate: {
+          title: `Why is this ${stars} stars?`,
+          prompt: `A ${stars}-star rating needs a reason, so it can be found later. Rating`,
+          placeholder: 'e.g. this project has trench and external long run',
+          confirmLabel: `Rate ${stars}★ and post`,
+        },
+      });
+      return;
+    }
+
+    if ('statusId' in patch) {
+      const label = labelById(boardRef.current.labels, (patch.statusId as string) ?? null);
+      if (isPendingInfoLabel(label?.name)) {
+        setGate({
+          project,
+          patch,
+          kind: 'pending-info',
+          gate: {
+            title: 'What information is missing?',
+            prompt: 'Say what you are waiting for before putting this on hold. Project',
+            placeholder: 'e.g. need the signed utility interconnection letter from the customer',
+            confirmLabel: 'Set status and post',
+          },
+        });
+        return;
+      }
+    }
+
+    applyPatch(project, patch);
+  };
+
+  /** The gate was answered — write the update and the patch in one go. */
+  const resolveGate = (text: string) => {
+    if (!gate) return;
+    const u = newUpdate(gate.project.id, text, me, gate.kind, gate.rating ? { rating: gate.rating } : {});
+    // The field change keeps its own activity entry; this adds the post.
+    applyPatch(gate.project, gate.patch, undefined, u, activityEntry(gate.project.id, me, 'update-post'));
+    setGate(null);
+    toast('Update posted.');
+  };
+
+  /**
+   * Upsert an update on its own (the Updates thread's own edits), and record
+   * it in the activity log — #5, "whatever action we take on a project it must
+   * be recorded". The update's TEXT is not copied into the log: it already
+   * lives on the thread, and duplicating it would double the store.
+   */
+  const putUpdateOnBoard = (u: ProjectUpdate) => {
+    const cur = boardRef.current;
+    const existed = (cur.updates ?? []).some((x) => x.id === u.id);
+    const action: BoardActivity['action'] = u.deleted
+      ? 'update-delete'
+      : existed
+        ? 'update-edit'
+        : 'update-post';
+    setBoard({
+      ...cur,
+      updates: putUpdate(cur.updates, u),
+      activity: [activityEntry(u.projectId, me, action), ...cur.activity],
     });
   };
 
@@ -592,7 +727,10 @@ export default function BoardTab({
     return board.projects
       .filter((p) => !p.deletedAt)
       .filter((p) => (filters.showArchived ? true : !p.archivedAt))
-      .filter((p) => (needle ? p.name.toLowerCase().includes(needle) : true))
+      // Matches project name AND coordinator, punctuation-folded, every term
+      // required. Before this, searching a person's name found nothing at all
+      // (Aboud 2026-10-17 #9) — see src/lib/boardSearch.ts.
+      .filter((p) => (needle ? matchesSearch(p, needle) : true))
       .filter((p) => (filters.coordinators.length ? filters.coordinators.includes(p.coordinator) : true))
       .filter((p) => (filters.statusIds.length ? filters.statusIds.includes(p.statusId ?? '') : true))
       .filter((p) => (filters.phaseIds.length ? filters.phaseIds.includes(p.phaseId ?? '') : true))
@@ -710,19 +848,42 @@ export default function BoardTab({
    * (3) was missed first time round, so select-all could write a teammate's
    * collapsed group (found by review, 2026-10-08).
    */
+  /** A search is being typed — see `shown` and the Completed section. */
+  const searching = filters.search.trim().length > 0;
+
   const shown = useMemo(() => {
-    const base = doneOpen ? [...active, ...completed] : active;
+    // While a search is running, completed rows are always in play — hiding a
+    // match behind a collapsed section is what made #9 look like "nothing
+    // appears". The user's own doneOpen preference is not written to.
+    const base = doneOpen || searching ? [...active, ...completed] : active;
     if (groupBy === 'none') return base;
     const hidden = new Set<string>();
     for (const g of groupProjects(base, groupBy, board.labels)) {
       if (collapsed[g.key]) for (const p of g.rows) hidden.add(p.id);
     }
     return hidden.size ? base.filter((p) => !hidden.has(p.id)) : base;
-  }, [active, completed, doneOpen, groupBy, collapsed, board.labels]);
+  }, [active, completed, doneOpen, searching, groupBy, collapsed, board.labels]);
 
-  const picked = useMemo(() => selectedRows(shown, selected), [shown, selected]);
-  const allShownSelected = shown.length > 0 && picked.length === shown.length;
-  const someShownSelected = picked.length > 0;
+  /**
+   * Rows a bulk action will touch. Resolved from every LIVE project, not from
+   * `shown` (Aboud 2026-10-17 #7: "I select multi project and change the status
+   * it does not do the action for all projects").
+   *
+   * It used to read `shown`, so any row that left the viewport's filter — a
+   * status edit moving it to Completed, a group collapsing, a background sync
+   * reordering — silently dropped out of the selection, and the bulk action
+   * then applied to fewer rows than the user had ticked. Keeping the selection
+   * whole and REPORTING what is hidden is honest; shrinking it silently is not.
+   */
+  const picked = useMemo(
+    () => selectedRows(board.projects.filter((p) => !p.deletedAt), selected),
+    [board.projects, selected],
+  );
+  const shownPicked = useMemo(() => selectedRows(shown, selected), [shown, selected]);
+  /** Selected, but not currently on screen — surfaced in the bulk bar. */
+  const hiddenPicked = picked.length - shownPicked.length;
+  const allShownSelected = shown.length > 0 && shownPicked.length === shown.length;
+  const someShownSelected = shownPicked.length > 0;
 
   /**
    * Read through a ref, NOT the closure.
@@ -740,14 +901,16 @@ export default function BoardTab({
   };
   const clearSelection = () => setSelected({});
 
-  // A row that scrolls out of the filter must not stay secretly selected.
+  // Drop selections for rows that genuinely no longer exist (deleted, or gone
+  // in a sync). Rows merely hidden by a filter STAY selected and are counted
+  // in the bulk bar instead — see `picked` above for why.
   useEffect(() => {
     setSelected((s) => {
-      const live = new Set(shown.map((p) => p.id));
+      const live = new Set(board.projects.filter((p) => !p.deletedAt).map((p) => p.id));
       const next = Object.fromEntries(Object.entries(s).filter(([id, on]) => on && live.has(id)));
       return Object.keys(next).length === Object.keys(s).length ? s : next;
     });
-  }, [shown]);
+  }, [board.projects]);
 
   const columns = useMemo<ColumnDef<BoardProject>[]>(
     () => [
@@ -813,6 +976,7 @@ export default function BoardTab({
                 toast('Name copied.');
               }}
               onActivity={() => setActivityFor(row.original)}
+              onUpdates={() => setUpdatesFor(row.original)}
               onArchive={() => archive(row.original)}
               onRestore={() => restore(row.original)}
               onDelete={() => setConfirmDelete(row.original)}
@@ -852,6 +1016,12 @@ export default function BoardTab({
             valueId={row.original.statusId}
             onPick={(statusId) => {
               const prev = row.original.statusId;
+              // "Pending Additional Information" is intercepted here and does
+              // not land until the user says what is missing (#6).
+              if (isPendingInfoLabel(labelById(boardRef.current.labels, statusId)?.name)) {
+                guardedPatch(row.original, { statusId });
+                return;
+              }
               applyPatch(row.original, { statusId });
               // Crossing INTO a done label hides the row from the main board —
               // announce where it went, with a way back.
@@ -941,8 +1111,32 @@ export default function BoardTab({
         accessorFn: (p) => p.rating ?? undefined,
         sortUndefined: 'last',
         cell: ({ row }) => (
-          <RatingCell value={row.original.rating} onPick={(rating) => applyPatch(row.original, { rating })} />
+          // 4 and 5 stars go through the gate — they must say why (#3).
+          <RatingCell value={row.original.rating} onPick={(rating) => guardedPatch(row.original, { rating })} />
         ),
+      },
+      {
+        // The Monday-style thread (#2). Count doubles as the affordance —
+        // a row with nothing on it shows a quiet "+", not a zero.
+        id: 'updates',
+        header: 'Updates',
+        size: 110,
+        minSize: 80,
+        maxSize: 400,
+        accessorFn: (p) => updateCountById.get(p.id) ?? 0,
+        cell: ({ row }) => {
+          const n = updateCountById.get(row.original.id) ?? 0;
+          return (
+            <button
+              type="button"
+              className={`board-upd-cell${n ? ' has' : ''}`}
+              title={n ? `${n} update${n === 1 ? '' : 's'} — open the thread` : 'Post the first update'}
+              onClick={() => setUpdatesFor(row.original)}
+            >
+              💬 {n || '+'}
+            </button>
+          );
+        },
       },
       {
         id: 'post',
@@ -993,7 +1187,7 @@ export default function BoardTab({
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh
     // when the data they RENDER changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board.labels, authors, me, isAdmin, postsByProject, installByProject, today, selected, allShownSelected, someShownSelected],
+    [board.labels, authors, me, isAdmin, postsByProject, installByProject, updateCountById, today, selected, allShownSelected, someShownSelected],
   );
 
   const table = useReactTable({
@@ -1161,6 +1355,10 @@ export default function BoardTab({
           >
             Show archived
           </button>
+          {/* Natural-language search over every project's Updates (#3). */}
+          <button type="button" className="btn small secondary" onClick={() => setAskOpen(true)} title="Search everything the team has posted on every project">
+            💬 Ask the updates
+          </button>
           <span className={`board-date-range ${filters.dateFrom || filters.dateTo ? 'on' : ''}`}>
             <span className="muted">Designed</span>
             <input
@@ -1255,7 +1453,7 @@ export default function BoardTab({
                             title="Sort"
                           >
                             {flexRender(header.column.columnDef.header, header.getContext())}
-                            {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
+                            <SortArrow dir={header.column.getIsSorted()} />
                           </button>
                           <div
                             className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
@@ -1284,7 +1482,13 @@ export default function BoardTab({
                 ? 'No projects yet — add the first one below.'
                 : activeTotal === 0
                   ? 'Nothing in progress — everything is in Completed projects below.'
-                  : 'Nothing matches the filters.'}
+                  : completed.length > 0
+                    ? // The real shape of Aboud's #9: every one of Yarob's
+                      // projects is Done, so a search for him emptied this
+                      // table while 25 matches sat in a collapsed section
+                      // below, reading as "nothing appears".
+                      `No active projects match — but ${completed.length} completed ${completed.length === 1 ? 'one does' : 'ones do'}, shown below.`
+                    : 'Nothing matches the filters.'}
             </p>
           )}
         </div>
@@ -1359,7 +1563,7 @@ export default function BoardTab({
                               title="Sort"
                             >
                               {flexRender(header.column.columnDef.header, header.getContext())}
-                              {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? ''}
+                              <SortArrow dir={header.column.getIsSorted()} />
                             </button>
                           )}
                         </th>
@@ -1382,6 +1586,11 @@ export default function BoardTab({
         <div className="board-bulk-bar" role="region" aria-label="Bulk actions">
           <span className="board-bulk-count">
             {picked.length} selected
+            {hiddenPicked > 0 && (
+              <span className="board-bulk-hidden" title="Selected rows that the current filters hide. Bulk actions still apply to them.">
+                {' '}· {hiddenPicked} hidden
+              </span>
+            )}
           </span>
           <FilterSelect
             label="Set status"
@@ -1435,6 +1644,38 @@ export default function BoardTab({
           onClose={() => setEditLabels(null)}
         />
       )}
+      {askOpen && (
+        <UpdateSearchModal
+          projects={board.projects.filter((p) => !p.deletedAt)}
+          updates={board.updates ?? []}
+          onOpenProject={(p) => {
+            setAskOpen(false);
+            setUpdatesFor(p);
+          }}
+          onClose={() => setAskOpen(false)}
+        />
+      )}
+
+      {updatesFor && (
+        <UpdatesModal
+          project={updatesFor}
+          updates={board.updates ?? []}
+          me={me}
+          isAdmin={isAdmin}
+          onPut={putUpdateOnBoard}
+          onClose={() => setUpdatesFor(null)}
+        />
+      )}
+
+      {gate && (
+        <RequireNoteModal
+          gate={gate.gate}
+          projectName={gate.project.name}
+          onConfirm={resolveGate}
+          onCancel={() => setGate(null)}
+        />
+      )}
+
       {activityFor && (
         <ActivityModal project={activityFor} activity={board.activity} onClose={() => setActivityFor(null)} />
       )}

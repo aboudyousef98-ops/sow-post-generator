@@ -12,6 +12,9 @@ const ACTION_TEXT: Record<BoardActivity['action'], string> = {
   archive: 'archived the project',
   restore: 'restored the project',
   delete: 'deleted the project',
+  'update-post': 'posted an update',
+  'update-edit': 'edited an update',
+  'update-delete': 'deleted an update',
 };
 
 export default function ActivityModal({
@@ -35,7 +38,9 @@ export default function ActivityModal({
             {entries.map((e) => (
               <div key={e.id} className="board-activity-row">
                 <div>
-                  <b>{e.actor || 'Unknown'}</b> {ACTION_TEXT[e.action]}
+                  {/* A newer client may write an action this build predates —
+                      show the raw verb rather than `undefined`. */}
+                  <b>{e.actor || 'Unknown'}</b> {ACTION_TEXT[e.action] ?? e.action}
                   {e.action === 'update' && e.changes && (
                     <ul>
                       {Object.entries(e.changes).map(([key, change]) => (

@@ -42,6 +42,11 @@
   status = 200
 
 [[redirects]]
+  from = "/api/:token/updatesearch"
+  to = "/.netlify/functions/updatesearch"
+  status = 200
+
+[[redirects]]
   from = "/api/:token/records"
   to = "/.netlify/functions/records"
   status = 200
