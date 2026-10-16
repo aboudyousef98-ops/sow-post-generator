@@ -6300,3 +6300,101 @@ tr:hover .board-label-cell.empty {
   margin-top: 4px;
   font-style: italic;
 }
+
+/* ---- Formatting toolbar + rich note rendering --------------------------- */
+/* Storage stays plain Slack markup; these rules only draw it. See
+   src/lib/richText.ts for why this is not a markdown renderer. */
+
+.fmt-bar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.fmt-btn {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  background: none;
+  color: var(--dyn-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fmt-btn:hover {
+  background: var(--dyn-bg);
+  border-color: var(--dyn-line);
+  color: var(--dyn-ink);
+}
+
+.fmt-btn:focus-visible {
+  outline: 2px solid var(--dyn-teal);
+  outline-offset: 1px;
+}
+
+.fmt-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--dyn-line);
+  margin: 0 4px;
+}
+
+/* The rendered note. Lists get real <ul>/<ol> so a selection-copy into Slack
+   arrives as a list rather than as literal "• " text. */
+.rich {
+  line-height: 1.6;
+  color: var(--dyn-ink);
+  font-size: 14.5px;
+  word-break: break-word;
+}
+
+.rich ul,
+.rich ol {
+  margin: 2px 0;
+  padding-left: 22px;
+}
+
+.rich ul {
+  list-style: disc;
+}
+
+.rich ol {
+  list-style: decimal;
+}
+
+.rich li {
+  margin: 1px 0;
+}
+
+/* Checkbox rows carry their own glyph, so suppress the disc. */
+.rich li.rich-check {
+  list-style: none;
+  margin-left: -22px;
+  padding-left: 22px;
+  position: relative;
+}
+
+.rich-box {
+  position: absolute;
+  left: 2px;
+  color: var(--dyn-muted);
+}
+
+.rich s {
+  color: var(--dyn-muted);
+}
+
+/* .ahj-post-text and .req-print-text set `white-space: pre-wrap`, which would
+   add a blank line after every block element once lists are real nodes. */
+.rich.ahj-post-text,
+.rich.req-print-text {
+  white-space: normal;
+}

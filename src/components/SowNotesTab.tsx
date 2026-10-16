@@ -11,6 +11,8 @@ import { flushSync } from 'react-dom';
 import { boardsOfKind, livePosts } from '../lib/ahj';
 import type { Ahj, AhjPost, Settings } from '../types';
 import type { Toast } from './Toast';
+import FormatToolbar, { continueList, formatHotkey } from './FormatToolbar';
+import RichText from './RichText';
 
 interface Props {
   ahjs: Ahj[];
@@ -37,6 +39,8 @@ export default function SowNotesTab({ ahjs, setAhjs, settings, setSettings, toas
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
   const [printing, setPrinting] = useState(false);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
   const ahjsRef = useRef(ahjs);
   ahjsRef.current = ahjs;
 
@@ -144,20 +148,27 @@ export default function SowNotesTab({ ahjs, setAhjs, settings, setSettings, toas
         <div className="card ahj-composer">
           <div style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
             <span className="ahj-avatar">{initials(author || '?')}</span>
-            <textarea
-              value={composer}
-              aria-label="New note"
-              onChange={(e) => setComposer(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault();
-                  addNote();
-                }
-              }}
-              rows={3}
-              placeholder="Add a general note for the team…"
-              style={{ marginTop: 0 }}
-            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <FormatToolbar taRef={composerRef} value={composer} onChange={setComposer} label="New note" />
+              <textarea
+                ref={composerRef}
+                value={composer}
+                aria-label="New note"
+                onChange={(e) => setComposer(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault();
+                    addNote();
+                    return;
+                  }
+                  if (formatHotkey(e, composerRef, composer, setComposer)) return;
+                  continueList(e, composerRef, composer, setComposer);
+                }}
+                rows={3}
+                placeholder="Add a general note for the team…"
+                style={{ marginTop: 0 }}
+              />
+            </div>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
             <label className="muted" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -212,10 +223,16 @@ export default function SowNotesTab({ ahjs, setAhjs, settings, setSettings, toas
 
             {editingId === p.id ? (
               <>
+                <FormatToolbar taRef={editRef} value={editDraft} onChange={setEditDraft} label="Edit note" />
                 <textarea
+                  ref={editRef}
                   value={editDraft}
                   aria-label="Edit note"
                   onChange={(e) => setEditDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (formatHotkey(e, editRef, editDraft, setEditDraft)) return;
+                    continueList(e, editRef, editDraft, setEditDraft);
+                  }}
                   rows={4}
                   style={{ marginTop: 0 }}
                 />
@@ -230,7 +247,7 @@ export default function SowNotesTab({ ahjs, setAhjs, settings, setSettings, toas
               </>
             ) : (
               <>
-                <div style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, color: 'var(--dyn-ink)' }}>{p.text}</div>
+                <RichText text={p.text} />
                 <div className="ahj-post-actions" style={{ marginTop: 8 }}>
                   <button
                     type="button"
@@ -266,7 +283,7 @@ export default function SowNotesTab({ ahjs, setAhjs, settings, setSettings, toas
           <ol className="req-print-list">
             {notes.map((p) => (
               <li key={p.id}>
-                <div className="req-print-text">{p.text}</div>
+                <RichText text={p.text} className="req-print-text" />
                 <div className="req-print-byline">
                   {p.pinned ? 'Pinned · ' : ''}
                   {p.editedBy ?? p.by} · {fmtShort(p.editedAt ?? p.at)}

@@ -14,6 +14,8 @@ import {
 } from '../lib/ahj';
 import type { Ahj, AhjPost, Settings } from '../types';
 import type { Toast } from './Toast';
+import FormatToolbar, { continueList, formatHotkey } from './FormatToolbar';
+import RichText from './RichText';
 
 interface Props {
   ahjs: Ahj[];
@@ -91,6 +93,8 @@ export default function AhjTab({
   const [printing, setPrinting] = useState(false);
 
   const pickerInput = useRef<HTMLInputElement>(null);
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const editRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => {
     if (pickerOpen) pickerInput.current?.focus();
   }, [pickerOpen]);
@@ -533,14 +537,19 @@ export default function AhjTab({
           <div className="card" style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <span className="ahj-avatar">{initials(author)}</span>
             <div style={{ flex: 1, minWidth: 0 }}>
+              <FormatToolbar taRef={composerRef} value={composer} onChange={setComposer} label="New requirement" />
               <textarea
+                ref={composerRef}
                 value={composer}
                 onChange={(e) => setComposer(e.target.value)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault();
                     addPost();
+                    return;
                   }
+                  if (formatHotkey(e, composerRef, composer, setComposer)) return;
+                  continueList(e, composerRef, composer, setComposer);
                 }}
                 rows={3}
                 placeholder={`Post a new requirement for ${sel.name}…`}
@@ -610,15 +619,23 @@ export default function AhjTab({
               </div>
               {editingId === p.id ? (
                 <>
+                  <FormatToolbar taRef={editRef} value={editDraft} onChange={setEditDraft} label="Edit requirement" />
                   <textarea
+                    ref={editRef}
                     value={editDraft}
                     onChange={(e) => setEditDraft(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                         e.preventDefault();
                         saveEdit();
+                        return;
                       }
-                      if (e.key === 'Escape') setEditingId(null);
+                      if (e.key === 'Escape') {
+                        setEditingId(null);
+                        return;
+                      }
+                      if (formatHotkey(e, editRef, editDraft, setEditDraft)) return;
+                      continueList(e, editRef, editDraft, setEditDraft);
                     }}
                     rows={4}
                     style={{ marginTop: 0 }}
@@ -634,7 +651,7 @@ export default function AhjTab({
                 </>
               ) : (
                 <>
-                  <div className="ahj-post-text">{p.text}</div>
+                  <RichText text={p.text} className="ahj-post-text" />
                   <div className="ahj-post-actions" style={{ marginTop: 8 }}>
                     <button
                       type="button"
@@ -818,8 +835,8 @@ export default function AhjTab({
                 ))}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-                <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', whiteSpace: 'pre-wrap', lineHeight: 1.6, color: 'var(--dyn-ink)' }}>
-                  {histView?.text}
+                <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px', lineHeight: 1.6, color: 'var(--dyn-ink)' }}>
+                  <RichText text={histView?.text ?? ''} />
                 </div>
                 <div style={{ padding: '10px 20px', borderTop: '1px solid var(--dyn-line)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, background: 'var(--dyn-bg)' }}>
                   <span className="muted">
@@ -853,7 +870,7 @@ export default function AhjTab({
           <ol className="req-print-list">
             {livePosts(sel).map((p) => (
               <li key={p.id}>
-                <div className="req-print-text">{p.text}</div>
+                <RichText text={p.text} className="req-print-text" />
                 <div className="req-print-byline">
                   {p.pinned ? 'Pinned · ' : ''}
                   {lastBy(p)} · {fmtShort(lastAct(p))}
