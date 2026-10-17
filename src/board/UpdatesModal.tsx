@@ -71,8 +71,12 @@ export default function UpdatesModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <h3>Updates — {project.name}</h3>
+      {/* `.modal.wide` is padding:0 / overflow:hidden, so this lays itself out
+          as header + composer / scrolling thread / footer. Letting the thread
+          grow the modal pushed Close off the bottom of the screen. */}
+      <div className="modal wide upd-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="upd-top">
+          <h3>Updates — {project.name}</h3>
 
         <div className="upd-composer">
           <FormatToolbar taRef={composerRef} value={draft} onChange={setDraft} label="New update" />
@@ -104,11 +108,12 @@ export default function UpdatesModal({
           </div>
         </div>
 
-        <div className="upd-head">
-          <h4>
-            {thread.length} update{thread.length === 1 ? '' : 's'}
-          </h4>
-          <span className="muted">Newest first</span>
+          <div className="upd-head">
+            <h4>
+              {thread.length} update{thread.length === 1 ? '' : 's'}
+            </h4>
+            <span className="muted">Newest first</span>
+          </div>
         </div>
 
         <div className="upd-thread">
@@ -116,15 +121,15 @@ export default function UpdatesModal({
 
           {thread.map((u) => (
             <article key={u.id} className="upd-item">
+              {/* Who, when and the tag all on ONE line — this used to stack
+                  into three rows for a single line of text. */}
               <div className="upd-item-head">
-                <span className="ahj-avatar">{initials(u.by)}</span>
-                <div className="upd-item-who">
-                  <strong>{u.by}</strong>
-                  <span className="muted" title={new Date(u.at).toLocaleString()}>
-                    {relativeTime(u.at)}
-                    {u.editedAt && ' · edited'}
-                  </span>
-                </div>
+                <span className="upd-avatar">{initials(u.by)}</span>
+                <strong className="upd-who">{u.by}</strong>
+                <span className="muted nowrap" title={new Date(u.at).toLocaleString()}>
+                  {relativeTime(u.at)}
+                  {u.editedAt && ' · edited'}
+                </span>
                 {KIND_BADGE[u.kind] && (
                   <span className={`upd-badge upd-badge-${u.kind}`}>
                     {KIND_BADGE[u.kind]}
@@ -157,7 +162,7 @@ export default function UpdatesModal({
                     }}
                     style={{ marginTop: 0 }}
                   />
-                  <div className="upd-actions">
+                  <div className="upd-actions edit">
                     <button type="button" className="btn primary small" onClick={() => saveEdit(u)}>
                       Save
                     </button>
@@ -169,11 +174,13 @@ export default function UpdatesModal({
               ) : (
                 <>
                   <RichText text={u.text} />
+                  {/* Kept together on the left and dimmed until hover — Edit
+                      and Delete were pinned to opposite edges of the row. */}
                   <div className="upd-actions">
                     {mayEdit(u) && (
                       <button
                         type="button"
-                        className="ahj-action"
+                        className="upd-action"
                         onClick={() => {
                           setEditingId(u.id);
                           setEditDraft(u.text);
@@ -182,9 +189,8 @@ export default function UpdatesModal({
                         Edit
                       </button>
                     )}
-                    <span style={{ flex: 1 }} />
                     {mayDelete(u) && (
-                      <button type="button" className="ahj-action danger" onClick={() => onPut(deleteUpdate(u, me))}>
+                      <button type="button" className="upd-action danger" onClick={() => onPut(deleteUpdate(u, me))}>
                         Delete
                       </button>
                     )}

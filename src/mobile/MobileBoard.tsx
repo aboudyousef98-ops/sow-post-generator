@@ -22,6 +22,17 @@ import {
   type ProjectPatch,
 } from '../lib/board';
 import { isoToUs, relativeTime } from '../lib/dates';
+import {
+  deleteUpdate,
+  isPendingInfoLabel,
+  needsRatingReason,
+  newUpdate,
+  putUpdate,
+  updateCounts,
+  updatesFor,
+} from '../lib/updates';
+import type { ProjectUpdate } from '../board/types';
+import RichText from '../components/RichText';
 import BottomSheet from './BottomSheet';
 
 interface Props {
@@ -36,7 +47,7 @@ interface Props {
   onOpenDraft: (recordId: string) => void;
 }
 
-type SheetKind = 'status' | 'phase' | 'person' | 'rating' | 'date' | 'menu' | 'filterStatus' | 'filterCoord' | 'filterPhase';
+type SheetKind = 'status' | 'phase' | 'person' | 'rating' | 'date' | 'menu' | 'filterStatus' | 'filterCoord' | 'filterPhase' | 'updates';
 interface Sheet {
   kind: SheetKind;
   id?: string;
@@ -73,20 +84,61 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
   const [resizing, setResizing] = useState<string | null>(null);
+  const [gate, setGate] = useState<{
+    project: BoardProject;
+    patch: ProjectPatch;
+    kind: 'rating' | 'pending-info';
+    rating?: 1 | 2 | 3 | 4 | 5;
+  } | null>(null);
+  const [gateText, setGateText] = useState('');
+  const [updDraft, setUpdDraft] = useState('');
   const addRef = useRef<HTMLInputElement>(null);
+
+  const updateCountById = useMemo(() => updateCounts(board.updates), [board.updates]);
 
   const statusLabels = labelsFor(board.labels, 'status');
   const phaseLabels = labelsFor(board.labels, 'phase');
 
   // Same mutation funnel as BoardTab.applyPatch — one row, one activity entry.
-  const applyPatch = (project: BoardProject, patch: ProjectPatch) => {
+  const applyPatch = (project: BoardProject, patch: ProjectPatch, withUpdate?: ProjectUpdate) => {
     const patched = patchProject(project, patch, me);
     const act = activityForPatch(project, patch, me, board.labels);
+    const extra = withUpdate ? [activityEntry(project.id, me, 'update-post')] : [];
     setBoard({
       ...board,
       projects: board.projects.map((p) => (p.id === project.id ? patched : p)),
-      activity: act ? [act, ...board.activity] : board.activity,
+      activity: [...(act ? [act] : []), ...extra, ...board.activity],
+      updates: withUpdate ? putUpdate(board.updates, withUpdate) : (board.updates ?? []),
     });
+  };
+
+  /** Upsert one update on its own, logged — mirrors BoardTab.putUpdateOnBoard. */
+  const putUpdateHere = (u: ProjectUpdate) => {
+    const existed = (board.updates ?? []).some((x) => x.id === u.id);
+    const action = u.deleted ? 'update-delete' : existed ? 'update-edit' : 'update-post';
+    setBoard({
+      ...board,
+      updates: putUpdate(board.updates, u),
+      activity: [activityEntry(u.projectId, me, action), ...board.activity],
+    });
+  };
+
+  /**
+   * The two gates, identical in effect to the desktop board (#3 and #6). They
+   * were MISSING here, so a 4-star rating or a move to "Pending Additional
+   * Information" could be made from a phone with no explanation at all —
+   * exactly the rule Aboud called "a must".
+   */
+  const guardedPatch = (project: BoardProject, patch: ProjectPatch) => {
+    if ('rating' in patch && needsRatingReason(patch.rating as number | null)) {
+      setGate({ project, patch, kind: 'rating', rating: patch.rating as 1 | 2 | 3 | 4 | 5 });
+      return;
+    }
+    if ('statusId' in patch && isPendingInfoLabel(labelById(board.labels, (patch.statusId as string) ?? null)?.name)) {
+      setGate({ project, patch, kind: 'pending-info' });
+      return;
+    }
+    applyPatch(project, patch);
   };
 
   const needle = search.trim().toLowerCase();
@@ -349,8 +401,10 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
                   className={cur === l.id ? 'selected' : ''}
                   style={{ background: l.color, color: labelTextColor(l.color) }}
                   onClick={() => {
-                    applyPatch(target, { [key]: cur === l.id ? null : l.id });
+                    const next = cur === l.id ? null : l.id;
                     close();
+                    if (key === 'statusId') guardedPatch(target, { statusId: next });
+                    else applyPatch(target, { phaseId: next });
                   }}
                 >
                   {l.name}
@@ -417,8 +471,9 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
                 aria-label={`${n} star${n === 1 ? '' : 's'}`}
                 className={target.rating != null && n <= target.rating ? 'on' : ''}
                 onClick={() => {
-                  applyPatch(target, { rating: target.rating === n ? null : n });
+                  const next = target.rating === n ? null : n;
                   close();
+                  guardedPatch(target, { rating: next });
                 }}
               >
                 ★
@@ -464,6 +519,108 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
         </BottomSheet>
       )}
 
+      {sheet?.kind === 'updates' && target && (
+        <BottomSheet title="Updates" sub={target.name} onClose={close}>
+          <div className="m-upd-composer">
+            <textarea
+              value={updDraft}
+              aria-label="New update"
+              rows={3}
+              placeholder="Post an update for the team…"
+              onChange={(e) => setUpdDraft(e.target.value)}
+            />
+            <button
+              className="m-sheet-primary"
+              disabled={!updDraft.trim()}
+              onClick={() => {
+                putUpdateHere(newUpdate(target.id, updDraft, me));
+                setUpdDraft('');
+                toast('Update posted.');
+              }}
+            >
+              Post update
+            </button>
+          </div>
+          <div className="m-upd-thread">
+            {updatesFor(board.updates, target.id).length === 0 && (
+              <p className="m-sheet-hint">No updates yet.</p>
+            )}
+            {updatesFor(board.updates, target.id).map((u) => (
+              <div key={u.id} className="m-upd-item">
+                <div className="m-upd-head">
+                  <strong>{u.by}</strong>
+                  <span className="m-upd-when">{relativeTime(u.at)}</span>
+                  {u.kind !== 'note' && (
+                    <span className={`upd-badge upd-badge-${u.kind}`}>
+                      {u.kind === 'rating' ? `Rating${u.rating ? ` · ${u.rating}★` : ''}` : 'Missing info'}
+                    </span>
+                  )}
+                </div>
+                <RichText text={u.text} />
+                {(u.by === me || isAdmin) && (
+                  <button
+                    className="m-upd-del"
+                    onClick={() => {
+                      putUpdateHere(deleteUpdate(u, me));
+                      toast('Update deleted.');
+                    }}
+                  >
+                    Delete
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </BottomSheet>
+      )}
+
+      {/* The gates (#3, #6). The patch is held until a reason is written;
+          dismissing the sheet abandons the change entirely. */}
+      {gate && (
+        <BottomSheet
+          title={gate.kind === 'rating' ? `Why is this ${gate.rating} stars?` : 'What information is missing?'}
+          sub={gate.project.name}
+          onClose={() => {
+            setGate(null);
+            setGateText('');
+          }}
+        >
+          <div className="m-upd-composer">
+            <textarea
+              value={gateText}
+              aria-label="Reason"
+              rows={4}
+              placeholder={
+                gate.kind === 'rating'
+                  ? 'e.g. this project has trench and external long run'
+                  : 'e.g. need the signed utility interconnection letter'
+              }
+              onChange={(e) => setGateText(e.target.value)}
+            />
+            <p className="m-sheet-hint">Posted to this project's Updates, so it can be searched later.</p>
+            <button
+              className="m-sheet-primary"
+              disabled={!gateText.trim()}
+              onClick={() => {
+                const u = newUpdate(
+                  gate.project.id,
+                  gateText,
+                  me,
+                  gate.kind,
+                  gate.rating ? { rating: gate.rating } : {},
+                );
+                applyPatch(gate.project, gate.patch, u);
+                setGate(null);
+                setGateText('');
+                toast('Update posted.');
+              }}
+            >
+              {gate.kind === 'rating' ? `Rate ${gate.rating}★ and post` : 'Set status and post'}
+            </button>
+          </div>
+        </BottomSheet>
+      )}
+
       {sheet?.kind === 'menu' && target && (
         <BottomSheet title={target.name} onClose={close}>
           <div className="m-sheet-list">
@@ -490,6 +647,12 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
               }}
             >
               Copy name
+            </button>
+            <button
+              className="m-sheet-item"
+              onClick={() => setSheet({ kind: 'updates', id: target.id })}
+            >
+              Updates ({updateCountById.get(target.id) ?? 0})
             </button>
             <button
               className="m-sheet-item"

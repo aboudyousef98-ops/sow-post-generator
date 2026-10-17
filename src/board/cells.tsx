@@ -292,12 +292,40 @@ export function RatingCell({
 
 // ---- Last update (hidden by default) ----------------------------------------
 
-export function UpdatedCell({ project }: { project: BoardProject }) {
+/**
+ * "Last update" — WHO and WHEN, and clicking it opens the full activity log
+ * for that row (Aboud 2026-10-17: "do u see the 'Last update' column, use this
+ * one for the activity log, when we click on it a new small window pop-up and
+ * show us everything").
+ *
+ * This column already answers "when did this last move?", so it is the natural
+ * place to ask "what moved?" — the log used to be buried in the ⋯ menu, where
+ * nobody found it.
+ */
+export function UpdatedCell({ project, onActivity }: { project: BoardProject; onActivity?: () => void }) {
   const when = relativeTime(project.updatedAt);
+  const label = `${project.updatedBy ? `${project.updatedBy} · ` : ''}${when}`;
+  const stamp = new Date(project.updatedAt).toLocaleString();
+
+  if (!onActivity) {
+    return (
+      <span className="cell-meta nowrap" title={stamp}>
+        {label}
+      </span>
+    );
+  }
   return (
-    <span className="cell-meta nowrap" title={new Date(project.updatedAt).toLocaleString()}>
-      {project.updatedBy ? `${project.updatedBy} · ` : ''}
-      {when}
-    </span>
+    <button
+      type="button"
+      className="cell-meta nowrap board-updated-cell"
+      // Named for what it DOES, not for what it reads — otherwise its
+      // accessible name is just the person, colliding with the coordinator
+      // cell in the same row.
+      aria-label={`Activity log for ${project.name}`}
+      title={`${stamp} — click for the full activity log`}
+      onClick={onActivity}
+    >
+      {label}
+    </button>
   );
 }

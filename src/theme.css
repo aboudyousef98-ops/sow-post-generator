@@ -6424,6 +6424,8 @@ tr:hover .board-label-cell.empty {
 }
 
 /* ---- Project Updates (Aboud 2026-10-17 #2/#3/#6) ------------------------ */
+/* Compact on purpose: the first cut gave one line of text four stacked rows,
+   and let the thread grow the modal until Close fell off the screen. */
 
 .board-upd-cell {
   border: 1px solid transparent;
@@ -6447,11 +6449,30 @@ tr:hover .board-label-cell.empty {
   font-weight: 600;
 }
 
+/* header + composer / scrolling thread / footer */
+.upd-modal {
+  display: flex;
+  flex-direction: column;
+}
+
+.upd-top {
+  padding: 16px 18px 0;
+  flex: 0 0 auto;
+}
+
+.upd-top h3 {
+  margin: 0 0 10px;
+}
+
 .upd-composer {
   border: 1px solid var(--dyn-line);
-  border-radius: 10px;
-  padding: 10px 12px;
+  border-radius: 8px;
+  padding: 8px 10px;
   background: var(--dyn-bg);
+}
+
+.upd-composer textarea {
+  font-size: 14px;
 }
 
 .upd-composer-foot {
@@ -6460,65 +6481,126 @@ tr:hover .board-label-cell.empty {
   align-items: center;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 8px;
+  margin-top: 6px;
+  font-size: 12.5px;
 }
 
 .upd-head {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  margin: 16px 2px 8px;
+  margin: 12px 2px 0;
 }
 
 .upd-head h4 {
   margin: 0;
-  font-size: 13px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--dyn-navy);
 }
 
+/* The only part that scrolls. */
 .upd-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  max-height: 46vh;
+  flex: 1 1 auto;
+  min-height: 0;
   overflow: auto;
+  padding: 4px 18px 8px;
 }
 
+/* A light rule between posts, not a box around each one. */
 .upd-item {
-  border: 1px solid var(--dyn-line);
-  border-radius: 10px;
-  padding: 10px 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--dyn-line);
+}
+
+.upd-item:last-child {
+  border-bottom: none;
 }
 
 .upd-item-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
+  gap: 7px;
+  margin-bottom: 3px;
+  font-size: 12.5px;
 }
 
-.upd-item-who {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
-  flex: 1;
+.upd-avatar {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  background: var(--dyn-navy);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.upd-who {
+  font-size: 13.5px;
+  color: var(--dyn-ink);
+}
+
+/* Pushes the tag to the right edge without a spacer element. */
+.upd-item-head .upd-badge {
+  margin-left: auto;
+}
+
+.upd-item .rich {
+  font-size: 14px;
+  padding-left: 29px;
 }
 
 .upd-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   align-items: center;
+  padding-left: 27px;
+  margin-top: 2px;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.upd-item:hover .upd-actions,
+.upd-actions:focus-within,
+.upd-actions.edit {
+  opacity: 1;
+}
+
+.upd-actions.edit {
+  justify-content: flex-end;
+  padding-left: 0;
   margin-top: 8px;
+}
+
+.upd-action {
+  border: none;
+  background: none;
+  padding: 2px 6px;
+  border-radius: 5px;
+  font-size: 12px;
+  color: var(--dyn-muted);
+  cursor: pointer;
+}
+
+.upd-action:hover {
+  background: var(--dyn-bg);
+  color: var(--dyn-ink);
+}
+
+.upd-action.danger:hover {
+  color: var(--dyn-danger, #e2445c);
 }
 
 /* Tagged updates written by a gate, so they stand out in a long thread. */
 .upd-badge {
-  font-size: 11px;
+  font-size: 10.5px;
   font-weight: 700;
-  padding: 2px 8px;
+  padding: 2px 7px;
   border-radius: 999px;
   white-space: nowrap;
 }
@@ -6531,6 +6613,13 @@ tr:hover .board-label-cell.empty {
 .upd-badge-pending-info {
   background: #e8f1ff;
   color: #1c4f91;
+}
+
+.upd-modal .modal-actions {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  border-top: 1px solid var(--dyn-line);
+  margin: 0;
 }
 
 /* "Ask the updates" — AI + keyword search across all threads (#3). */
@@ -6679,4 +6768,95 @@ tr:hover .board-label-cell.empty {
   font-size: 13px;
   line-height: 1.45;
   word-break: break-word;
+}
+
+/* "Last update" is the way into the activity log (Aboud 2026-10-17). It must
+   still read as metadata, not as a button, until you go near it. */
+.board-updated-cell {
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: none;
+  padding: 3px 6px;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  font: inherit;
+  color: inherit;
+}
+
+.board-updated-cell:hover {
+  background: var(--dyn-bg);
+  border-color: var(--dyn-line);
+  color: var(--dyn-ink);
+  text-decoration: underline;
+}
+
+/* ---- Mobile Updates + gate sheets (Aboud 2026-10-17) ------------------- */
+/* These were missing entirely on mobile, so the 4/5-star reason and the
+   "what's missing?" rules could be bypassed from a phone. */
+
+.m-upd-composer {
+  padding: 4px 16px 12px;
+}
+
+.m-upd-composer textarea {
+  width: 100%;
+  margin-top: 0;
+  font-size: 15px; /* ≥16px avoids iOS zoom-on-focus; 15 is the app's scale */
+}
+
+.m-sheet-primary {
+  width: 100%;
+  margin-top: 8px;
+  padding: 12px;
+  border: none;
+  border-radius: 10px;
+  background: var(--dyn-accent, #ff7a1a);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.m-sheet-primary:disabled {
+  opacity: 0.45;
+}
+
+.m-upd-thread {
+  max-height: 46vh;
+  overflow: auto;
+  padding: 0 16px 12px;
+}
+
+.m-upd-item {
+  padding: 10px 0;
+  border-top: 1px solid var(--dyn-line);
+}
+
+.m-upd-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  margin-bottom: 2px;
+  flex-wrap: wrap;
+}
+
+.m-upd-when {
+  color: var(--dyn-muted);
+}
+
+.m-upd-head .upd-badge {
+  margin-left: auto;
+}
+
+.m-upd-item .rich {
+  font-size: 14.5px;
+}
+
+.m-upd-del {
+  border: none;
+  background: none;
+  padding: 4px 0;
+  font-size: 12.5px;
+  color: var(--dyn-danger, #e2445c);
 }

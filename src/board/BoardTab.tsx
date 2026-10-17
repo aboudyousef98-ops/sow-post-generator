@@ -77,7 +77,7 @@ import Popover from './Popover';
 import { DateCell, LabelCell, NameCell, PersonCell, RatingCell, UpdatedCell, initialsOf } from './cells';
 
 const KEY_WIDTHS = 'sowpost.board.colWidths.v1';
-const KEY_VISIBILITY = 'sowpost.board.colVisibility.v1';
+const KEY_VISIBILITY = 'sowpost.board.colVisibility.v2'; // v2: Last update now defaults visible
 const KEY_FILTERS = 'sowpost.board.filters.v1';
 const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
 const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
@@ -405,8 +405,12 @@ export default function BoardTab({
   const [filters, setFilters] = useState<Filters>(() => readJson(KEY_FILTERS, NO_FILTERS));
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState(() => readJson<Record<string, number>>(KEY_WIDTHS, {}));
+  // "Last update" USED to default to hidden. It is now the way into a row's
+  // activity log (Aboud 2026-10-17), so it has to be on — a hidden column
+  // would leave the log unreachable. The storage key was bumped to v2 so
+  // everyone picks this up once instead of keeping an old `updated: false`.
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>(() =>
-    readJson<VisibilityState>(KEY_VISIBILITY, { updated: false }),
+    readJson<VisibilityState>(KEY_VISIBILITY, {}),
   );
   const [editLabels, setEditLabels] = useState<LabelColumnKey | null>(null);
   const [activityFor, setActivityFor] = useState<BoardProject | null>(null);
@@ -1181,7 +1185,7 @@ export default function BoardTab({
         minSize: 120,
         maxSize: 800,
         accessorFn: (p) => p.updatedAt,
-        cell: ({ row }) => <UpdatedCell project={row.original} />,
+        cell: ({ row }) => <UpdatedCell project={row.original} onActivity={() => setActivityFor(row.original)} />,
       },
     ],
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh

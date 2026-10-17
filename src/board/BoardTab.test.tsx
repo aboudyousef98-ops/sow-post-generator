@@ -777,3 +777,49 @@ describe('Updates thread', () => {
     expect(screen.getByText('0 updates')).toBeTruthy();
   });
 });
+
+// Aboud 2026-10-17: "do u see the 'Last update' column, use this one for the
+// activity log, when we click on it a new small window pop-up and show us
+// everything". The log existed but was buried in the ⋯ menu, so nobody found it.
+describe('Last update opens the activity log', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  it('clicking the cell opens the full log for that row', () => {
+    const b = emptyBoard();
+    b.projects = [boardProject('Martha Thompson', 'pm')];
+    render(<Harness initial={b} />);
+
+    fireEvent.click(screen.getAllByLabelText(/Activity log for Martha Thompson/)[0]);
+    expect(screen.getByText('Activity — Martha Thompson')).toBeTruthy();
+  });
+
+  it('shows the field changes and the update posts together', () => {
+    const b = emptyBoard();
+    b.projects = [boardProject('Martha Thompson', 'pm')];
+    render(<Harness initial={b} />);
+
+    // A field change...
+    fireEvent.click(screen.getAllByRole('button', { name: 'New project' })[0]);
+    fireEvent.click(screen.getByRole('option', { name: 'Working on it' }));
+    // ...and an update post.
+    fireEvent.click(screen.getAllByTitle('Post the first update')[0]);
+    fireEvent.change(screen.getByRole('textbox', { name: 'New update' }), { target: { value: 'waiting on the AHJ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+
+    fireEvent.click(screen.getAllByLabelText(/Activity log for Martha Thompson/)[0]);
+    expect(screen.getByText(/posted an update/)).toBeTruthy();
+    // The field change is rendered as "Status: New project → Working on it"
+    // across several elements, so match the row rather than an exact string.
+    expect(screen.getByText('Working on it', { selector: 'b' })).toBeTruthy();
+  });
+});
