@@ -2697,24 +2697,89 @@ tr:hover .board-label-cell.empty {
 }
 
 /* Activity */
-.board-activity {
+/* Activity modal — header / scrolling list / footer, ONE line per change.
+   It used to stack "<name> changed" above a bulleted "<field>: a → b", which
+   spent two rows and a bullet glyph saying one thing. */
+.act-modal {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  max-height: 50vh;
-  overflow: auto;
-  margin: 10px 0;
 }
-.board-activity-row {
+
+.act-top {
+  flex: 0 0 auto;
+  padding: 16px 18px 10px;
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 12px;
   border-bottom: 1px solid var(--dyn-line);
-  padding-bottom: 8px;
 }
-.board-activity-row ul {
-  margin: 4px 0 0;
-  padding-left: 18px;
+
+.act-top h3 {
+  margin: 0;
+}
+
+.act-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 18px 8px;
+}
+
+.act-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--dyn-line);
+  font-size: 13.5px;
+  line-height: 1.5;
+}
+
+.act-row:last-child {
+  border-bottom: none;
+}
+
+.act-avatar {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  border-radius: 50%;
+  background: var(--dyn-navy);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+}
+
+.act-body {
+  flex: 1;
+  min-width: 0;
+  color: var(--dyn-ink);
+}
+
+.act-who {
+  font-weight: 700;
+}
+
+.act-sep {
+  color: var(--dyn-line);
+}
+
+.act-when {
+  flex: 0 0 auto;
+  font-size: 12px;
+  color: var(--dyn-muted);
+}
+
+.act-modal .modal-actions {
+  flex: 0 0 auto;
+  padding: 10px 18px;
+  border-top: 1px solid var(--dyn-line);
+  margin: 0;
 }
 
 /* Shared modal footer (board modals) */
