@@ -6,8 +6,10 @@ switch". The investigation found that this is **not** an architecture problem.
 It is a one-key schema mismatch that silently rejected every board write for
 37 hours.
 
-**NOTHING HAS BEEN COMMITTED, PUSHED OR DEPLOYED.** Aboud's instruction:
-"don't deploy or push anything until we agree on the plan."
+**STATUS AT END OF SESSION: FIXED, DEPLOYED, DATA RECOVERED.**
+Branch `fix/board-save-outage` at `0a86e4a` — **committed and deployed to prod
+twice, but NOT pushed to GitHub.** Aboud approved the deploys; he never
+approved a push, so `main` is two commits behind production.
 
 ---
 
@@ -114,14 +116,35 @@ Watched every new test fail first, for the right reason, before writing the fix.
 
 ---
 
+## 4b. What happened after the deploy
+
+Confirmed in production, not assumed:
+
+| | |
+|---|---|
+| `updates` key on the board blob | **YES, 5 posts** — impossible under the old schema |
+| projects | 161 → 175 |
+| Anas's 11 stranded rows | **11/11 arrived** |
+| The two update threads at risk | both recovered (Sylvester Hernandez, Susan Stone) |
+| Duplicate rows created during the outage | 1 (Sony Joseph), deduped |
+
+**A second, independent bug surfaced and was fixed in `0a86e4a`:** the Board's
+people-pickers read `settings.authors` — localStorage-only, ships as three
+names, App appends only the signed-in user. Anas's list had no Yarob; Refai's
+had neither Anas nor Yarob. Fixed by using the synced account roster, the same
+list Extra Work moved to on 2026-10-08 and mobile already used. That commit
+also added column reordering and per-column value filters.
+
 ## 5. Still open
 
-1. **Deploy.** Blocked on Aboud's agreement. Until then the team is still
-   losing writes — this is the urgent item.
-2. **Tell the team now:** do not clear the cache, do not use the "reset"
-   button, stay in the same browser.
-   `src/components/ErrorBoundary.tsx:43` calls `localStorage.clear()`, which
-   would permanently destroy that person's stranded work.
+1. **⬜ YAROB HAS NOT SYNCED.** Last write `2026-10-16T19:24Z`. Everything he
+   did 16–18 Oct is still only in his browser. He must open the app — and
+   until he does, must not clear his cache, must not hit the crash-screen
+   reset (`src/components/ErrorBoundary.tsx:43` calls `localStorage.clear()`),
+   must not switch browsers. Check with `node scripts/check-sync.mjs`, then
+   `node scripts/dedupe-projects.mjs` (dry run first) in case he brings
+   duplicates.
+2. **Push the branch / merge to `main`.** Prod is ahead of `main`.
 3. **Settings is localStorage-only.** `sowpost.settings` — authors, designers,
    `clrAgents`, `projectManagers`, `utilities`, `regionLead`, `chips`,
    `defaults` — is **not** one of the five blobs. Every teammate has a private,
