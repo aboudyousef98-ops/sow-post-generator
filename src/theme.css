@@ -199,6 +199,32 @@ h4 {
   background: var(--dyn-muted);
 }
 
+/* A failing save is not a neutral state — it means the work in front of you
+   exists nowhere but this browser. It has to be impossible to read past. */
+.status-item.danger {
+  color: #fff;
+  background: #c0392b;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  animation: sync-alarm 1.6s ease-in-out infinite;
+}
+
+.status-item.danger .status-dot {
+  background: #fff;
+}
+
+@keyframes sync-alarm {
+  50% {
+    background: #e74c3c;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-item.danger {
+    animation: none;
+  }
+}
+
 /* "Posting as" moved out of the Source card and into the header.
    width:auto is load-bearing: the shared form rule below sets
    `select { width: 100% }`, which made this 1644px wide and — once it was

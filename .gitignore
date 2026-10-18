@@ -11,7 +11,7 @@ deno.lock
 # Live blob backups. These contain the users blob, which holds per-user
 # password SALTS and HASHES — restoring logins needs them, so the files stay
 # on disk, but they must not ride along in the repo.
-_versions/v11-live-backup-*/
+_versions/*live-backup-*/
 
 # Transient prod verification dumps.
 _versions/_prodcheck/

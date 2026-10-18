@@ -772,18 +772,24 @@ export default function App({ session, onLogout }: AppProps = {}) {
         {/* One pill, a dot per service (spec/11 — Option A). The full wording
             stays on each item's title, which is also what the tests read. */}
         <span className="status-pill">
+          {/* The label itself has to change, not just the dot. On 2026-10-17
+              the board rejected every PUT for 37 hours and this pill still
+              read "Synced" with only the dot greyed out, so nobody noticed
+              their work was never leaving the browser. */}
           <span
-            className={`status-item ${syncStatus === 'synced' ? 'ok' : 'off'}`}
+            className={`status-item ${
+              syncStatus === 'synced' ? 'ok' : syncStatus === 'local' ? 'danger' : 'off'
+            }`}
             title={
               syncStatus === 'checking'
                 ? 'Sync…'
                 : syncStatus === 'synced'
                   ? 'Team synced'
-                  : 'Local only'
+                  : 'NOT SAVED — your changes are only in this browser. Do not clear your cache; tell Aboud.'
             }
           >
             <span className="status-dot" />
-            Synced
+            {syncStatus === 'local' ? 'Not saved' : 'Synced'}
           </span>
           <span
             className={`status-item ${aiStatus === 'ok' ? 'ok' : 'off'}`}
