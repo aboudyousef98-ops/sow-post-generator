@@ -199,6 +199,58 @@ h4 {
   background: var(--dyn-muted);
 }
 
+/* ---- Board: column reorder + per-column filters (2026-10-18) ------------- */
+
+/* Headers are draggable to reorder. `select` and the sticky `name` are not. */
+.board-th-movable {
+  cursor: grab;
+}
+.board-th-movable:active {
+  cursor: grabbing;
+}
+.board-th-dragging {
+  opacity: 0.4;
+}
+/* Where the dragged column would land. */
+.board-th-droppable {
+  box-shadow: inset 2px 0 0 0 var(--dyn-teal);
+}
+
+.board-col-filter {
+  background: none;
+  border: none;
+  padding: 0 2px;
+  cursor: pointer;
+  font-size: 9px;
+  line-height: 1;
+  color: var(--dyn-muted);
+  opacity: 0.55;
+}
+.board-col-filter:hover {
+  opacity: 1;
+}
+.board-col-filter.on {
+  color: var(--dyn-teal);
+  opacity: 1;
+}
+.board-col-filter-count {
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: 1px;
+}
+
+/* Long value lists (project names) must not run off the screen. */
+.board-col-menu {
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.board-colfilter-clear {
+  background: var(--dyn-teal);
+  color: #fff;
+  border: none;
+}
+
 /* A failing save is not a neutral state — it means the work in front of you
    exists nowhere but this browser. It has to be impossible to read past. */
 .status-item.danger {

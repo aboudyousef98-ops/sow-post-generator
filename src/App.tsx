@@ -153,9 +153,16 @@ export default function App({ session, onLogout }: AppProps = {}) {
   const [tab, setTab] = useState<Tab>(session ? 'board' : 'compose');
   const [toasts, setToasts] = useState<Toast[]>([]);
   const isMobile = useIsMobile();
-  // Extra Work lists everyone with an ACCOUNT, not Settings.authors — that list
-  // is device-local, so Anas and Ya'rob were missing from their own hours
-  // screen (2026-10-08). See extraWorkRoster().
+  // Everyone with an ACCOUNT, not Settings.authors — that list is device-local,
+  // so Anas and Ya'rob were missing from their own hours screen (2026-10-08).
+  // See extraWorkRoster().
+  //
+  // The Board needs the same list and was still on settings.authors until
+  // 2026-10-18: its shipped default is three names, and App only appends the
+  // signed-in user, so Anas's coordinator filter and "Set coordinator" menu
+  // offered Aboud/Omar/Refai/Anas and no Ya'rob — he could neither filter for
+  // him nor assign him. Refai saw neither Anas nor Ya'rob. Any people-picker
+  // added later belongs on this roster too, never on settings.authors.
   //
   // `usersStamp` is bumped whenever the shared user list is refetched. Without
   // it this memo would never recompute: extraWorkRoster() reads localStorage,
@@ -163,7 +170,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
   // last LOGIN — sessions never expire, so that could be weeks stale and a
   // reload did not fix it (found by review, 2026-10-08).
   const [usersStamp, setUsersStamp] = useState(0);
-  const ewRoster = useMemo(
+  const accountRoster = useMemo(
     () => extraWorkRoster(session?.displayName, settings.authors),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session?.displayName, settings.authors, usersStamp],
@@ -730,7 +737,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
           setAhjs={setAhjs}
           extraWork={extraWork}
           setExtraWork={setExtraWork}
-          ewRoster={ewRoster}
+          ewRoster={accountRoster}
           markPostedById={markPostedById}
           duplicateDraft={duplicateDraft}
           deleteRecord={deleteRecord}
@@ -903,7 +910,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
             setBoard={setBoard}
             me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
             isAdmin={!session || session.role === 'admin'}
-            authors={settings.authors}
+            authors={accountRoster}
             toast={toast}
             records={records}
             onOpenCompose={openFromBoard}
@@ -970,7 +977,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
             me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
             myUsername={session?.username ?? ''}
             isAdmin={!session || session.role === 'admin'}
-            roster={ewRoster}
+            roster={accountRoster}
             toast={toast}
           />
         )}

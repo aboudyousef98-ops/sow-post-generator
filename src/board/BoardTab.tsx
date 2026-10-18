@@ -36,6 +36,15 @@ import {
   type ProjectPatch,
 } from '../lib/board';
 import {
+  PINNED_COLUMNS,
+  UNFILTERABLE_COLUMNS,
+  distinctColumnValues,
+  hasColumnFilters,
+  matchesColumnFilters,
+  moveColumn,
+  normalizeColumnOrder,
+} from '../lib/boardColumns';
+import {
   GROUP_OPTIONS,
   NO_FILTERS,
   agingState,
@@ -81,6 +90,7 @@ const KEY_VISIBILITY = 'sowpost.board.colVisibility.v2'; // v2: Last update now 
 const KEY_FILTERS = 'sowpost.board.filters.v1';
 const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
 const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
+const KEY_ORDER = 'sowpost.board.colOrder.v1';
 
 // Filters / NO_FILTERS now live in lib/boardViews so the view presets can be
 // unit-tested without a DOM.
@@ -184,6 +194,69 @@ function FilterSelect({
           ),
         )}
         {!single && selected.length > 0 && (
+          <button type="button" className="board-menu-item muted" onClick={() => onChange([])}>
+            Clear
+          </button>
+        )}
+      </div>
+    </Popover>
+  );
+}
+
+/**
+ * Per-column value filter (Aboud 2026-10-18: "can we have a filter for each
+ * column? to filter everything by that value?").
+ *
+ * Lists the values actually present in that column and filters to the ticked
+ * ones. Values come from lib/boardColumns, not from the table's accessors —
+ * those are sort keys and would show lowercased names and internal label ids.
+ */
+function ColumnFilter({
+  columnId,
+  label,
+  values,
+  selected,
+  open,
+  onOpenChange,
+  onChange,
+}: {
+  columnId: string;
+  label: string;
+  values: string[];
+  selected: string[];
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onChange: (values: string[]) => void;
+}) {
+  const on = selected.length > 0;
+  return (
+    <Popover
+      open={open}
+      onOpenChange={onOpenChange}
+      trigger={
+        <button
+          type="button"
+          className={`board-col-filter${on ? ' on' : ''}`}
+          aria-label={`Filter ${label}`}
+          title={on ? `${label}: ${selected.join(', ')}` : `Filter by ${label}`}
+        >
+          ▼{on ? <span className="board-col-filter-count">{selected.length}</span> : null}
+        </button>
+      }
+    >
+      <div className="board-menu board-col-menu">
+        {values.length === 0 && <span className="board-menu-item muted">Nothing to filter</span>}
+        {values.map((v) => (
+          <label key={`${columnId}:${v}`} className="board-menu-item">
+            <input
+              type="checkbox"
+              checked={selected.includes(v)}
+              onChange={(e) => onChange(e.target.checked ? [...selected, v] : selected.filter((x) => x !== v))}
+            />
+            {v}
+          </label>
+        ))}
+        {on && (
           <button type="button" className="board-menu-item muted" onClick={() => onChange([])}>
             Clear
           </button>
@@ -438,6 +511,24 @@ export default function BoardTab({
   );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  // Column order is a viewer preference like widths and visibility. Reconciled
+  // against the columns that exist now on every load, so a release that adds a
+  // column does not hide it from anyone who has already dragged things about.
+  const [columnOrder, setColumnOrder] = useState<string[]>(() => {
+    try {
+      const raw = localStorage.getItem(KEY_ORDER);
+      return Array.isArray(JSON.parse(raw ?? 'null')) ? (JSON.parse(raw as string) as string[]) : [];
+    } catch {
+      return [];
+    }
+  });
+  const [dragCol, setDragCol] = useState<string | null>(null);
+  // Per-column value filters. Deliberately NOT persisted: a saved filter that
+  // silently hides rows across sessions is the same "where did my projects go"
+  // trap that cost this board two days. It resets every load, and the header
+  // count plus a highlighted funnel say when one is on.
+  const [columnFilters, setColumnFilters] = useState<Record<string, string[]>>({});
+  const [filterMenu, setFilterMenu] = useState<string | null>(null);
   // Fixed for the lifetime of the render pass, so every row is aged against
   // the same "today" (and a test can't straddle midnight).
   const today = todayIso();
@@ -459,6 +550,9 @@ export default function BoardTab({
   useEffect(() => {
     localStorage.setItem(KEY_GROUP_BY, groupBy);
   }, [groupBy]);
+  useEffect(() => {
+    if (columnOrder.length) localStorage.setItem(KEY_ORDER, JSON.stringify(columnOrder));
+  }, [columnOrder]);
 
   const boardRef = useRef(board);
   boardRef.current = board;
@@ -506,6 +600,11 @@ export default function BoardTab({
 
   /** projectId → live update count, for the Updates column badge. */
   const updateCountById = useMemo(() => updateCounts(board.updates), [board.updates]);
+  // What the per-column filters read a cell as. See lib/boardColumns.
+  const columnCtx = useMemo(
+    () => ({ labels: board.labels, installByProject, updateCountById }),
+    [board.labels, installByProject, updateCountById],
+  );
 
   const agingFor = (p: BoardProject): AgingState =>
     agingState(p, installByProject.get(p.id) ?? null, today);
@@ -726,7 +825,10 @@ export default function BoardTab({
     [board.labels],
   );
 
-  const visible = useMemo(() => {
+  // Rows the standard filters allow, BEFORE the per-column value filters.
+  // The value list each header offers is drawn from this, so unticking a value
+  // never removes it from its own menu — you can always put it back.
+  const valuePool = useMemo(() => {
     const needle = filters.search.trim().toLowerCase();
     return board.projects
       .filter((p) => !p.deletedAt)
@@ -752,6 +854,12 @@ export default function BoardTab({
       .filter((p) => (filters.staleOnly ? agingState(p, installByProject.get(p.id) ?? null, today) !== 'none' : true))
       .sort((a, b) => b.position - a.position);
   }, [board.projects, filters, me, installByProject, today]);
+
+  // Per-column value filters (Aboud 2026-10-18).
+  const visible = useMemo(
+    () => valuePool.filter((p) => matchesColumnFilters(p, columnFilters, columnCtx)),
+    [valuePool, columnFilters, columnCtx],
+  );
 
   // A project whose status label "counts as done" leaves the main board and
   // lands in the Completed projects section below (Aboud, 2026-10-02).
@@ -1194,13 +1302,21 @@ export default function BoardTab({
     [board.labels, authors, me, isAdmin, postsByProject, installByProject, updateCountById, today, selected, allShownSelected, someShownSelected],
   );
 
+  // Reconciled every render: a saved order from an older release must not hide
+  // a column added since, and must not resurrect one that was removed.
+  const resolvedOrder = useMemo(
+    () => normalizeColumnOrder(columnOrder, columns.map((c) => c.id as string)),
+    [columnOrder, columns],
+  );
+
   const table = useReactTable({
     data: active,
     columns,
-    state: { sorting, columnSizing, columnVisibility },
+    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnOrderChange: setColumnOrder,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     enableColumnResizing: true,
@@ -1213,7 +1329,7 @@ export default function BoardTab({
   const doneTable = useReactTable({
     data: completed,
     columns,
-    state: { sorting, columnSizing, columnVisibility },
+    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
@@ -1287,6 +1403,19 @@ export default function BoardTab({
             ? 'no projects yet'
             : `${active.length} of ${activeTotal} active project${activeTotal === 1 ? '' : 's'}`}
         </span>
+        {/* A column filter hides rows, and a hidden filter reads as missing
+            data — which this board has already paid for once. One obvious
+            chip, always reachable, that turns every column filter off. */}
+        {hasColumnFilters(columnFilters) && (
+          <button
+            type="button"
+            className="btn small board-colfilter-clear"
+            onClick={() => setColumnFilters({})}
+            title="Remove every per-column filter"
+          >
+            Column filters on — clear
+          </button>
+        )}
         <span style={{ flex: 1 }} />
         <button type="button" className="btn primary" onClick={() => addRef.current?.focus()}>
           + New project
@@ -1435,41 +1564,83 @@ export default function BoardTab({
             <thead>
               {table.getHeaderGroups().map((hg) => (
                 <tr key={hg.id}>
-                  {hg.headers.map((header) => (
-                    <th
-                      key={header.id}
-                      className={header.column.id === 'name' ? 'board-sticky' : ''}
-                      style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
-                    >
-                      {/* The select column holds a checkbox — it must not be
-                          wrapped in the sort button (invalid, and every click
-                          would sort instead of select). */}
-                      {header.column.id === 'select' ? (
-                        <span className="board-th-plain">
-                          {flexRender(header.column.columnDef.header, header.getContext())}
-                        </span>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            className="board-th"
-                            onClick={header.column.getToggleSortingHandler()}
-                            title="Sort"
-                          >
+                  {hg.headers.map((header) => {
+                    const colId = header.column.id;
+                    const movable = !PINNED_COLUMNS.includes(colId);
+                    const picked = columnFilters[colId] ?? [];
+                    return (
+                      <th
+                        key={header.id}
+                        className={[
+                          colId === 'name' ? 'board-sticky' : '',
+                          movable ? 'board-th-movable' : '',
+                          dragCol && dragCol !== colId && movable ? 'board-th-droppable' : '',
+                          dragCol === colId ? 'board-th-dragging' : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' ')}
+                        style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
+                        // Reorder by dragging the header onto another one
+                        // (Aboud 2026-10-18: "we can move the columns between
+                        // each other, so we can have one of them closer").
+                        // `select` and the sticky `name` never move.
+                        draggable={movable}
+                        onDragStart={movable ? () => setDragCol(colId) : undefined}
+                        onDragEnd={() => setDragCol(null)}
+                        onDragOver={movable && dragCol ? (e) => e.preventDefault() : undefined}
+                        onDrop={
+                          movable && dragCol
+                            ? (e) => {
+                                e.preventDefault();
+                                setColumnOrder(moveColumn(resolvedOrder, dragCol, colId));
+                                setDragCol(null);
+                              }
+                            : undefined
+                        }
+                      >
+                        {/* The select column holds a checkbox — it must not be
+                            wrapped in the sort button (invalid, and every click
+                            would sort instead of select). */}
+                        {colId === 'select' ? (
+                          <span className="board-th-plain">
                             {flexRender(header.column.columnDef.header, header.getContext())}
-                            <SortArrow dir={header.column.getIsSorted()} />
-                          </button>
-                          <div
-                            className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
-                            onMouseDown={header.getResizeHandler()}
-                            onTouchStart={header.getResizeHandler()}
-                            onDoubleClick={() => header.column.resetSize()}
-                            title="Drag to resize · double-click to reset"
-                          />
-                        </>
-                      )}
-                    </th>
-                  ))}
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="board-th"
+                              onClick={header.column.getToggleSortingHandler()}
+                              title={movable ? 'Sort · drag the header to move this column' : 'Sort'}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <SortArrow dir={header.column.getIsSorted()} />
+                            </button>
+                            {!UNFILTERABLE_COLUMNS.includes(colId) && (
+                              <ColumnFilter
+                                columnId={colId}
+                                label={String(header.column.columnDef.header ?? colId)}
+                                values={distinctColumnValues(valuePool, colId, columnCtx)}
+                                selected={picked}
+                                open={filterMenu === colId}
+                                onOpenChange={(v) => setFilterMenu(v ? colId : null)}
+                                onChange={(vals) =>
+                                  setColumnFilters((f) => ({ ...f, [colId]: vals }))
+                                }
+                              />
+                            )}
+                            <div
+                              className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
+                              onMouseDown={header.getResizeHandler()}
+                              onTouchStart={header.getResizeHandler()}
+                              onDoubleClick={() => header.column.resetSize()}
+                              title="Drag to resize · double-click to reset"
+                            />
+                          </>
+                        )}
+                      </th>
+                    );
+                  })}
                 </tr>
               ))}
             </thead>
