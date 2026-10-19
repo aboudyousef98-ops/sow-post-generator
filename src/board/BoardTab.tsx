@@ -27,6 +27,7 @@ import {
   activityForPatch,
   cleanName,
   findDuplicate,
+  isOutOfScopeLabel,
   labelById,
   linkedPosts,
   newProject,
@@ -53,6 +54,7 @@ import {
   installDateOf,
   isPresetActive,
   selectedRows,
+  splitSections,
   viewPresets,
   type AgingState,
   type Filters,
@@ -82,6 +84,7 @@ import UpdatesModal from './UpdatesModal';
 import UpdateSearchModal from './UpdateSearchModal';
 import RequireNoteModal, { type NoteGate } from './RequireNoteModal';
 import EditLabelsModal from './EditLabelsModal';
+import ImportModal, { type ImportRequest } from './ImportModal';
 import Popover from './Popover';
 import { DateCell, LabelCell, NameCell, PersonCell, RatingCell, UpdatedCell, initialsOf } from './cells';
 
@@ -89,11 +92,40 @@ const KEY_WIDTHS = 'sowpost.board.colWidths.v1';
 const KEY_VISIBILITY = 'sowpost.board.colVisibility.v2'; // v2: Last update now defaults visible
 const KEY_FILTERS = 'sowpost.board.filters.v1';
 const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
+const KEY_SCOPE_OPEN = 'sowpost.board.scopeOpen.v1';
 const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
 const KEY_ORDER = 'sowpost.board.colOrder.v1';
 
 // Filters / NO_FILTERS now live in lib/boardViews so the view presets can be
 // unit-tested without a DOM.
+
+/** Which of the board's three sections a status label puts a row in. */
+type Section = 'active' | 'scope' | 'done';
+
+const SECTION_TITLE: Record<Section, string> = {
+  active: 'the board',
+  scope: 'Out of SOW scope',
+  done: 'Completed projects',
+};
+
+function sectionOf(label: BoardLabel | undefined): Section {
+  if (label?.isDone) return 'done';
+  if (isOutOfScopeLabel(label)) return 'scope';
+  return 'active';
+}
+
+/**
+ * "…but 3 out-of-scope and 25 completed ones do" — the tail of the empty-table
+ * message. Counting the rows that ARE matching, section by section, is what
+ * stops an empty table from reading as missing data.
+ */
+function matchesBelow(scope: number, done: number): string {
+  const parts: string[] = [];
+  if (scope) parts.push(`${scope} out-of-scope`);
+  if (done) parts.push(`${done} completed`);
+  const total = scope + done;
+  return `${parts.join(' and ')} ${total === 1 ? 'one does' : 'ones do'}`;
+}
 
 function readJson<T>(key: string, fallback: T): T {
   try {
@@ -453,6 +485,85 @@ function BodyInner({
     </>
   );
 }
+/**
+ * A collapsible section below the main table — "Completed projects" and
+ * "Out of SOW scope". Same columns, same widths, same sorting state as the
+ * main table; only the rows differ. Headers here sort but do not resize:
+ * resizing lives on the main header alone, so there is one source of width.
+ */
+function SectionCard({
+  variant,
+  title,
+  emptyText,
+  open,
+  onToggle,
+  table,
+  columnSizeVars,
+  width,
+  highlightId,
+  agingOf,
+  selectedIds,
+}: {
+  /** Drives the accent colour only — see `.board-done` / `.board-scope`. */
+  variant: 'done' | 'scope';
+  title: string;
+  emptyText: string;
+  open: boolean;
+  onToggle: () => void;
+  table: TanTable<BoardProject>;
+  columnSizeVars: Record<string, number>;
+  width: number;
+  highlightId: string | null;
+  agingOf?: (p: BoardProject) => AgingState;
+  selectedIds?: Record<string, boolean>;
+}) {
+  const rows = table.options.data.length;
+  return (
+    <div className={`card list-card board-done board-${variant}`}>
+      <button type="button" className="board-done-toggle" aria-expanded={open} onClick={onToggle}>
+        <span className={`board-done-caret ${open ? 'open' : ''}`}>▸</span>
+        {title}
+        <span className="board-done-count">{rows}</span>
+      </button>
+      {open &&
+        (rows === 0 ? (
+          <p className="muted board-empty">{emptyText}</p>
+        ) : (
+          <div className="board-scroll">
+            <table className="board-table" style={{ ...columnSizeVars, width }}>
+              <thead>
+                {table.getHeaderGroups().map((hg) => (
+                  <tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className={header.column.id === 'name' ? 'board-sticky' : ''}
+                        style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
+                      >
+                        {header.column.id === 'select' ? null : (
+                          <button
+                            type="button"
+                            className="board-th"
+                            onClick={header.column.getToggleSortingHandler()}
+                            title="Sort"
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            <SortArrow dir={header.column.getIsSorted()} />
+                          </button>
+                        )}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
+              </thead>
+              <BodyInner table={table} highlightId={highlightId} agingOf={agingOf} selectedIds={selectedIds} />
+            </table>
+          </div>
+        ))}
+    </div>
+  );
+}
+
 const MemoBody = memo(
   BodyInner,
   (prev, next) =>
@@ -502,8 +613,12 @@ export default function BoardTab({
   const [addName, setAddName] = useState('');
   const [duplicate, setDuplicate] = useState<BoardProject | null>(null);
   const [columnsMenu, setColumnsMenu] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   // Completed section: out of sight by default, one click away.
   const [doneOpen, setDoneOpen] = useState(() => localStorage.getItem(KEY_DONE_OPEN) === '1');
+  // "Out of SOW scope" — same deal, and also collapsed by default: the whole
+  // point is that these rows stop crowding the pipeline.
+  const [scopeOpen, setScopeOpen] = useState(() => localStorage.getItem(KEY_SCOPE_OPEN) === '1');
   const addRef = useRef<HTMLInputElement>(null);
   // Tier 1: group by, collapsed groups, and bulk selection.
   const [groupBy, setGroupBy] = useState<GroupKey>(
@@ -548,6 +663,9 @@ export default function BoardTab({
     localStorage.setItem(KEY_DONE_OPEN, doneOpen ? '1' : '0');
   }, [doneOpen]);
   useEffect(() => {
+    localStorage.setItem(KEY_SCOPE_OPEN, scopeOpen ? '1' : '0');
+  }, [scopeOpen]);
+  useEffect(() => {
     localStorage.setItem(KEY_GROUP_BY, groupBy);
   }, [groupBy]);
   useEffect(() => {
@@ -562,9 +680,11 @@ export default function BoardTab({
   useEffect(() => {
     if (!focusId) return;
     const project = boardRef.current.projects.find((p) => p.id === focusId);
-    if (project?.statusId && boardRef.current.labels.find((l) => l.id === project.statusId)?.isDone) {
-      setDoneOpen(true);
-    }
+    // Reveal whichever collapsed section the row actually sits in — otherwise
+    // "open it" scrolls to nothing.
+    const label = boardRef.current.labels.find((l) => l.id === project?.statusId);
+    if (label?.isDone) setDoneOpen(true);
+    else if (isOutOfScopeLabel(label)) setScopeOpen(true);
     setHighlightId(focusId);
     const scroll = setTimeout(() => {
       document.querySelector(`[data-project-id="${focusId}"]`)?.scrollIntoView({ block: 'center' });
@@ -792,6 +912,105 @@ export default function BoardTab({
     toast(`Label "${label.name}" archived.`);
   };
 
+  /**
+   * Apply a whole Salesforce report in ONE write (Aboud, 2026-10-19).
+   *
+   * One setBoard call matters: it is one localStorage write, one debounced push
+   * and one merge on everyone else's copy. Sixty-one separate writes would race
+   * the debounce and could lose rows.
+   *
+   * Undo is captured BEFORE the write and reverses exactly what this import
+   * did — nothing else. Created rows are tombstoned rather than dropped from
+   * the array, because a bare removal does not propagate: the merge is
+   * newer-wins per id, so a row missing on one side simply comes back.
+   */
+  const runImport = ({ plan, restoreArchived }: ImportRequest) => {
+    const cur = boardRef.current;
+    const now = new Date().toISOString();
+    const projects = [...cur.projects];
+    const activity: BoardActivity[] = [];
+    const createdIds: string[] = [];
+    const phaseBefore: { id: string; phaseId: string | null }[] = [];
+    const restoredIds: string[] = [];
+    // Newest-on-top, and in the order the report listed them.
+    let position = Date.parse(now) + plan.rows.length;
+
+    for (const row of plan.rows) {
+      if (row.match === 'maybe') continue; // unanswered — the button blocks this
+
+      if (row.match === 'new') {
+        const created: BoardProject = {
+          ...newProject(row.name, me, cur.labels, now),
+          // newProject puts the author in `coordinator`; the report decides it
+          // here, and '' (the Design report's "-") must stay unassigned.
+          coordinator: row.coordinator,
+          phaseId: row.phaseChange?.toId ?? null,
+          position: position--,
+        };
+        projects.push(created);
+        createdIds.push(created.id);
+        activity.push(
+          activityEntry(created.id, me, 'create', { name: { old: '—', new: created.name } }, now),
+        );
+        continue;
+      }
+
+      const index = projects.findIndex((p) => p.id === row.projectId);
+      if (index === -1) continue;
+      const before = projects[index];
+      if (row.match === 'archived' && !restoreArchived) continue;
+
+      const patch: ProjectPatch = {};
+      if (row.match === 'archived') patch.archivedAt = undefined;
+      if (row.phaseChange) patch.phaseId = row.phaseChange.toId;
+      if (Object.keys(patch).length === 0) continue;
+
+      projects[index] = patchProject(before, patch, me, now);
+      if (row.match === 'archived') {
+        restoredIds.push(before.id);
+        activity.push(activityEntry(before.id, me, 'restore', undefined, now));
+      }
+      if (row.phaseChange) {
+        phaseBefore.push({ id: before.id, phaseId: row.phaseChange.fromId });
+        const entry = activityForPatch(before, { phaseId: row.phaseChange.toId }, me, cur.labels, now);
+        if (entry) activity.push(entry);
+      }
+    }
+
+    if (createdIds.length === 0 && phaseBefore.length === 0 && restoredIds.length === 0) {
+      setImportOpen(false);
+      toast('Nothing to import — the board already matches that report.');
+      return;
+    }
+
+    setBoard({ ...cur, projects, activity: [...activity, ...cur.activity] });
+    setImportOpen(false);
+
+    const parts = [`Imported ${createdIds.length} project${createdIds.length === 1 ? '' : 's'}`];
+    if (phaseBefore.length) parts.push(`${phaseBefore.length} moved phase`);
+    if (restoredIds.length) parts.push(`${restoredIds.length} restored`);
+    toast(`${parts.join(' · ')}.`, {
+      label: 'Undo',
+      fn: () => {
+        const back = boardRef.current;
+        const undone = new Date().toISOString();
+        const created = new Set(createdIds);
+        const restored = new Set(restoredIds);
+        const phases = new Map(phaseBefore.map((p) => [p.id, p.phaseId]));
+        setBoard({
+          ...back,
+          projects: back.projects.map((p) => {
+            if (created.has(p.id)) return patchProject(p, { deletedAt: undone }, me, undone);
+            const patch: ProjectPatch = {};
+            if (phases.has(p.id)) patch.phaseId = phases.get(p.id) ?? null;
+            if (restored.has(p.id)) patch.archivedAt = undone;
+            return Object.keys(patch).length ? patchProject(p, patch, me, undone) : p;
+          }),
+        });
+      },
+    });
+  };
+
   const create = (force: boolean) => {
     const name = cleanName(addName);
     if (!name) return;
@@ -862,19 +1081,13 @@ export default function BoardTab({
   );
 
   // A project whose status label "counts as done" leaves the main board and
-  // lands in the Completed projects section below (Aboud, 2026-10-02).
-  const doneStatusIds = useMemo(
-    () => new Set(board.labels.filter((l) => l.isDone).map((l) => l.id)),
-    [board.labels],
+  // lands in the Completed projects section below (Aboud, 2026-10-02); one
+  // whose status is marked out-of-scope lands in the section between the two
+  // (Aboud, 2026-10-19). Both rules live in lib/boardViews.splitSections.
+  const { active, outOfScope, completed } = useMemo(
+    () => splitSections(visible, board.labels),
+    [visible, board.labels],
   );
-  const { active, completed } = useMemo(() => {
-    const active: BoardProject[] = [];
-    const completed: BoardProject[] = [];
-    for (const p of visible) (p.statusId && doneStatusIds.has(p.statusId) ? completed : active).push(p);
-    // Most recently finished first — updatedAt moves when the status flips.
-    completed.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-    return { active, completed };
-  }, [visible, doneStatusIds]);
 
   // ---- drag-to-reorder (hold a row, move it, drop — spec: monday-style) -----
 
@@ -955,7 +1168,8 @@ export default function BoardTab({
    * "Visible" has THREE independent hiding mechanisms and a bulk action may
    * only ever touch rows that pass all three:
    *   1. the filters (already applied — `active` / `completed`),
-   *   2. the Completed section being collapsed (`doneOpen`),
+   *   2. a collapsed section — Completed (`doneOpen`) or Out of SOW scope
+   *      (`scopeOpen`),
    *   3. a COLLAPSED GROUP when grouping is on.
    * (3) was missed first time round, so select-all could write a teammate's
    * collapsed group (found by review, 2026-10-08).
@@ -964,17 +1178,22 @@ export default function BoardTab({
   const searching = filters.search.trim().length > 0;
 
   const shown = useMemo(() => {
-    // While a search is running, completed rows are always in play — hiding a
-    // match behind a collapsed section is what made #9 look like "nothing
-    // appears". The user's own doneOpen preference is not written to.
-    const base = doneOpen || searching ? [...active, ...completed] : active;
+    // While a search is running, completed and out-of-scope rows are always in
+    // play — hiding a match behind a collapsed section is what made #9 look
+    // like "nothing appears". The user's own open/shut preferences are not
+    // written to.
+    const base = [
+      ...active,
+      ...(scopeOpen || searching ? outOfScope : []),
+      ...(doneOpen || searching ? completed : []),
+    ];
     if (groupBy === 'none') return base;
     const hidden = new Set<string>();
     for (const g of groupProjects(base, groupBy, board.labels)) {
       if (collapsed[g.key]) for (const p of g.rows) hidden.add(p.id);
     }
     return hidden.size ? base.filter((p) => !hidden.has(p.id)) : base;
-  }, [active, completed, doneOpen, searching, groupBy, collapsed, board.labels]);
+  }, [active, outOfScope, completed, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
 
   /**
    * Rows a bulk action will touch. Resolved from every LIVE project, not from
@@ -1135,12 +1354,12 @@ export default function BoardTab({
                 return;
               }
               applyPatch(row.original, { statusId });
-              // Crossing INTO a done label hides the row from the main board —
-              // announce where it went, with a way back.
-              const wasDone = Boolean(labelById(boardRef.current.labels, prev)?.isDone);
-              const isDone = Boolean(labelById(boardRef.current.labels, statusId)?.isDone);
-              if (isDone && !wasDone) {
-                toast(`${row.original.name} → Completed projects.`, {
+              // Crossing INTO a done or out-of-scope label hides the row from
+              // the main board — announce where it went, with a way back.
+              const from = sectionOf(labelById(boardRef.current.labels, prev));
+              const to = sectionOf(labelById(boardRef.current.labels, statusId));
+              if (to !== from && to !== 'active') {
+                toast(`${row.original.name} → ${SECTION_TITLE[to]}.`, {
                   label: 'Undo',
                   fn: () => {
                     const cur = boardRef.current.projects.find((p) => p.id === row.original.id);
@@ -1337,6 +1556,19 @@ export default function BoardTab({
     enableColumnResizing: false,
   });
 
+  // Out of SOW scope — identical contract to doneTable: shared columns, shared
+  // widths, shared sorting, its own rows.
+  const scopeTable = useReactTable({
+    data: outOfScope,
+    columns,
+    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableColumnResizing: false,
+  });
+
   // Column widths as CSS variables on the table element — cells read them with
   // `calc(var(--col-x-size) * 1px)` so a drag never re-renders the rows.
   const sizingState = table.getState().columnSizing;
@@ -1376,8 +1608,10 @@ export default function BoardTab({
   const openDuplicate = () => {
     if (!duplicate) return;
     setFilters((f) => ({ ...f, search: '', mine: false }));
-    // The twin may live in the Completed section — reveal it before scrolling.
-    if (duplicate.statusId && doneStatusIds.has(duplicate.statusId)) setDoneOpen(true);
+    // The twin may live in a collapsed section — reveal it before scrolling.
+    const where = sectionOf(labelById(board.labels, duplicate.statusId));
+    if (where === 'done') setDoneOpen(true);
+    if (where === 'scope') setScopeOpen(true);
     setHighlightId(duplicate.id);
     setDuplicate(null);
     setAddName('');
@@ -1387,10 +1621,12 @@ export default function BoardTab({
     setTimeout(() => setHighlightId(null), 2500);
   };
 
-  // Header counts speak about ACTIVE work; completed rows have their own count.
-  const activeTotal = board.projects.filter(
-    (p) => !p.deletedAt && !p.archivedAt && !(p.statusId && doneStatusIds.has(p.statusId)),
-  ).length;
+  // Header counts speak about ACTIVE work; the completed and out-of-scope
+  // sections carry their own counts.
+  const activeTotal = useMemo(
+    () => splitSections(board.projects.filter((p) => !p.deletedAt && !p.archivedAt), board.labels).active.length,
+    [board.projects, board.labels],
+  );
   const dupStatus = duplicate ? labelById(board.labels, duplicate.statusId)?.name : '';
   const presets = useMemo(() => viewPresets(board.labels), [board.labels]);
 
@@ -1399,7 +1635,7 @@ export default function BoardTab({
       <div className="list-head">
         <h1>Board</h1>
         <span className="muted">
-          {activeTotal === 0 && completed.length === 0
+          {activeTotal === 0 && completed.length === 0 && outOfScope.length === 0
             ? 'no projects yet'
             : `${active.length} of ${activeTotal} active project${activeTotal === 1 ? '' : 's'}`}
         </span>
@@ -1523,6 +1759,14 @@ export default function BoardTab({
             )}
           </span>
           <span style={{ flex: 1 }} />
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setImportOpen(true)}
+            title="Paste a Scope of Work Assignments report and add whatever is missing"
+          >
+            Import from Salesforce
+          </button>
           <Popover
             open={columnsMenu}
             onOpenChange={setColumnsMenu}
@@ -1653,16 +1897,17 @@ export default function BoardTab({
 
           {active.length === 0 && (
             <p className="muted board-empty">
-              {activeTotal === 0 && completed.length === 0
+              {activeTotal === 0 && completed.length === 0 && outOfScope.length === 0
                 ? 'No projects yet — add the first one below.'
                 : activeTotal === 0
-                  ? 'Nothing in progress — everything is in Completed projects below.'
-                  : completed.length > 0
+                  ? 'Nothing in progress — every project is in a section below.'
+                  : completed.length + outOfScope.length > 0
                     ? // The real shape of Aboud's #9: every one of Yarob's
                       // projects is Done, so a search for him emptied this
                       // table while 25 matches sat in a collapsed section
-                      // below, reading as "nothing appears".
-                      `No active projects match — but ${completed.length} completed ${completed.length === 1 ? 'one does' : 'ones do'}, shown below.`
+                      // below, reading as "nothing appears". The out-of-scope
+                      // section can hide a match exactly the same way.
+                      `No active projects match — but ${matchesBelow(outOfScope.length, completed.length)}, shown below.`
                     : 'Nothing matches the filters.'}
             </p>
           )}
@@ -1702,60 +1947,40 @@ export default function BoardTab({
         </div>
       </div>
 
-      <div className="card list-card board-done">
-        <button
-          type="button"
-          className="board-done-toggle"
-          aria-expanded={doneOpen}
-          onClick={() => setDoneOpen((v) => !v)}
-        >
-          <span className={`board-done-caret ${doneOpen ? 'open' : ''}`}>▸</span>
-          Completed projects
-          <span className="board-done-count">{completed.length}</span>
-        </button>
-        {doneOpen &&
-          (completed.length === 0 ? (
-            <p className="muted board-empty">
-              Nothing here yet — a project lands here when its status is set to a “done” label.
-            </p>
-          ) : (
-            <div className="board-scroll">
-              <table className="board-table" style={{ ...columnSizeVars, width: table.getTotalSize() }}>
-                <thead>
-                  {doneTable.getHeaderGroups().map((hg) => (
-                    <tr key={hg.id}>
-                      {hg.headers.map((header) => (
-                        <th
-                          key={header.id}
-                          className={header.column.id === 'name' ? 'board-sticky' : ''}
-                          style={{ width: `calc(var(--header-${header.id}-size) * 1px)` }}
-                        >
-                          {header.column.id === 'select' ? null : (
-                            <button
-                              type="button"
-                              className="board-th"
-                              onClick={header.column.getToggleSortingHandler()}
-                              title="Sort"
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <SortArrow dir={header.column.getIsSorted()} />
-                            </button>
-                          )}
-                        </th>
-                      ))}
-                    </tr>
-                  ))}
-                </thead>
-                <BodyInner
-                  table={doneTable}
-                  highlightId={highlightId}
-                  agingOf={agingFor}
-                  selectedIds={selected}
-                />
-              </table>
-            </div>
-          ))}
-      </div>
+      {/* Out of SOW scope sits BETWEEN active and Completed on purpose
+          (Aboud 2026-10-19): these projects are not in the pipeline, but they
+          are not finished either, and they still have to be findable. */}
+      <SectionCard
+        variant="scope"
+        title="Out of SOW scope"
+        emptyText="Nothing here — a project lands here when its status is marked “out of scope” in Edit labels (Hold, Sonnen and ENPHASE are, by default)."
+        // A search forces both sections open for the duration of the search —
+        // `searching` made their rows selectable (below) but left them off
+        // screen, which is the same "nothing appears" trap as #9. The stored
+        // preference is not written to, so it comes back as it was.
+        open={scopeOpen || searching}
+        onToggle={() => setScopeOpen((v) => !v)}
+        table={scopeTable}
+        columnSizeVars={columnSizeVars}
+        width={table.getTotalSize()}
+        highlightId={highlightId}
+        agingOf={agingFor}
+        selectedIds={selected}
+      />
+
+      <SectionCard
+        variant="done"
+        title="Completed projects"
+        emptyText="Nothing here yet — a project lands here when its status is set to a “done” label."
+        open={doneOpen || searching}
+        onToggle={() => setDoneOpen((v) => !v)}
+        table={doneTable}
+        columnSizeVars={columnSizeVars}
+        width={table.getTotalSize()}
+        highlightId={highlightId}
+        agingOf={agingFor}
+        selectedIds={selected}
+      />
 
       {picked.length > 0 && (
         <div className="board-bulk-bar" role="region" aria-label="Bulk actions">
@@ -1807,6 +2032,16 @@ export default function BoardTab({
             Clear selection
           </button>
         </div>
+      )}
+
+      {importOpen && (
+        <ImportModal
+          projects={board.projects}
+          labels={board.labels}
+          roster={authors}
+          onImport={runImport}
+          onClose={() => setImportOpen(false)}
+        />
       )}
 
       {editLabels && (

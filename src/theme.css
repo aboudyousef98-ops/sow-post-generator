@@ -2907,6 +2907,100 @@ tr:hover .board-label-cell.empty {
   border-top: 1px solid var(--dyn-border);
 }
 
+/* Import from Salesforce — one vertical page, one dense line per outcome. */
+.modal.board-import {
+  max-width: 680px;
+  width: 92vw;
+}
+.board-import-paste {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--dyn-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.4;
+  resize: vertical;
+}
+.board-import-report {
+  margin-top: 12px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+.board-import-head {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.board-import-line {
+  border-top: 1px solid var(--dyn-line, #eef1f2);
+  padding: 7px 2px;
+  font-size: 13px;
+}
+.board-import-line > summary {
+  cursor: pointer;
+  list-style: revert;
+}
+.board-import-line.plain {
+  margin: 0;
+}
+.board-import-line b {
+  display: inline-block;
+  min-width: 26px;
+  text-align: right;
+  margin-right: 6px;
+}
+.board-import-names {
+  margin: 6px 0 2px 32px;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--dyn-muted);
+}
+.board-import-names li {
+  padding: 1px 0;
+}
+.board-import-restore {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 8px 0 2px 32px;
+  font-size: 13px;
+}
+.board-import-question {
+  border: 1px solid #fdab3d;
+  border-radius: var(--radius-sm, 6px);
+  background: #fff8ec;
+  padding: 10px 12px;
+  margin-top: 10px;
+  font-size: 13px;
+}
+.board-import-question p {
+  margin: 0 0 6px;
+}
+.board-import-question label {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin-right: 16px;
+}
+.board-import-warn {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #8a6100;
+}
+.board-import-error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: #c0392b;
+}
+
+/* Out of SOW scope — same section furniture, a parked-not-finished accent so
+   it never reads as "done" at a glance (Aboud 2026-10-19). */
+.board-scope .board-done-toggle {
+  color: #8a6100; /* darker shade of the Hold amber, readable on white */
+}
+.board-scope .board-done-count {
+  background: #fdab3d;
+}
+
 /* Post column (board → Compose) */
 .board-post-cell {
   width: 100%;
@@ -5037,6 +5131,18 @@ tr:hover .board-label-cell.empty {
   font-size: 11px;
   font-weight: 600;
   padding: 3px 8px;
+}
+
+/* Out of SOW scope on mobile — same card, the amber accent from desktop. */
+.m-scope {
+  margin-bottom: 12px;
+}
+.m-scope .m-done-toggle {
+  color: #8a6100;
+}
+.m-scope .m-done-count,
+.m-scope .m-done-pill {
+  background: #fdab3d;
 }
 
 /* Drafts */

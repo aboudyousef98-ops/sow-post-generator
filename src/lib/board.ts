@@ -52,6 +52,36 @@ export function seedLabels(): BoardLabel[] {
   ];
 }
 
+/**
+ * Status labels that sit OUTSIDE the SOW pipeline unless someone says
+ * otherwise — Aboud 2026-10-19. These three already exist on the live board as
+ * team-created labels, so there is nothing to seed and nothing to migrate: the
+ * names are matched case-insensitively and the result is only a DEFAULT.
+ *
+ * Tick/untick "out of scope" in Edit labels and the explicit boolean is stored
+ * (which bumps updatedAt), so a deliberate choice always beats this list —
+ * same contract as a rename beating a re-seed.
+ */
+const OUT_OF_SCOPE_DEFAULT_NAMES = new Set(['hold', 'sonnen', 'enphase']);
+
+/**
+ * True when a status label means "parked, not our scope".
+ *
+ * `isDone` wins: a label marked both belongs in Completed, because that is the
+ * stronger statement about the work. The two are kept mutually exclusive in
+ * Edit labels, so this only matters for data written by an older client.
+ */
+export function isOutOfScopeLabel(label: BoardLabel | undefined): boolean {
+  if (!label || label.columnKey !== 'status' || label.isDone) return false;
+  if (typeof label.outOfScope === 'boolean') return label.outOfScope;
+  return OUT_OF_SCOPE_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
+}
+
+/** Ids of every out-of-scope status label — the set BoardTab splits rows with. */
+export function outOfScopeStatusIds(labels: BoardLabel[]): Set<string> {
+  return new Set(labels.filter(isOutOfScopeLabel).map((l) => l.id));
+}
+
 export function emptyBoard(): BoardState {
   return { projects: [], labels: seedLabels(), activity: [], updates: [] };
 }

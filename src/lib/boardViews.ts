@@ -3,7 +3,7 @@
 // state, this file owns the rules so they can be tested without a DOM.
 
 import type { BoardLabel, BoardProject } from '../board/types';
-import { labelById, labelsFor, type LinkedPosts } from './board';
+import { labelById, labelsFor, outOfScopeStatusIds, type LinkedPosts } from './board';
 
 // ---- filters ----------------------------------------------------------------
 // Lives here (not in BoardTab) so the presets below can be unit-tested.
@@ -85,6 +85,46 @@ export function agingTitle(state: AgingState, project: BoardProject, installIso:
   if (state === 'overdue') return `Install date passed ${daysSince(installIso ?? '', todayIso)} day(s) ago`;
   if (state === 'stale') return `No change in ${daysSince(project.updatedAt, todayIso)} days`;
   return '';
+}
+
+// ---- board sections ---------------------------------------------------------
+
+export interface BoardSections {
+  /** The pipeline — the main table, in the order it came in. */
+  active: BoardProject[];
+  /**
+   * Parked, not our scope (Hold / Sonnen / ENPHASE by default). Its own
+   * section between active and Completed: on the board, but out of the way.
+   */
+  outOfScope: BoardProject[];
+  /** Status counts as done. */
+  completed: BoardProject[];
+}
+
+/**
+ * Split the visible rows into the board's three sections (Aboud 2026-10-19:
+ * the out-of-scope statuses "are disturbing our board").
+ *
+ * `active` keeps the incoming order — whatever sort or manual drag produced it.
+ * The other two sections are most-recently-touched first, because `updatedAt`
+ * moves when the status flips, so the row that just left the pipeline is on top.
+ */
+export function splitSections(projects: BoardProject[], labels: BoardLabel[]): BoardSections {
+  const doneIds = new Set(labels.filter((l) => l.isDone).map((l) => l.id));
+  const scopeIds = outOfScopeStatusIds(labels);
+  const active: BoardProject[] = [];
+  const outOfScope: BoardProject[] = [];
+  const completed: BoardProject[] = [];
+  for (const p of projects) {
+    // Done is checked first — see isOutOfScopeLabel for why it wins.
+    if (p.statusId && doneIds.has(p.statusId)) completed.push(p);
+    else if (p.statusId && scopeIds.has(p.statusId)) outOfScope.push(p);
+    else active.push(p);
+  }
+  const recentFirst = (a: BoardProject, b: BoardProject) => b.updatedAt.localeCompare(a.updatedAt);
+  completed.sort(recentFirst);
+  outOfScope.sort(recentFirst);
+  return { active, outOfScope, completed };
 }
 
 // ---- grouping ---------------------------------------------------------------

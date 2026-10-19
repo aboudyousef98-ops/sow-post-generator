@@ -1,0 +1,152 @@
+Report: Projects
+Scope of Work Assignments - Design
+Total Records
+61
+Total Records 61
+Total Scope of Work Complete
+0
+Total Project Size (kW)
+874.120
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+Scope Of Work Assignment: Full Name
+Scope of Work Complete
+Project Name
+Project Size (kW)
+CLR Agent: Full Name
+Fulfillment: Fulfillment Coordinator: Full Name
+Sorted by Fulfillment: Fulfillment Coordinator: Full Name, A-to-ZAscending
+Fulfillment: Current Design: Designer assigned: Full Name
+Lender
+Fulfillment: Scheduling Alerts!
+Project Status
+Fulfillment: Current Design: Document Name
+Fulfillment: AHJ Start Date unchecked Select all rows for Drill Down.
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+10/18/2026, unchecked, Select row for Drill Down.
+10/18/2026(10)
+Subtotal
+10/19/2026, unchecked, Select row for Drill Down.
+10/19/2026(2)
+Subtotal
+Total(61)
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+Scope Of Work Assignment: Full Name
+Scope of Work Complete
+Project Name
+Project Size (kW)
+CLR Agent: Full Name
+Fulfillment: Fulfillment Coordinator: Full Name
+Sorted by Fulfillment: Fulfillment Coordinator: Full Name, A-to-ZAscending
+Fulfillment: Current Design: Designer assigned: Full Name
+Lender
+Fulfillment: Scheduling Alerts!
+Project Status
+Fulfillment: Current Design: Document Name
+10/18/2026(10)
+-
+feature not included
+Duane Hallemann
+10.250
+✨Austen Hallett
+-
+Hamzah Musamih
+SOLRITE
+Design Notes for Duane Hallemann:
+
+Roof rating is 5/10, 12 years old, SS states that it looks mainly worm down, need to inspect it to see if repair work is needed before hand
+Please look at the elevation notes carefully, very important
+A placard has ...
+AHJ
+Design Request - Duane Hallemann | FF | Rooftop Solar
+-
+feature not included
+William Roberts
+10.250
+✨Austen Hallett
+-
+Rashed Kteshat
+SOLRITE
+Roof Rating 8/10
+If its possible to fit the main disconnect next to the meter it would please proceed as we don't have measurements
+AHJ
+Design Request - William Roberts | FF | Rooftop Solar
+-
+feature not included
+Okernithia Shepherd
+17.630
+Adam Hallett
+-
+Hamzah Musamih
+SOLRITE
+Design Notes for Okernithia Shepherd:
+
+Roof rating is 9/10, basically a fresh roof
+There is some heavy tree work, please do it before hand
+Spare tandems will be sent just in case, but you can fit the gateway and surge without needing them, just gotta...
+Install Scheduled
+Design Request - Okernithia Shepherd | FF | Rooftop Solar
+-
+feature not included
+Donald Kennedy
+11.890
+✨Mat Liu
+-
+Hamzah Musamih
+SOLRITE
+Design Notes for Donald Kennedy:
+Attic covers whole roof and entrance is located inside the garage
+Roof is 5 years old, and is rated 8/10
+Garage is insanely cluttered and will need to be cleared out before installation (maybe send someone to help HO) ...
+AHJ
+Design Request - Donald Kennedy | FF | Rooftop Solar
+-
+feature not included
+Alonzo Burbridge
+13.940
+Tre Goodloe
+-
+Rashed Kteshat
+SOLRITE
+Design notes:
+- One vent pipe will be sent just in case as roof layout is really tight.
+AHJ
+Design Request - Alonzo Burbridge | FF | Rooftop Solar
+Subtotal
+0
+135.300
+10/19/2026(2)
+-
+feature not included
+Steven Clifton
+20.090
+Tre Goodloe
+-
+Khader Alnajjar
+SOLRITE
+ROOF rating 4 Degranulation +12YEARS OLD, please check before installation
+Please check with the neighbor about the batts placement; HO approved. Nothing will exceed the 12" of HO property
+AHJ
+Design Request - Steven Clifton | FF | Rooftop Solar
+-
+feature not included
+HARPER JR Walker
+12.710
+Adam Hallett
+-
+Khader Alnajjar
+SOLRITE
+roof rating 8
+metal roof: please install the s5! Mounts properly so it doesn't leak
+AHJ
+Design Request - HARPER JR Walker | FF | Rooftop Solar
+Subtotal
+0
+32.800
+Total(61)
+0
+874.120

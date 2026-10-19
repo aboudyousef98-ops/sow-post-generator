@@ -1,0 +1,113 @@
+Report: Projects
+Scope of Work Assignments - Scheduled
+Total Records
+15
+Total Records 15
+Total Scope of Work Complete
+0
+Total Project Size (kW)
+200.490
+Install Scheduled Date
+Sorted by Install Scheduled Date, oldest-to-newestAscending
+Install Scheduled Date
+Sorted by Install Scheduled Date, oldest-to-newestAscending
+Scope Of Work Assignment: Full Name
+Scope of Work Complete
+Project Name
+Street Address
+Project Size (kW)
+CLR Agent: Full Name
+Fulfillment: Current Design: Designer assigned: Full Name
+Sorted by Fulfillment: Current Design: Designer assigned: Full Name, A-to-ZAscending
+Lender
+Fulfillment: Scheduling Alerts!
+Project Status
+Fulfillment: Current Design: Document Name
+Install Scheduled Date unchecked Select all rows for Drill Down.
+Install Scheduled Date
+Sorted by Install Scheduled Date, oldest-to-newestAscending
+10/27/2026, unchecked, Select row for Drill Down.
+10/27/2026(5)
+Subtotal
+10/29/2026, unchecked, Select row for Drill Down.
+10/29/2026(1)
+Subtotal
+Total(15)
+Install Scheduled Date
+Sorted by Install Scheduled Date, oldest-to-newestAscending
+Scope Of Work Assignment: Full Name
+Scope of Work Complete
+Project Name
+Street Address
+Project Size (kW)
+CLR Agent: Full Name
+Fulfillment: Current Design: Designer assigned: Full Name
+Sorted by Fulfillment: Current Design: Designer assigned: Full Name, A-to-ZAscending
+Lender
+Fulfillment: Scheduling Alerts!
+Project Status
+Fulfillment: Current Design: Document Name
+10/27/2026(5)
+Aboud Yousef
+feature not included
+Karan Staggers
+1024 Fair Oaks Dr
+25.830
+Adam Hallett
+Ahmad Sarayreh
+SOLRITE
+We need to install a new 125A main breaker in the other panel and connect it to the subpanel, as shown in the SLD.
+Roof rating is 9 (Prime).
+Install Scheduled
+Redesign [Nº 1] - Karan Staggers | FF | Rooftop Solar
+Anas Yaghmour
+feature not included
+Nikki Calton
+6340 Rockrose Trail
+13.530
+Adam Hallett
+Farah Hamida
+SOLRITE
+-
+Install Scheduled
+Redesign [Nº 1] - Nikki Calton | FF | Rooftop Solar
+Ya'rob Alnabelsi
+feature not included
+Eric Webber
+-
+11.890
+Tre Goodloe
+Ihab Huwaidi
+SOLRITE
+* The roof in good condition.
+* We need to do 4x tree trims for the trees that covers the south side of the house.
+Install Scheduled
+Redesign [Nº 2] - Eric Webber | FF | Rooftop Solar
+Aboud Yousef
+feature not included
+Susan Stone
+1315 Bennett Dr
+10.250
+✨Austen Hallett
+Khader Alnajjar
+SOLRITE
+-there are holes in the plywood from the attic and the roof rating is 5. Please check before the installation
+-There's a fallen branch on the roof that needs to be cut and removed and check if there's damage underneath
+- Please make sure to finish tre...
+Install Scheduled
+Design Request - Susan Stone | FF | Rooftop Solar
+Subtotal
+0
+78.720
+10/29/2026(1)
+Ya'rob Alnabelsi
+feature not included
+Paul Richardson
+8724 Wood Homestead Dr
+11.480
+Alexandria Mullen
+Khader Alnajjar
+SOLRITE
+Roof is 10+ years old
+Degranulation
+Roof rated 7

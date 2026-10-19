@@ -4,7 +4,7 @@
 // rows still use the label). System labels can be renamed/recolored only.
 
 import { useMemo, useState } from 'react';
-import { LABEL_PALETTE, labelsFor } from '../lib/board';
+import { LABEL_PALETTE, isOutOfScopeLabel, labelsFor } from '../lib/board';
 import type { BoardLabel, BoardProject, LabelColumnKey } from './types';
 import Popover from './Popover';
 
@@ -103,7 +103,8 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
     if (options.some((l) => l.name.toLowerCase() === clean.toLowerCase())) return;
     const used = new Set(options.map((l) => l.color));
     const color = LABEL_PALETTE.find((c) => !used.has(c)) ?? LABEL_PALETTE[options.length % LABEL_PALETTE.length];
-    const maxOrder = Math.max(0, ...options.filter((l) => !l.isDone).map((l) => l.sortOrder));
+    // After the working labels, before the parked and finished ones.
+    const maxOrder = Math.max(0, ...options.filter((l) => !l.isDone && !isOutOfScopeLabel(l)).map((l) => l.sortOrder));
     onUpdate([
       {
         id: crypto.randomUUID(),
@@ -194,14 +195,33 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                     default
                   </label>
                   {columnKey === 'status' && (
-                    <label className="board-label-flag" title="Counts as finished (used by filters/automations)">
-                      <input
-                        type="checkbox"
-                        checked={l.isDone}
-                        onChange={(e) => onUpdate([{ ...l, isDone: e.target.checked }])}
-                      />
-                      done
-                    </label>
+                    <>
+                      <label className="board-label-flag" title="Counts as finished (used by filters/automations)">
+                        <input
+                          type="checkbox"
+                          checked={l.isDone}
+                          // Mutually exclusive with "out of scope": a row has
+                          // exactly one section, so a label must not claim two.
+                          onChange={(e) =>
+                            onUpdate([{ ...l, isDone: e.target.checked, outOfScope: e.target.checked ? false : l.outOfScope }])
+                          }
+                        />
+                        done
+                      </label>
+                      <label
+                        className="board-label-flag"
+                        title="Not in the SOW pipeline — these rows move to the “Out of SOW scope” section"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isOutOfScopeLabel(l)}
+                          onChange={(e) =>
+                            onUpdate([{ ...l, outOfScope: e.target.checked, isDone: e.target.checked ? false : l.isDone }])
+                          }
+                        />
+                        out of scope
+                      </label>
+                    </>
                   )}
                   <span className="board-label-tools">
                     <button type="button" className="btn small secondary" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${l.name} up`}>

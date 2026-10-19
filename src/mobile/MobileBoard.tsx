@@ -21,6 +21,7 @@ import {
   patchProject,
   type ProjectPatch,
 } from '../lib/board';
+import { splitSections } from '../lib/boardViews';
 import { isoToUs, relativeTime } from '../lib/dates';
 import {
   deleteUpdate,
@@ -80,6 +81,7 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
   const [phaseFilter, setPhaseFilter] = useState<string | null>(null);
   const [coordFilter, setCoordFilter] = useState<string | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
+  const [scopeOpen, setScopeOpen] = useState(false);
   const [addName, setAddName] = useState('');
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
@@ -153,9 +155,11 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
         .sort((a, b) => b.position - a.position),
     [board.projects, needle, mine, me, coordFilter, statusFilter, phaseFilter],
   );
-  const isDone = (p: BoardProject) => !!labelById(board.labels, p.statusId)?.isDone;
-  const active = visible.filter((p) => !isDone(p));
-  const completed = visible.filter(isDone);
+  // Same three sections as the desktop board, same rules (lib/boardViews).
+  const { active, outOfScope, completed } = useMemo(
+    () => splitSections(visible, board.labels),
+    [visible, board.labels],
+  );
 
   const startResize = (key: string, e: React.PointerEvent) => {
     e.preventDefault();
@@ -363,7 +367,27 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
           </button>
         </div>
 
+        {/* Out of SOW scope, then Completed — the desktop order, so the two
+            boards read the same way (Aboud 2026-10-19). */}
         <div className="m-done-wrap">
+          <div className="m-card m-scope">
+            <button className="m-done-toggle" onClick={() => setScopeOpen(!scopeOpen)}>
+              <span className={`m-caret ${scopeOpen ? 'open' : ''}`}>▸</span>
+              Out of SOW scope
+              <span className="m-done-count">{outOfScope.length}</span>
+            </button>
+            {scopeOpen && (
+              <div className="m-done-list">
+                {outOfScope.map((c) => (
+                  <div key={c.id} className="m-done-item">
+                    <span className="m-done-name">{c.name}</span>
+                    <span className="m-done-coord">{c.coordinator}</span>
+                    <span className="m-done-pill">{labelById(board.labels, c.statusId)?.name ?? '—'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="m-card">
             <button className="m-done-toggle" onClick={() => setDoneOpen(!doneOpen)}>
               <span className={`m-caret ${doneOpen ? 'open' : ''}`}>▸</span>

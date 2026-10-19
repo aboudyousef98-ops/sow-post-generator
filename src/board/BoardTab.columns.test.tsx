@@ -38,7 +38,14 @@ const project = (id: string, name: string, over: Partial<BoardProject> = {}): Bo
 });
 
 const BOARD: BoardState = {
-  labels: [label('s1', 'Working on it', 'status'), label('s2', 'Hold', 'status')],
+  labels: [
+    label('s1', 'Working on it', 'status'),
+    // These are column-filter tests, so every row has to stay in the MAIN
+    // table. "Hold" is out-of-scope by default (lib/board), which would move
+    // two of the three rows into their own section — `outOfScope: false` keeps
+    // the fixture about filtering and nothing else.
+    label('s2', 'Hold', 'status', { outOfScope: false }),
+  ],
   projects: [
     project('a', 'Alpha Customer', { coordinator: 'Omar Rajab' }),
     project('b', 'Bravo Customer', { coordinator: 'Anas Yaghmour', statusId: 's2' }),

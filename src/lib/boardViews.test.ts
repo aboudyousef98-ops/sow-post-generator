@@ -10,6 +10,7 @@ import {
   installDateOf,
   isPresetActive,
   selectedRows,
+  splitSections,
   viewPresets,
 } from './boardViews';
 import type { PostRecord } from '../types';
@@ -54,6 +55,73 @@ describe('installDateOf', () => {
     expect(installDateOf(undefined)).toBeNull();
     expect(installDateOf({})).toBeNull();
     expect(installDateOf({ draft: post('') })).toBeNull();
+  });
+});
+
+describe('splitSections', () => {
+  // The live board's own labels (ids from the real store), plus the seeds.
+  const hold = { ...LABELS[0], id: 'hold', name: 'Hold', isDefault: false, outOfScope: undefined };
+  const sonnen = { ...LABELS[0], id: 'sonnen', name: 'Sonnen', isDefault: false, outOfScope: undefined };
+  const enphase = { ...LABELS[0], id: 'enphase', name: 'ENPHASE', isDefault: false, outOfScope: undefined };
+  const labels = [...LABELS, hold, sonnen, enphase];
+
+  it('puts Hold / Sonnen / ENPHASE in their own section, with no stored flag', () => {
+    const rows = [
+      p({ id: 'a', statusId: 'status-working' }),
+      p({ id: 'b', statusId: 'hold' }),
+      p({ id: 'c', statusId: 'sonnen' }),
+      p({ id: 'd', statusId: 'enphase' }),
+      p({ id: 'e', statusId: 'status-done' }),
+    ];
+    const { active, outOfScope, completed } = splitSections(rows, labels);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(outOfScope.map((r) => r.id).sort()).toEqual(['b', 'c', 'd']);
+    expect(completed.map((r) => r.id)).toEqual(['e']);
+  });
+
+  it('matches the default names case- and space-insensitively', () => {
+    const odd = [{ ...hold, id: 'x', name: '  hOlD ' }];
+    const { active, outOfScope } = splitSections([p({ id: 'a', statusId: 'x' })], [...labels, ...odd]);
+    expect(active).toHaveLength(0);
+    expect(outOfScope.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('an explicit outOfScope:false beats the name default', () => {
+    const kept = [{ ...hold, outOfScope: false }];
+    const { active, outOfScope } = splitSections([p({ id: 'a', statusId: 'hold' })], [...LABELS, ...kept]);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(outOfScope).toHaveLength(0);
+  });
+
+  it('out-of-scope works on any label name once the flag is ticked', () => {
+    const custom = [{ ...LABELS[0], id: 'ot', name: 'OVERTIME', isDefault: false, outOfScope: true }];
+    const { active, outOfScope } = splitSections([p({ id: 'a', statusId: 'ot' })], [...LABELS, ...custom]);
+    expect(active).toHaveLength(0);
+    expect(outOfScope.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('done wins when a label somehow claims both', () => {
+    const both = [{ ...hold, isDone: true, outOfScope: true }];
+    const { outOfScope, completed } = splitSections([p({ id: 'a', statusId: 'hold' })], [...LABELS, ...both]);
+    expect(outOfScope).toHaveLength(0);
+    expect(completed.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('keeps the incoming order in active, and sorts the other two newest-first', () => {
+    const rows = [
+      p({ id: 'a2', statusId: 'status-working', position: 2 }),
+      p({ id: 'a1', statusId: 'status-working', position: 1 }),
+      p({ id: 's-old', statusId: 'hold', updatedAt: '2026-10-01T00:00:00.000Z' }),
+      p({ id: 's-new', statusId: 'hold', updatedAt: '2026-10-18T00:00:00.000Z' }),
+    ];
+    const { active, outOfScope } = splitSections(rows, labels);
+    expect(active.map((r) => r.id)).toEqual(['a2', 'a1']);
+    expect(outOfScope.map((r) => r.id)).toEqual(['s-new', 's-old']);
+  });
+
+  it('a row with no status, or an unknown one, stays active', () => {
+    const { active } = splitSections([p({ id: 'a' }), p({ id: 'b', statusId: 'gone' })], labels);
+    expect(active.map((r) => r.id)).toEqual(['a', 'b']);
   });
 });
 

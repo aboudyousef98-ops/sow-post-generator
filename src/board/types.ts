@@ -17,6 +17,17 @@ export interface BoardLabel {
   isDefault: boolean;
   /** "Finished" meaning, for automations and filters (status only). */
   isDone: boolean;
+  /**
+   * "Not our pipeline" meaning (status only) — the row leaves the active table
+   * for the "Out of SOW scope" section, which sits between active and
+   * Completed (Aboud 2026-10-19: Hold / Sonnen / ENPHASE "are not on our
+   * pipeline but we need to have them there").
+   *
+   * OPTIONAL on purpose: every label written before 2026-10-19 has no such
+   * field, and a board must not need a migration to behave. `undefined` falls
+   * back to the by-name default in lib/board.isOutOfScopeLabel.
+   */
+  outOfScope?: boolean;
   /** Seeded label: rename/recolor OK, archive not allowed. */
   isSystem: boolean;
   archived: boolean;

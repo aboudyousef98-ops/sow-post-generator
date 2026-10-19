@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 // Board tab — create, duplicate guard, label edit, rating, archive/undo.
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -19,7 +21,16 @@ class RO {
 const toasts: { text: string; action?: { label: string; fn: () => void } }[] = [];
 const opened: BoardProject[] = [];
 
-function Harness({ initial, records = [] }: { initial?: BoardState; records?: PostRecord[] }) {
+function Harness({
+  initial,
+  records = [],
+  authors = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai'],
+}: {
+  initial?: BoardState;
+  records?: PostRecord[];
+  /** Override for the import tests, which need the real five-person roster. */
+  authors?: string[];
+}) {
   const [board, setBoard] = useState<BoardState>(initial ?? emptyBoard());
   return (
     <BoardTab
@@ -27,7 +38,7 @@ function Harness({ initial, records = [] }: { initial?: BoardState; records?: Po
       setBoard={setBoard}
       me="Aboud Yousef"
       isAdmin
-      authors={['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai']}
+      authors={authors}
       toast={(text, action) => toasts.push({ text, action })}
       records={records}
       onOpenCompose={(p) => opened.push(p)}
@@ -284,7 +295,7 @@ describe('BoardTab', () => {
 
     // Gone from the main board (section is collapsed by default)…
     expect(screen.queryByText('Martha Thompson')).toBeNull();
-    expect(screen.getByText('Nothing in progress — everything is in Completed projects below.')).toBeTruthy();
+    expect(screen.getByText('Nothing in progress — every project is in a section below.')).toBeTruthy();
     expect(toasts.at(-1)?.text).toBe('Martha Thompson → Completed projects.');
 
     // …and in the Completed section when expanded, still fully editable.
@@ -311,7 +322,8 @@ describe('BoardTab', () => {
     fireEvent.change(within(modal).getByLabelText('New label name'), { target: { value: 'Shipped' } });
     fireEvent.click(within(modal).getByRole('button', { name: 'Add' }));
     const row = within(modal).getByLabelText('Rename Shipped').closest('.board-label-row') as HTMLElement;
-    fireEvent.click(within(row).getByRole('checkbox'));
+    // Two flags live on a status row now — "done" and "out of scope".
+    fireEvent.click(within(row).getByLabelText('done'));
     fireEvent.click(within(modal).getByRole('button', { name: 'Close' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'New project' }));
@@ -415,6 +427,141 @@ describe('BoardTab — Tier 1', () => {
     ];
     return board;
   }
+
+  // ---- Out of SOW scope (Aboud 2026-10-19) ----------------------------------
+
+  /** withRows() plus the live board's Hold label and one row on it. */
+  function withHold() {
+    const board = withRows();
+    board.labels = [
+      ...seedLabels(),
+      {
+        id: 'hold',
+        columnKey: 'status',
+        name: 'Hold',
+        color: '#FDAB3D',
+        sortOrder: 90,
+        isDefault: false,
+        isDone: false,
+        isSystem: false,
+        archived: false,
+        updatedAt: '2026-10-10T00:00:00.000Z',
+      },
+    ];
+    board.projects.push({ ...boardProject('Karan Staggers', 'pj-4'), statusId: 'hold' });
+    return board;
+  }
+
+  it('a Hold row leaves the active table for the Out of SOW scope section', () => {
+    render(<Harness initial={withHold()} />);
+    // Collapsed by default, so the row is off the board entirely…
+    expect(screen.queryByText('Karan Staggers')).toBeNull();
+    const toggle = screen.getByRole('button', { name: /Out of SOW scope/ });
+    expect(toggle.textContent).toContain('1');
+    // …and the header count speaks only about the three active ones.
+    expect(screen.getByText('3 of 3 active projects')).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(screen.getByText('Karan Staggers')).toBeTruthy();
+  });
+
+  it('the section sits between the active table and Completed projects', () => {
+    render(<Harness initial={withHold()} />);
+    const cards = Array.from(document.querySelectorAll('.list-card'));
+    const scope = cards.findIndex((c) => c.classList.contains('board-scope'));
+    const done = cards.findIndex((c) => c.classList.contains('board-done') && !c.classList.contains('board-scope'));
+    expect(scope).toBeGreaterThan(0); // the main table card comes first
+    expect(done).toBeGreaterThan(scope);
+  });
+
+  it('a search reveals an out-of-scope match without opening the section by hand', () => {
+    render(<Harness initial={withHold()} />);
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'Karan' } });
+    expect(screen.getByText('Karan Staggers')).toBeTruthy();
+  });
+
+  it('the open/shut choice survives a remount', () => {
+    const board = withHold();
+    const { unmount } = render(<Harness initial={board} />);
+    fireEvent.click(screen.getByRole('button', { name: /Out of SOW scope/ }));
+    unmount();
+    render(<Harness initial={board} />);
+    expect(screen.getByText('Karan Staggers')).toBeTruthy();
+  });
+
+  // ---- Import from Salesforce (Aboud 2026-10-19) ----------------------------
+
+  const SCHEDULED_REPORT = readFileSync(
+    resolve('src/lib/__fixtures__/sf-report-scheduled-partial.txt'),
+    'utf8',
+  );
+
+  function openImport() {
+    fireEvent.click(screen.getByRole('button', { name: /Import from Salesforce/ }));
+    fireEvent.change(screen.getByLabelText('Salesforce report'), { target: { value: SCHEDULED_REPORT } });
+    fireEvent.click(screen.getByRole('button', { name: /^Import 4$/ }));
+  }
+
+  it('importing the Scheduled report creates every missing row, on Schedule', () => {
+    render(<Harness initial={emptyBoard()} />);
+    openImport();
+
+    for (const n of ['Karan Staggers', 'Nikki Calton', 'Eric Webber', 'Susan Stone']) {
+      expect(screen.getByText(n)).toBeTruthy();
+    }
+    // The cut-off row was reported in the preview, never written.
+    expect(screen.queryByText('Paul Richardson')).toBeNull();
+    // Four rows, all on Schedule, so the Design/Schedule cell says so.
+    expect(screen.getAllByRole('button', { name: 'Schedule' })).toHaveLength(4);
+    expect(screen.getByText('4 of 4 active projects')).toBeTruthy();
+  });
+
+  it('the import carries each row’s SOW coordinator, Ya’rob included', () => {
+    // The real roster spells him "Yarob"; Salesforce writes "Ya'rob".
+    render(
+      <Harness
+        initial={emptyBoard()}
+        authors={['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai', 'Yarob Alnabelsi', 'Anas Yaghmour']}
+      />,
+    );
+    openImport();
+    const row = screen.getByText('Eric Webber').closest('tr') as HTMLElement;
+    // The ROSTER spelling lands on the row, not Salesforce's "Ya'rob".
+    expect(within(row).getByText('Yarob Alnabelsi')).toBeTruthy();
+    // And Anas, who the report assigns to a different row.
+    const nikki = screen.getByText('Nikki Calton').closest('tr') as HTMLElement;
+    expect(within(nikki).getByText('Anas Yaghmour')).toBeTruthy();
+  });
+
+  it('one Undo takes the whole import back off the board', () => {
+    render(<Harness initial={emptyBoard()} />);
+    openImport();
+    expect(toasts.at(-1)?.text).toMatch(/Imported 4 projects/);
+
+    act(() => toasts.at(-1)!.action!.fn());
+
+    for (const n of ['Karan Staggers', 'Nikki Calton', 'Eric Webber', 'Susan Stone']) {
+      expect(screen.queryByText(n)).toBeNull();
+    }
+    expect(screen.getByText(/No projects yet/)).toBeTruthy();
+  });
+
+  it('a second import of the same report changes nothing and offers nothing to do', () => {
+    render(<Harness initial={emptyBoard()} />);
+    openImport();
+
+    fireEvent.click(screen.getByRole('button', { name: /Import from Salesforce/ }));
+    fireEvent.change(screen.getByLabelText('Salesforce report'), { target: { value: SCHEDULED_REPORT } });
+    expect((screen.getByRole('button', { name: /^Import$/ }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/matches the board already/)).toBeTruthy();
+  });
+
+  it('every imported row is in the activity log', () => {
+    render(<Harness initial={emptyBoard()} />);
+    openImport();
+    fireEvent.click(screen.getByText('Karan Staggers').closest('tr')!.querySelector('.board-updated-cell')!);
+    expect(screen.getByText(/created the project/)).toBeTruthy();
+  });
 
   it('group by status: a header per label, in label order, with counts', () => {
     render(<Harness initial={withRows()} />);
