@@ -563,6 +563,30 @@ describe('BoardTab — Tier 1', () => {
     expect(screen.getByText(/created the project/)).toBeTruthy();
   });
 
+  it('a new row whose Salesforce status is Hold lands in Out of SOW scope', () => {
+    const board = emptyBoard();
+    board.labels = [
+      ...seedLabels(),
+      { id: 'hold', columnKey: 'status', name: 'Hold', color: '#FDAB3D', sortOrder: 90,
+        isDefault: false, isDone: false, isSystem: false, archived: false, updatedAt: '2026-10-10T00:00:00.000Z' },
+    ];
+    render(<Harness initial={board} />);
+    fireEvent.click(screen.getByRole('button', { name: /Import from Salesforce/ }));
+    fireEvent.change(screen.getByLabelText('Salesforce report'), {
+      target: { value: readFileSync(resolve('src/lib/__fixtures__/sf-report-design-cancel-hold.txt'), 'utf8') },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /^Import 9$/ }));
+
+    // Randel Love is Hold in Salesforce, so it skips the pipeline entirely.
+    expect(screen.queryByText('Randel Love')).toBeNull();
+    const scope = screen.getByRole('button', { name: /Out of SOW scope/ });
+    expect(scope.textContent).toContain('1');
+    fireEvent.click(scope);
+    expect(screen.getByText('Randel Love')).toBeTruthy();
+    // The other eight are on the board as usual.
+    expect(screen.getByText('Gloria Davis')).toBeTruthy();
+  });
+
   it('group by status: a header per label, in label order, with counts', () => {
     render(<Harness initial={withRows()} />);
     fireEvent.change(screen.getByLabelText('Group by'), { target: { value: 'status' } });

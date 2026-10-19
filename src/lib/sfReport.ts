@@ -28,11 +28,19 @@ export interface SfReportRow {
   /** Roster display name; '' when the report says '-' or the name is unknown. */
   coordinator: string;
   /**
+   * Salesforce's own Project Status, verbatim — "Install Scheduled", "AHJ",
+   * "Cancel", "Hold". Kept raw because the board may have a status label of
+   * the same name, and a new row should land on it (Aboud, 2026-10-19).
+   */
+  status: string;
+  /**
    * Salesforce's own Project Status says this job is already scheduled. True
    * even on the Design report — "Okernithia Shepherd" is exactly that case —
    * and it is what makes Schedule win over Design per row, not just per paste.
    */
   scheduled: boolean;
+  /** Status is Cancel. Imported like any other row, but counted separately. */
+  cancelled: boolean;
 }
 
 export interface SfReport {
@@ -54,6 +62,8 @@ const ANCHOR = 'feature not included';
 const DOC_NAME_RE = /\|\s*(?:FF|PA)\s*\|/;
 /** Salesforce Project Status values that mean "already scheduled". */
 const SCHEDULED_STATUS_RE = /install\s*scheduled/i;
+/** …and the ones that mean the job is dead. */
+const CANCELLED_STATUS_RE = /^cancel/i;
 
 function detectKind(lines: string[]): SfReportKind {
   for (const line of lines) {
@@ -175,11 +185,16 @@ export function parseSfReport(input: string, roster: string[]): SfReport {
       else warnings.push(`${name}: "${rawCoordinator}" is not on the roster — left unassigned.`);
     }
 
+    // Project Status is the line immediately before the document name.
+    const status = prevNonEmpty(lines, doc, at);
+    const cancelled = CANCELLED_STATUS_RE.test(status);
     rows.push({
       name,
       coordinator,
-      // Project Status is the line immediately before the document name.
-      scheduled: SCHEDULED_STATUS_RE.test(prevNonEmpty(lines, doc, at)),
+      status,
+      // A cancelled job is never "scheduled", whatever else the row says.
+      scheduled: !cancelled && SCHEDULED_STATUS_RE.test(status),
+      cancelled,
     });
   }
 

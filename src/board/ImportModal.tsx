@@ -134,6 +134,18 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
                 </label>
               </>
             </Line>
+            {/* Aboud's call (2026-10-19): cancelled rows ARE imported, but the
+                count is never buried, and a board row that has since been
+                cancelled is surfaced so it can be archived by hand. */}
+            <Line n={counts.cancelled} text="cancelled in Salesforce — imported anyway">
+              {names(plan.rows.filter((r) => r.cancelled).map((r) => r.name))}
+            </Line>
+            <Line
+              n={plan.cancelledOnBoard.length}
+              text="already on the board, now cancelled in Salesforce — archive by hand"
+            >
+              {names(plan.cancelledOnBoard.map((p) => p.name))}
+            </Line>
             <Line n={plan.absent.length} text="on the board, not on this report — nothing will change">
               {names(plan.absent.map((p) => p.name))}
             </Line>

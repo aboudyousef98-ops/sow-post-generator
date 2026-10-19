@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseSfReport } from './sfReport';
 
-const fixture = (name: string) => readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8');
+// Normalised on the way in: git checks these out with CRLF on Windows, and a
+// test that edits the text with '\n' patterns would silently match nothing.
+const fixture = (name: string) =>
+  readFileSync(new URL(`./__fixtures__/${name}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 
 const SCHEDULED = fixture('sf-report-scheduled-partial.txt');
 const DESIGN = fixture('sf-report-design-partial.txt');
@@ -146,5 +149,41 @@ describe('parseSfReport — honesty about what it could not read', () => {
     expect(r.totalRecords).toBe(7);
     expect(r.complete).toBe(true);
     expect(r.warnings).toEqual([]);
+  });
+});
+
+describe('parseSfReport — Salesforce Project Status', () => {
+  const CANCEL_HOLD = fixture('sf-report-design-cancel-hold.txt');
+
+  it('keeps the raw status of every row', () => {
+    const by = new Map(parseSfReport(CANCEL_HOLD, ROSTER).rows.map((r) => [r.name, r.status]));
+    expect(by.get('Susan Stone')).toBe('Install Scheduled');
+    expect(by.get('David Crumrine')).toBe('AHJ');
+    expect(by.get('Gloria Davis')).toBe('Cancel');
+    expect(by.get('Randel Love')).toBe('Hold');
+  });
+
+  it('marks the cancelled rows', () => {
+    const r = parseSfReport(CANCEL_HOLD, ROSTER);
+    expect(r.rows.filter((x) => x.cancelled).map((x) => x.name)).toEqual([
+      'Johann Lawrence-Brian Dsouza',
+      'Gloria Davis',
+      'Jeannie Kutach',
+      'Gloria Roberts',
+    ]);
+  });
+
+  it('a cancelled row is not treated as scheduled', () => {
+    const r = parseSfReport(CANCEL_HOLD, ROSTER);
+    expect(r.rows.find((x) => x.name === 'Gloria Davis')?.scheduled).toBe(false);
+  });
+
+  it('still reads the rest of the row — this paste is the Ctrl+A window, 9 of 61', () => {
+    const r = parseSfReport(CANCEL_HOLD, ROSTER);
+    expect(r.rows).toHaveLength(9);
+    expect(r.totalRecords).toBe(61);
+    expect(r.complete).toBe(false);
+    expect(r.unreadable).toEqual([]);
+    expect(r.rows.find((x) => x.name === 'Eric Webber')?.coordinator).toBe('Yarob Alnabelsi');
   });
 });

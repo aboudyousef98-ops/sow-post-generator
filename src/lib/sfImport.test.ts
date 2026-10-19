@@ -29,7 +29,7 @@ function proj(name: string, over: Partial<BoardProject> = {}): BoardProject {
 }
 
 function row(name: string, over: Partial<SfReportRow> = {}): SfReportRow {
-  return { name, coordinator: 'Aboud Yousef', scheduled: false, ...over };
+  return { name, coordinator: 'Aboud Yousef', status: 'AHJ', scheduled: false, cancelled: false, ...over };
 }
 
 function report(kind: 'scheduled' | 'design', rows: SfReportRow[], over: Partial<SfReport> = {}): SfReport {
@@ -242,5 +242,68 @@ describe('end to end, through the real pastes', () => {
     expect(plan.counts.create).toBe(4); // the other four are genuinely new
     // Partial paste (7 of 61), so it must not claim anything is missing.
     expect(plan.absent).toEqual([]);
+  });
+})
+
+describe('planImport — Salesforce status carried onto NEW rows only', () => {
+  const HOLD = { ...LABELS[0], id: 'hold', name: 'Hold', isDefault: false, updatedAt: '2026-10-10T00:00:00.000Z' };
+  const labels = [...LABELS, HOLD];
+
+  it('a new row whose Salesforce status is Hold gets the board’s Hold status', () => {
+    const plan = planImport(report('design', [row('Randel Love', { status: 'Hold' })]), [], labels);
+    expect(plan.rows[0].statusId).toBe('hold');
+  });
+
+  it('a status with no matching board label leaves the default alone', () => {
+    const plan = planImport(report('design', [row('David Crumrine', { status: 'AHJ' })]), [], labels);
+    expect(plan.rows[0].statusId).toBeUndefined();
+  });
+
+  it('an EXISTING row’s status is never touched, even by Hold', () => {
+    const plan = planImport(
+      report('design', [row('Randel Love', { status: 'Hold' })]),
+      [proj('Randel Love', { statusId: 'status-working' })],
+      labels,
+    );
+    expect(plan.rows[0].match).toBe('matched');
+    expect(plan.rows[0].statusId).toBeUndefined();
+  });
+
+  it('matches the board label by name, ignoring case', () => {
+    const plan = planImport(report('design', [row('Randel Love', { status: 'hold' })]), [], labels);
+    expect(plan.rows[0].statusId).toBe('hold');
+  });
+});
+
+describe('planImport — cancelled projects', () => {
+  it('imports them (Aboud’s call) but counts them separately', () => {
+    const plan = planImport(
+      report('design', [row('Gloria Davis', { status: 'Cancel', cancelled: true }), row('David Crumrine')]),
+      [],
+      LABELS,
+    );
+    expect(plan.counts.create).toBe(2);
+    expect(plan.counts.cancelled).toBe(1);
+    expect(plan.rows.find((r) => r.name === 'Gloria Davis')?.cancelled).toBe(true);
+  });
+
+  it('flags a board row Salesforce now shows as cancelled, so it can be archived by hand', () => {
+    const plan = planImport(
+      report('design', [row('Gloria Davis', { status: 'Cancel', cancelled: true })]),
+      [proj('Gloria Davis')],
+      LABELS,
+    );
+    expect(plan.cancelledOnBoard.map((p) => p.name)).toEqual(['Gloria Davis']);
+    // Still only flagged — the import never archives or edits it.
+    expect(plan.rows[0].match).toBe('matched');
+  });
+
+  it('a cancelled row never counts as scheduled, so it cannot drag a row onto Schedule', () => {
+    const plan = planImport(
+      report('design', [row('Gloria Davis', { status: 'Cancel', cancelled: true })]),
+      [proj('Gloria Davis', { phaseId: DESIGN })],
+      LABELS,
+    );
+    expect(plan.rows[0].phaseChange).toBeUndefined();
   });
 })

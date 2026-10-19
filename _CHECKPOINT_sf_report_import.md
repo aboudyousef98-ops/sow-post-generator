@@ -82,3 +82,43 @@ Two structural invariants, verified against both real pastes:
 - Activity is capped at 1000 entries and the log is already near it — a 61-row
   import spends 61. Worth raising the cap before the first full import.
 - Everything open in `_CHECKPOINT_board_save_outage.md` is untouched.
+
+---
+
+## Follow-up, same day — Salesforce Project Status (Aboud testing, 2026-10-19)
+
+Live testing with a real Ctrl+A paste surfaced statuses the first two fixtures
+never contained. Of 9 rows pasted: `Install Scheduled` 2, `AHJ` 2,
+**`Cancel` 4**, **`Hold` 1**.
+
+The importer read Project Status *only* to detect "Install Scheduled", so all
+nine would have been added as live Design projects — four of them cancelled.
+On a 61-row import that is a couple of dozen dead projects dropped into the
+pipeline the Out-of-SOW-scope section had just been built to clear.
+
+**Decisions (Aboud):**
+- **Cancelled rows are still imported** — his call over my recommendation to
+  skip them — but the count is never buried, and any row *already on the board*
+  that Salesforce now shows as `Cancel` is listed so he can archive it himself.
+  The import still never archives or edits anything.
+- **A NEW row carries a Salesforce status that names a board status.** Today
+  that is `Hold`, so those rows land straight in Out of SOW scope instead of
+  the pipeline. Existing rows are untouched, as before.
+- A cancelled row can never count as `scheduled`, so it cannot drag anything
+  onto Schedule.
+
+New fixture `sf-report-design-cancel-hold.txt` — his actual Ctrl+A paste,
+9 of 61 rows, carrying `Cancel`, `Hold`, a hyphenated shouted name
+(`JOHANN LAWRENCE-BRIAN DSOUZA`) and the trailing `Loading...`.
+
+Also fixed: the fixture helper in `sfReport.test.ts` now normalises CRLF. Git
+checked the fixtures out with CRLF on this laptop, which silently broke a test
+that edits the text with `\n` patterns — it passed by accident before.
+
+824 tests pass (was 809).
+
+### Still open
+- **Ctrl+A cannot get all 61 rows.** Salesforce only renders what you scroll
+  past, so each copy yields a different ~9-row window (10/18–10/19 the first
+  time, 9/27–9/28 the second, ending in `Loading...`). The CSV-export route is
+  designed but NOT built — see the options put to Aboud 2026-10-19.

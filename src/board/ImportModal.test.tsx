@@ -15,7 +15,7 @@ const SCHEDULED = fixture('sf-report-scheduled-partial.txt');
 const DESIGN = fixture('sf-report-design-partial.txt');
 
 const ROSTER = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai', 'Yarob Alnabelsi', 'Anas Yaghmour'];
-const LABELS = seedLabels();
+const LABELS = [...seedLabels(), { ...seedLabels()[0], id: 'hold', name: 'Hold', isDefault: false, updatedAt: '2026-10-10T00:00:00.000Z' }];
 
 const proj = (name: string, over: Partial<BoardProject> = {}): BoardProject => ({
   ...newProject(name, 'Omar Rajab', LABELS, '2026-10-01T00:00:00.000Z'),
@@ -144,3 +144,34 @@ describe('ImportModal', () => {
     expect(screen.queryByText(/not on this report/)).toBeNull();
   });
 });
+
+describe('ImportModal — cancelled and Hold rows', () => {
+  afterEach(cleanup);
+  const CANCEL_HOLD = fixture('sf-report-design-cancel-hold.txt');
+
+  it('counts the cancelled rows and still imports them', () => {
+    const imported = show();
+    paste(CANCEL_HOLD);
+    const line = screen.getByText(/cancelled in Salesforce/).closest('details') as HTMLElement;
+    fireEvent.click(within(line).getByText(/cancelled in Salesforce/));
+    expect(within(line).getByText('Gloria Davis')).toBeTruthy();
+    // 9 rows, all new → all 9 imported, cancelled included.
+    expect(importButton().textContent).toBe('Import 9');
+    fireEvent.click(importButton());
+    expect(imported[0].plan.counts.cancelled).toBe(4);
+  });
+
+  it('flags a board row that Salesforce now shows as cancelled', () => {
+    show([proj('Gloria Davis')]);
+    paste(CANCEL_HOLD);
+    expect(screen.getByText(/now cancelled in Salesforce/)).toBeTruthy();
+  });
+
+  it('a new Hold row is given the board’s Hold status', () => {
+    const imported = show();
+    paste(CANCEL_HOLD);
+    fireEvent.click(importButton());
+    const love = imported[0].plan.rows.find((r) => r.name === 'Randel Love')!;
+    expect(love.statusId).toBe('hold');
+  });
+})

@@ -945,6 +945,9 @@ export default function BoardTab({
           // here, and '' (the Design report's "-") must stay unassigned.
           coordinator: row.coordinator,
           phaseId: row.phaseChange?.toId ?? null,
+          // Only set when Salesforce's own status names a board status (Hold
+          // today). Otherwise newProject's default label stands.
+          ...(row.statusId ? { statusId: row.statusId } : {}),
           position: position--,
         };
         projects.push(created);

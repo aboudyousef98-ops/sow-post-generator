@@ -30,14 +30,28 @@ export interface ImportRow {
   boardName?: string;
   /** The phase this row would end up on, when that differs from today's. */
   phaseChange?: { fromId: string | null; toId: string };
+  /**
+   * Status label for a NEW row, when Salesforce's own status names one of the
+   * board's (today that is "Hold", which lands it in Out of SOW scope).
+   * Never set for an existing row — an import does not touch a status someone
+   * chose by hand.
+   */
+  statusId?: string;
+  /** Salesforce says this project is cancelled. */
+  cancelled?: boolean;
 }
 
 export interface ImportPlan {
   kind: SfReportKind;
   rows: ImportRow[];
-  counts: { create: number; matched: number; maybe: number; archived: number; phase: number };
+  counts: { create: number; matched: number; maybe: number; archived: number; phase: number; cancelled: number };
   /** Rows a Design paste left on Schedule — reported, never silent. */
   stickySchedule: string[];
+  /**
+   * Rows already on the board that Salesforce now shows as cancelled. Flagged
+   * only — Aboud's call (2026-10-19) is that an import never archives.
+   */
+  cancelledOnBoard: BoardProject[];
   /** Active-section rows the paste does not mention. Empty on a partial paste. */
   absent: BoardProject[];
   warnings: string[];
@@ -112,8 +126,13 @@ export function planImport(
   answers: Record<string, MaybeAnswer> = {},
 ): ImportPlan {
   const { schedule, design } = phaseIds(labels);
-  const counts = { create: 0, matched: 0, maybe: 0, archived: 0, phase: 0 };
+  const counts = { create: 0, matched: 0, maybe: 0, archived: 0, phase: 0, cancelled: 0 };
   const stickySchedule: string[] = [];
+  const cancelledOnBoard: BoardProject[] = [];
+  /** Board status labels by lowercased name — for the Hold carry-over. */
+  const statusByName = new Map(
+    labels.filter((l) => l.columnKey === 'status' && !l.archived).map((l) => [l.name.trim().toLowerCase(), l.id]),
+  );
   const rows: ImportRow[] = [];
   const warnings = [...report.warnings];
 
@@ -142,6 +161,18 @@ export function planImport(
     }
 
     const row: ImportRow = { name: r.name, coordinator: r.coordinator, match };
+    if (r.cancelled) {
+      row.cancelled = true;
+      counts.cancelled++;
+      // Already on the board and now dead in Salesforce — worth seeing, but
+      // the import does not act on it.
+      if ((match === 'matched' || match === 'archived') && hit) cancelledOnBoard.push(hit);
+    }
+    // Salesforce's status names a board status → a NEW row starts there.
+    if (match === 'new') {
+      const mapped = statusByName.get(r.status.trim().toLowerCase());
+      if (mapped) row.statusId = mapped;
+    }
     if (match === 'maybe') {
       row.boardName = near!.name;
       row.projectId = near!.id;
@@ -186,5 +217,5 @@ export function planImport(
     absent = active.filter((p) => !hitKeys.has(nameKey(p.name)));
   }
 
-  return { kind: report.kind, rows, counts, stickySchedule, absent, warnings };
+  return { kind: report.kind, rows, counts, stickySchedule, cancelledOnBoard, absent, warnings };
 }

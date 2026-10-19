@@ -1,0 +1,179 @@
+Report
+Report: Projects
+Scope of Work Assignments - Design
+Total Records
+61
+Total Records 61
+Total Scope of Work Complete
+0
+Total Project Size (kW)
+874.120
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+Scope Of Work Assignment: Full Name
+Scope of Work Complete
+Project Name
+Project Size (kW)
+CLR Agent: Full Name
+Fulfillment: Fulfillment Coordinator: Full Name
+Sorted by Fulfillment: Fulfillment Coordinator: Full Name, A-to-ZAscending
+Fulfillment: Current Design: Designer assigned: Full Name
+Lender
+Fulfillment: Scheduling Alerts!
+Project Status
+Fulfillment: Current Design: Document Name
+Fulfillment: AHJ Start Date unchecked Select all rows for Drill Down.
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+9/27/2026, unchecked, Select row for Drill Down.
+9/27/2026(8)
+Subtotal
+9/28/2026, unchecked, Select row for Drill Down.
+9/28/2026(2)
+Fulfillment: AHJ Start Date
+Sorted by Fulfillment: AHJ Start Date, oldest-to-newestAscending
+Scope Of Work Assignment: Full Name
+Scope of Work Complete
+Project Name
+Project Size (kW)
+CLR Agent: Full Name
+Fulfillment: Fulfillment Coordinator: Full Name
+Sorted by Fulfillment: Fulfillment Coordinator: Full Name, A-to-ZAscending
+Fulfillment: Current Design: Designer assigned: Full Name
+Lender
+Fulfillment: Scheduling Alerts!
+Project Status
+Fulfillment: Current Design: Document Name
+9/27/2026(8)
+Aboud Yousef
+feature not included
+Susan Stone
+10.250
+✨Austen Hallett
+-
+Khader Alnajjar
+SOLRITE
+-there are holes in the plywood from the attic and the roof rating is 5. Please check before the installation
+-There's a fallen branch on the roof that needs to be cut and removed and check if there's damage underneath
+- Please make sure to finish tre...
+Install Scheduled
+Design Request - Susan Stone | FF | Rooftop Solar
+Ya'rob Alnabelsi
+feature not included
+Eric Webber
+11.890
+Tre Goodloe
+-
+Ihab Huwaidi
+SOLRITE
+* The roof in good condition.
+* We need to do 4x tree trims for the trees that covers the south side of the house.
+Install Scheduled
+Redesign [Nº 2] - Eric Webber | FF | Rooftop Solar
+-
+feature not included
+David Crumrine
+10.250
+Alexandria Mullen
+-
+Hamzah Musamih
+SOLRITE
+Notes for David Crumrine
+
+This is a two story duplex, and the average segment tilt is 40 deg
+There is some clutter on the BESS wall inside the garage, please have the HO clear it out before install
+AHJ
+Design Request - David Crumrine | FF | Rooftop Solar
+-
+feature not included
+JOHANN LAWRENCE-BRIAN DSOUZA
+8.610
+Alexandria Mullen
+-
+Ihab Huwaidi
+SOLRITE
+* HO need to clear the garage so we can install the batteries.
+* It's 3 story home, We need a boom lift.
+Cancel
+Design Request - JOHANN LAWRENCE-BRIAN DSOUZA | FF | Rooftop Solar
+-
+feature not included
+Randel Love
+10.250
+Alexandria Mullen
+-
+Ihab Huwaidi
+SOLRITE
+* We need to remove 5 panels from the existing system
+* The surveyor rate the roof 8/10, the roof is in good condition
+* We need to do one tree trim
+Hold
+Design Request - Randel Love | FF | Rooftop Solar
+-
+feature not included
+Eric R Smith
+23.370
+✨Austen Hallett
+-
+Ahmad Sarayreh
+SOLRITE
+Roof rating is 4 (Poor).
+Roof Issues: Degranulation;Exposed Matte Line, and it's too steep 58-60 Degrees. Please check before installation
+2 Disconnected attics and do not cover the entire house.
+AHJ
+Design Request - Eric R Smith | FF | Rooftop Solar
+-
+feature not included
+Gloria Davis
+10.250
+Tre Goodloe
+-
+Ihab Huwaidi
+SOLRITE
+-
+Cancel
+Design Request - Gloria Davis | FF | Rooftop Solar
+-
+feature not included
+JEANNIE KUTACH
+13.120
+Alexandria Mullen
+-
+Khader Alnajjar
+SOLRITE
+Wind Damage Degranulation roof rated 5 please check before install
+Push & small tree that are located in front of the meter must be removed before installation.
+Cancel
+Design Request - JEANNIE KUTACH | FF | Rooftop Solar
+Subtotal
+0
+97.990
+9/28/2026(2)
+-
+feature not included
+Gloria Roberts
+15.580
+Adam Hallett
+-
+Hamzah Musamih
+SOLRITE
+Notes for Gloria Roberts:
+
+Roof rating is 2/10, roof likely will need replacement
+We will need to have the deep freezer that is blocking the attic access to be moved by the HO
+There is a big whole in the ceiling of the garage
+Gutter around the house...
+Cancel
+Design Request - Gloria Roberts | FF | Rooftop Solar
+Press Enter to update the below table
+Row Counts
+
+Detail Rows
+
+Subtotals
+
+Grand Total
+
+Loading...
