@@ -1027,6 +1027,23 @@ table.list tr.row:hover {
 }
 
 /* Compose-side AHJ requirements banner */
+/* Aluminum wiring stance — one dense yellow line under Jurisdiction. */
+.alu-banner {
+  grid-column: 1 / -1;
+  background: var(--dyn-warn-bg);
+  border: 1px solid var(--dyn-yellow);
+  border-radius: var(--radius-card);
+  color: var(--dyn-warn-ink);
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.alu-banner strong {
+  color: var(--dyn-warn-ink);
+}
+
 .ahj-banner {
   grid-column: 1 / -1;
   background: #fffdf3;

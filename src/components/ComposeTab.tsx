@@ -6,6 +6,7 @@ import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { titleCaseName } from '../lib/nameCase';
 import { boardsOfKind, livePosts, matchAhj } from '../lib/ahj';
+import { matchAluminum } from '../lib/aluminumWiring';
 import { APPROVAL_FIELD, matchedBoard } from '../lib/template';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
@@ -218,6 +219,9 @@ export default function ComposeTab({
   // Utility / Funding / General boards, and a utility named "Harris" must not
   // match a Jurisdiction of "Harris".
   const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
+  // Aluminum wiring stance from Othman's static list — independent of the
+  // (hand-maintained) AHJ boards above, read-only, matched the same way.
+  const aluMatch = matchAluminum(record.sf.jurisdiction);
   const ahjPosts = ahjMatch ? livePosts(ahjMatch.ahj) : [];
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
 
@@ -536,6 +540,13 @@ export default function ComposeTab({
               onChange={(e) => setSf({ jurisdiction: e.target.value }, 'jurisdiction')}
             />
           </label>
+          {/* Aluminum wiring stance (Aboud 2026-10-20): shows for EVERY listed
+              jurisdiction — his call — and is display-only, never posted. */}
+          {aluMatch && (
+            <div className="alu-banner">
+              <strong>⚠ Aluminum wiring — {aluMatch.name}:</strong> {aluMatch.requirement}
+            </div>
+          )}
           {/* Utility. Until now this was filled ONLY by the Salesforce
               extractor, with no way to set it by hand. It already drives the
               automatic disconnect duration — a TNMP utility means 4–6 h
