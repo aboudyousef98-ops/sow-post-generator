@@ -122,3 +122,63 @@ that edits the text with `\n` patterns — it passed by accident before.
   past, so each copy yields a different ~9-row window (10/18–10/19 the first
   time, 9/27–9/28 the second, ending in `Loading...`). The CSV-export route is
   designed but NOT built — see the options put to Aboud 2026-10-19.
+
+---
+
+## Second follow-up, 2026-10-19 evening — reading the exported .xlsx
+
+**UNCOMMITTED.** Finished and green, but left in the working tree: Aboud said
+"dont deploy anything" and ended the session. Ask before committing.
+
+Ctrl+A was proven unusable. Salesforce Lightning only keeps rendered rows in
+the DOM, so two copies of the same 61-record report produced two different
+~9-row windows (10/18–10/19, then 9/27–9/28, the second ending in `Loading...`).
+Scrolling swaps the window rather than accumulating it.
+
+So: **`Export → Details Only (.xlsx)`**, read directly in the browser.
+
+| File | Role |
+|---|---|
+| `src/lib/sfWorkbook.ts` | `sheetToGrid()` (exceljs sheet → string grid) + `parseSfGrid()` → the same `SfReport` the paste parser returns. Pure. |
+| `src/board/ImportModal.tsx` | file picker above the paste box; the file wins when set; `exceljs` is `import()`-ed so it stays out of the main bundle |
+| `src/lib/__fixtures__/sf-export-design.xlsx` | Aboud's real export, 21 KB |
+
+The export is the *better* input: a real header row means columns are matched
+**by name**, so the `feature not included` anchor is not needed and moving or
+adding a Salesforce column cannot break it.
+
+### What the real file changed
+- **62 rows, not the 61 the browser header claimed** — the two captures were
+  minutes apart. The file is authoritative, so `complete` is always true and
+  the "expand the date groups" warning never fires for an export.
+- **A 🏷️ emoji on two project names** (`MEWELDE J Moore 🏷️`) that its own
+  design document omits. Those two silently failed the cross-check — 60 of 62.
+  Now stripped by `cleanProjectName()` in `sfReport.ts`, shared by both
+  parsers; left in, it would also have poisoned board name-matching forever.
+  The same helper stops `Ira Matthews III` becoming `Ira Matthews Iii`.
+- **A status neither sample had: `Install Initiated`** (2 rows). Treated as
+  scheduled — the install has started, so it is not design work. Stated to
+  Aboud; **not explicitly confirmed**. `SCHEDULED_STATUS_RE` and
+  `CANCELLED_STATUS_RE` now live in `sfReport.ts` and are shared, so the paste
+  and the export can never disagree about what a status means.
+- Statuses in the file: AHJ 40 · Cancel 8 · Hold 8 · Install Scheduled 4 ·
+  Install Initiated 2.
+
+### Verification
+- **842 tests, 841 pass.** The one failure is **pre-existing and unrelated**:
+  `App.integration` → *Compose acceptance flow → paste → classify → preview →
+  persist → post*. Confirmed by stashing all of this work and running the full
+  suite twice on clean `HEAD`, where it also failed. It passes in isolation and
+  times out under parallel load. Worth fixing separately.
+- tsc, eslint, `check:nosecrets` and `npm run build` all clean.
+- Verified the fixture does **not** reach the bundle — no customer name from it
+  appears anywhere in `dist/`.
+- One flaky test of my own was found and fixed before it could settle in: the
+  file-reading test waited on a fixed 400 ms timer and failed under suite load.
+  It now waits on the rendered result (`findByText`).
+
+### Still open
+- `Install Initiated` → Schedule is unconfirmed.
+- The importer is **desktop only**; mobile has the sections but no button.
+- `ACTIVITY_CAP = 1000` and prod is already at 1000 — a 62-row import spends 62
+  entries. Raise it before the first full import.

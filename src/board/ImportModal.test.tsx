@@ -175,3 +175,33 @@ describe('ImportModal — cancelled and Hold rows', () => {
     expect(love.statusId).toBe('hold');
   });
 })
+
+describe('ImportModal — the exported file', () => {
+  afterEach(cleanup);
+
+  it('offers a file picker alongside the paste box', () => {
+    show();
+    expect(screen.getByLabelText(/exported .xlsx/i)).toBeTruthy();
+  });
+
+  it('reads the whole export and shows every row', async () => {
+    const imported = show();
+    const buf = readFileSync(resolve('src/lib/__fixtures__/sf-export-design.xlsx'));
+    const file = new File([buf], 'Scope of Work Assignments - Design.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    const input = screen.getByLabelText(/exported .xlsx/i) as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+
+    // Reading the workbook is async (exceljs is import()-ed). Wait on the
+    // result, never on a timer — a fixed sleep is flaky under full-suite load.
+    await screen.findByText(/found 62 of 62/, undefined, { timeout: 15_000 });
+    expect(screen.getByText(/Design report/)).toBeTruthy();
+    // A file is never partial, so the "expand the date groups" nag must be gone.
+    expect(screen.queryByText(/Expand every date group/)).toBeNull();
+
+    fireEvent.click(importButton());
+    expect(imported[0].plan.rows).toHaveLength(62);
+    expect(imported[0].plan.counts.cancelled).toBe(8);
+  });
+})

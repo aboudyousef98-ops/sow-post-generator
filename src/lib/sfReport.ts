@@ -57,13 +57,48 @@ export interface SfReport {
   error?: string;
 }
 
+/**
+ * Salesforce decorates some project names with a tag emoji — the export has
+ * "MEWELDE J Moore 🏷️" while its own design document says "MEWELDE J Moore".
+ * Left in, it fails the document cross-check AND poisons name matching against
+ * the board forever, so it comes off before anything else happens.
+ */
+// Alternation rather than a character class: a class mixing pictographs with
+// variation selectors splits a grapheme and is flagged by
+// no-misleading-character-class — correctly, since 🏷️ is U+1F3F7 U+FE0F.
+const DECORATION_RE = /\p{Extended_Pictographic}|\p{Variation_Selector}|\u200D/gu;
+
+/** Suffixes title-casing would otherwise mangle into "Iii" / "Jr". */
+const SUFFIXES: Record<string, string> = {
+  ii: 'II', iii: 'III', iv: 'IV', vi: 'VI', vii: 'VII', jr: 'Jr', sr: 'Sr',
+};
+
+/** The name as it should appear on the board: undecorated, cleaned, title-cased. */
+export function cleanProjectName(raw: string): string {
+  const titled = titleCaseName(cleanName(raw.replace(DECORATION_RE, ' ')));
+  return titled
+    .split(' ')
+    .map((word) => SUFFIXES[word.toLowerCase()] ?? word)
+    .join(' ');
+}
+
+/** Comparison key that ignores the decorations above. */
+export function projectNameKey(raw: string): string {
+  return nameKey(raw.replace(DECORATION_RE, ' '));
+}
+
 const ANCHOR = 'feature not included';
 /** The document-name line, e.g. "Design Request - Susan Stone | FF | Rooftop Solar". */
 const DOC_NAME_RE = /\|\s*(?:FF|PA)\s*\|/;
-/** Salesforce Project Status values that mean "already scheduled". */
-const SCHEDULED_STATUS_RE = /install\s*scheduled/i;
-/** …and the ones that mean the job is dead. */
-const CANCELLED_STATUS_RE = /^cancel/i;
+/**
+ * Salesforce Project Status values meaning the job is at or past scheduling.
+ * "Install Initiated" means the install has already started, so it is
+ * certainly not design work. Shared with lib/sfWorkbook.ts so the paste and
+ * the export can never disagree about what a status means.
+ */
+export const SCHEDULED_STATUS_RE = /install\s*(scheduled|initiated)/i;
+/** …and the one that means the job is dead. */
+export const CANCELLED_STATUS_RE = /^cancel/i;
 
 function detectKind(lines: string[]): SfReportKind {
   for (const line of lines) {
@@ -167,7 +202,7 @@ export function parseSfReport(input: string, roster: string[]): SfReport {
       unreadable.push(`${label} — the row is cut off (no design document name). Copy the report again.`);
       continue;
     }
-    if (nameKey(nameFromDocument(lines[doc])) !== nameKey(rawName)) {
+    if (projectNameKey(nameFromDocument(lines[doc])) !== projectNameKey(rawName)) {
       unreadable.push(`${label} — does not match its design document "${lines[doc]}".`);
       continue;
     }

@@ -9,7 +9,8 @@
 
 import { useMemo, useState, type ReactNode } from 'react';
 import { planImport, type ImportPlan, type MaybeAnswer } from '../lib/sfImport';
-import { parseSfReport } from '../lib/sfReport';
+import { parseSfReport, type SfReport } from '../lib/sfReport';
+import { parseSfGrid, sheetToGrid } from '../lib/sfWorkbook';
 import type { BoardLabel, BoardProject } from './types';
 
 export interface ImportRequest {
@@ -58,15 +59,52 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
   const [text, setText] = useState('');
   const [answers, setAnswers] = useState<Record<string, MaybeAnswer>>({});
   const [restoreArchived, setRestoreArchived] = useState(false);
+  /**
+   * A report read from an exported .xlsx. It wins over the paste box when set,
+   * because a file always holds every record — the browser copy only ever
+   * contains the rows Salesforce has rendered (Aboud, 2026-10-19).
+   */
+  const [fromFile, setFromFile] = useState<SfReport | null>(null);
+  const [fileName, setFileName] = useState('');
+  const [reading, setReading] = useState(false);
+
+  const readWorkbook = async (file: File) => {
+    setReading(true);
+    setFileName(file.name);
+    setAnswers({});
+    try {
+      // import()-ed so exceljs never lands in the main bundle — the same rule
+      // lib/extraWorkXlsx.ts follows.
+      const { default: ExcelJS } = await import('exceljs');
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(await file.arrayBuffer());
+      const sheet = wb.worksheets[0];
+      if (!sheet) throw new Error('empty workbook');
+      setFromFile(parseSfGrid(sheetToGrid(sheet), roster));
+    } catch {
+      setFromFile({
+        kind: 'unknown',
+        rows: [],
+        totalRecords: null,
+        complete: false,
+        unreadable: [],
+        warnings: [],
+        error: `Could not read "${file.name}". Export the report again with Export → Details Only (.xlsx).`,
+      });
+    } finally {
+      setReading(false);
+    }
+  };
 
   // Pure and offline, so it re-runs on every keystroke — no Parse button.
-  const report = useMemo(() => parseSfReport(text, roster), [text, roster]);
+  const pasted_ = useMemo(() => parseSfReport(text, roster), [text, roster]);
+  const report = fromFile ?? pasted_;
   const plan = useMemo(() => planImport(report, projects, labels, answers), [report, projects, labels, answers]);
 
-  const pasted = text.trim().length > 0;
+  const haveInput = Boolean(fromFile) || text.trim().length > 0;
   const { counts } = plan;
   const todo = counts.create + counts.phase + (restoreArchived ? counts.archived : 0);
-  const blocked = !pasted || Boolean(report.error) || counts.maybe > 0 || todo === 0;
+  const blocked = !haveInput || Boolean(report.error) || counts.maybe > 0 || todo === 0;
 
   const pick = (name: string, answer: MaybeAnswer) => setAnswers((a) => ({ ...a, [name]: answer }));
 
@@ -78,25 +116,53 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
       <div className="modal board-import" onClick={(e) => e.stopPropagation()}>
         <h3>Import from Salesforce</h3>
         <p className="muted">
-          Copy the whole <b>Scope of Work Assignments</b> report — Scheduled or Design — and paste it below. Nothing is
-          written to the board until you press Import.
+          Best way: in Salesforce use <b>Export → Details Only (.xlsx)</b> and choose the file below — an export always
+          holds every record. Pasting works too, but the browser only copies the rows it has drawn. Nothing is written
+          to the board until you press Import.
         </p>
+
+        <label className="board-import-file">
+          <span>Choose the exported .xlsx</span>
+          <input
+            type="file"
+            accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void readWorkbook(file);
+            }}
+          />
+          {fileName && <span className="board-import-filename">{reading ? 'reading…' : fileName}</span>}
+        </label>
 
         <textarea
           className="board-import-paste"
           aria-label="Salesforce report"
-          placeholder="Paste the report here"
+          placeholder={fromFile ? 'Using the file above — clear it to paste instead' : '…or paste the report here'}
           rows={5}
           value={text}
+          disabled={Boolean(fromFile)}
           onChange={(e) => {
             setText(e.target.value);
             setAnswers({}); // a new paste invalidates old answers
           }}
         />
+        {fromFile && (
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => {
+              setFromFile(null);
+              setFileName('');
+              setAnswers({});
+            }}
+          >
+            Clear the file
+          </button>
+        )}
 
-        {pasted && report.error && <p className="board-import-error">{report.error}</p>}
+        {haveInput && report.error && <p className="board-import-error">{report.error}</p>}
 
-        {pasted && !report.error && (
+        {haveInput && !report.error && (
           <div className="board-import-report">
             <p className="board-import-head">
               <b>{report.kind === 'scheduled' ? 'Scheduled' : 'Design'} report</b>

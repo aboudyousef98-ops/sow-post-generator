@@ -7109,3 +7109,26 @@ tr:hover .board-label-cell.empty {
   font-size: 12.5px;
   color: var(--dyn-danger, #e2445c);
 }
+
+/* Import: the exported-file picker, above the paste box. */
+.board-import-file {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.board-import-file input[type='file'] {
+  font-weight: 400;
+  font-size: 12px;
+}
+.board-import-filename {
+  font-weight: 400;
+  color: var(--dyn-muted);
+}
+.board-import-paste:disabled {
+  background: #f6f7f8;
+  color: var(--dyn-muted);
+}

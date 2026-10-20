@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { parseSfReport } from './sfReport';
+import { cleanProjectName, parseSfReport } from './sfReport';
 
 // Normalised on the way in: git checks these out with CRLF on Windows, and a
 // test that edits the text with '\n' patterns would silently match nothing.
@@ -185,5 +185,25 @@ describe('parseSfReport — Salesforce Project Status', () => {
     expect(r.complete).toBe(false);
     expect(r.unreadable).toEqual([]);
     expect(r.rows.find((x) => x.name === 'Eric Webber')?.coordinator).toBe('Yarob Alnabelsi');
+  });
+});
+
+describe('cleanProjectName', () => {
+  it('drops the 🏷️ tag Salesforce appends to some project names', () => {
+    expect(cleanProjectName('MEWELDE J Moore 🏷️')).toBe('Mewelde J Moore');
+  });
+
+  it('keeps a generational suffix readable instead of "Iii"', () => {
+    expect(cleanProjectName('Ira Matthews III')).toBe('Ira Matthews III');
+    expect(cleanProjectName('JOEL VERBOIS JR')).toBe('Joel Verbois Jr');
+  });
+
+  it('still title-cases an ordinary shouted name', () => {
+    expect(cleanProjectName('KARAN STAGGERS')).toBe('Karan Staggers');
+    expect(cleanProjectName('  Susan   Stone ')).toBe('Susan Stone');
+  });
+
+  it('leaves a hyphenated name hyphenated', () => {
+    expect(cleanProjectName('JOHANN LAWRENCE-BRIAN DSOUZA')).toBe('Johann Lawrence-Brian Dsouza');
   });
 });
