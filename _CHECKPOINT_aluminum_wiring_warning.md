@@ -48,11 +48,20 @@
   two clean full runs followed. Same pre-existing behavior as
   `_CHECKPOINT_sf_report_import.md` notes.)
 
+## Shipped — 2026-10-20 (Aboud lifted the deploy freeze: "just deploy")
+
+- Committed as `118a4e9` on `main` (and the sfWorkbook reader as `974fdcc`),
+  pushed — **main matches prod again**.
+- Deployed via `npx netlify deploy --build --prod`
+  (deploy `6ad7b41917cb6c0342c3113d`). Post-deploy gate: no `changeme` in the
+  bundle, dataset + `.alu-banner` present in `dist/assets/index-*.js`, site
+  200, functions 403 to unauthorized callers.
+- Verified live in Chrome on a real draft: Karan Staggers / Cedar Hill shows
+  "⚠ Aluminum wiring — Cedar Hill: Allowed per NEC; …" under Jurisdiction,
+  and the Slack preview does NOT contain it (display-only confirmed on prod).
+
 ## Pending
 
-- **UNCOMMITTED, like the sfWorkbook work** — "don't deploy anything" stands;
-  ask before committing, ask again before deploying.
-- Not visually checked in a real browser (jsdom only) — worth a 10-second look
-  on `netlify dev` before shipping.
 - If Salesforce starts exporting the stance per project, the lookup can switch
   source without touching the banner.
+- `scripts/reset-local-password.mjs` remains intentionally untracked.
