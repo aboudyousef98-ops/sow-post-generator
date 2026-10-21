@@ -45,6 +45,7 @@ function Harness({ initial, ahjs = [harris] }: { initial?: Partial<PostRecord>; 
       record={record}
       settings={defaultSettings()}
       ahjs={ahjs}
+      boardProjects={[]}
       update={(fn) => setRecord((r) => fn(r))}
       onMarkPosted={() => {}}
       onNewPost={() => {}}

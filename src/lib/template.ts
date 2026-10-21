@@ -1,5 +1,6 @@
 // Canonical post template + clipboard formats — spec/06-output-template.md.
 
+import type { BoardProject } from '../board/types';
 import type { Ahj, PostRecord, PostValue, Settings } from '../types';
 import { boardsOfKind, livePosts, matchAhj } from './ahj';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
@@ -51,20 +52,37 @@ export function titleBlockRegion(record: PostRecord): string {
   return (record.sf.installRegionRaw ?? '').trim() || metroCode(record) || record.sf.region;
 }
 
+/**
+ * SOW Coordinator cell (Aboud, 2026-10-21): the board's assignment, not whoever
+ * typed the draft. Only the LINKED row counts (record.projectId — matching by
+ * customer name could grab the wrong project). Falls back to the author when
+ * the record is unlinked, the row was deleted, or the row is unassigned — an
+ * empty cell in a drawing is worse than the author's name.
+ */
+export function titleBlockCoordinator(record: PostRecord, boardProjects?: BoardProject[]): string {
+  const linked = record.projectId
+    ? boardProjects?.find((p) => p.id === record.projectId && !p.deletedAt)
+    : undefined;
+  return linked?.coordinator.trim() || record.author.trim();
+}
+
 /** The five title-block cells, in the order they appear in the AutoCAD table. */
-export function titleBlockFields(record: PostRecord): { label: string; value: string }[] {
+export function titleBlockFields(
+  record: PostRecord,
+  boardProjects?: BoardProject[],
+): { label: string; value: string }[] {
   return [
     { label: 'Project Name', value: record.sf.customerName.trim() },
     { label: 'Property Address', value: (record.sf.siteAddress ?? '').trim() },
     { label: 'Region', value: titleBlockRegion(record) },
     { label: 'AHJ', value: (record.sf.jurisdiction ?? '').trim() },
-    { label: 'SOW Coordinator', value: record.author.trim() },
+    { label: 'SOW Coordinator', value: titleBlockCoordinator(record, boardProjects) },
   ];
 }
 
 /** All five values, one per line — the clipboard payload for a single column paste. */
-export function titleBlockTsv(record: PostRecord): string {
-  return titleBlockFields(record)
+export function titleBlockTsv(record: PostRecord, boardProjects?: BoardProject[]): string {
+  return titleBlockFields(record, boardProjects)
     .map((f) => f.value)
     .join('\n');
 }

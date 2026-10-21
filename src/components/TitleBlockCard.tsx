@@ -9,11 +9,14 @@
 // If (2) misbehaves in AutoCAD, (1) is the fallback and nothing else changes.
 
 import { useState } from 'react';
+import type { BoardProject } from '../board/types';
 import { titleBlockFields, titleBlockTsv } from '../lib/template';
 import type { PostRecord } from '../types';
 
 interface Props {
   record: PostRecord;
+  /** For the SOW Coordinator cell — the linked board row's assignment wins over the author. */
+  boardProjects: BoardProject[];
   toast: (text: string) => void;
 }
 
@@ -21,10 +24,10 @@ function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-export default function TitleBlockCard({ record, toast }: Props) {
+export default function TitleBlockCard({ record, boardProjects, toast }: Props) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
-  const fields = titleBlockFields(record);
+  const fields = titleBlockFields(record, boardProjects);
   const filled = fields.filter((f) => f.value).length;
 
   const copyOne = async (label: string, value: string) => {
@@ -35,7 +38,7 @@ export default function TitleBlockCard({ record, toast }: Props) {
   };
 
   const copyAll = async () => {
-    const text = titleBlockTsv(record);
+    const text = titleBlockTsv(record, boardProjects);
     const html = `<table>${fields.map((f) => `<tr><td>${esc(f.value)}</td></tr>`).join('')}</table>`;
     try {
       await navigator.clipboard.write([

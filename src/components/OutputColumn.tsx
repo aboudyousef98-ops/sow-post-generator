@@ -11,6 +11,7 @@ import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import { noteCheck } from '../lib/api';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
+import type { BoardProject } from '../board/types';
 import type { Ahj, PostRecord, Settings } from '../types';
 import TitleBlockCard from './TitleBlockCard';
 
@@ -18,6 +19,8 @@ interface Props {
   record: PostRecord;
   settings: Settings;
   ahjs?: Ahj[];
+  /** For the title block's SOW Coordinator cell — see titleBlockCoordinator(). */
+  boardProjects: BoardProject[];
   update: (updater: (r: PostRecord) => PostRecord) => void;
   onMarkPosted: () => void;
   onNewPost: () => void;
@@ -31,7 +34,7 @@ interface Check {
   action?: string;
 }
 
-export default function OutputColumn({ record, settings, ahjs, update, onMarkPosted, toast }: Props) {
+export default function OutputColumn({ record, settings, ahjs, boardProjects, update, onMarkPosted, toast }: Props) {
   const text = buildPostText(record, settings, ahjs);
   const html = buildPostHtml(record, settings, ahjs);
 
@@ -257,7 +260,7 @@ export default function OutputColumn({ record, settings, ahjs, update, onMarkPos
         </div>
       </div>
 
-      {titleBlockOpen && <TitleBlockCard record={record} toast={toast} />}
+      {titleBlockOpen && <TitleBlockCard record={record} boardProjects={boardProjects} toast={toast} />}
 
       <div className="card preview-card">
         <div className="preview-head">

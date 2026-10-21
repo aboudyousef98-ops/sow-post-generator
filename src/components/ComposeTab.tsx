@@ -931,6 +931,7 @@ export default function ComposeTab({
           record={record}
           settings={settings}
           ahjs={ahjs}
+          boardProjects={boardProjects}
           update={update}
           onMarkPosted={onMarkPosted}
           onNewPost={onNewPost}

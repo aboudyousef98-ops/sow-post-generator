@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { BoardProject } from '../board/types';
 import type { PostRecord } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
 import { POLISH_KEYS, emptyInstallNotes } from './installNotes';
@@ -374,6 +375,67 @@ describe('AutoCAD title block', () => {
     const rec = norcaRecord();
     rec.sf.siteAddress = undefined;
     expect(titleBlockFields(rec)[1]).toEqual({ label: 'Property Address', value: '' });
+  });
+
+  // SOW Coordinator = the board's assignment, not whoever typed the draft
+  // (Aboud, 2026-10-21). Falls back to the author only when the board has
+  // nothing to say — an empty cell in a drawing is worse than the author.
+  describe('SOW Coordinator comes from the linked board row', () => {
+    function boardRow(over: Partial<BoardProject> = {}): BoardProject {
+      return {
+        id: 'bp1',
+        name: 'Norca Garcia',
+        coordinator: 'Anas Yaghmour',
+        statusId: null,
+        phaseId: null,
+        designedDate: null,
+        rating: null,
+        position: 1,
+        createdAt: '2026-10-01T00:00:00.000Z',
+        createdBy: 'Aboud Yousef',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+        updatedBy: 'Aboud Yousef',
+        schemaVersion: 1,
+        ...over,
+      };
+    }
+
+    it('uses the linked row\'s coordinator over the record author', () => {
+      const rec = norcaRecord({ projectId: 'bp1' });
+      expect(titleBlockFields(rec, [boardRow()])[4]).toEqual({
+        label: 'SOW Coordinator',
+        value: 'Anas Yaghmour',
+      });
+    });
+
+    it('the TSV paste uses the board coordinator too', () => {
+      const rec = norcaRecord({ projectId: 'bp1' });
+      rec.sf.installRegionRaw = 'Houston / Beaumont';
+      expect(titleBlockTsv(rec, [boardRow()])).toBe(
+        'Norca Garcia\n1317 Skylark Rd, Pasadena, TX 77502\nHouston / Beaumont\nPasadena\nAnas Yaghmour',
+      );
+    });
+
+    it('falls back to the author when the record is not linked', () => {
+      const rec = norcaRecord(); // no projectId
+      expect(titleBlockFields(rec, [boardRow()])[4].value).toBe('Aboud Yousef');
+    });
+
+    it('falls back to the author when the linked row was deleted', () => {
+      const rec = norcaRecord({ projectId: 'bp1' });
+      const rows = [boardRow({ deletedAt: '2026-10-20T00:00:00.000Z' })];
+      expect(titleBlockFields(rec, rows)[4].value).toBe('Aboud Yousef');
+    });
+
+    it('falls back to the author when the linked row is unassigned', () => {
+      const rec = norcaRecord({ projectId: 'bp1' });
+      expect(titleBlockFields(rec, [boardRow({ coordinator: '  ' })])[4].value).toBe('Aboud Yousef');
+    });
+
+    it('falls back to the author when no board is passed at all', () => {
+      const rec = norcaRecord({ projectId: 'bp1' });
+      expect(titleBlockFields(rec)[4].value).toBe('Aboud Yousef');
+    });
   });
 });
 
