@@ -56,6 +56,32 @@ Then: "do this then deploy."
   lint`, `check:nosecrets`, `npm run build` all clean. No fixture customer
   name reaches `dist/`.
 
-## Deploy
-Per CLAUDE.md §6: live-data backup → deploy → re-pull + diff. Recorded below
-when done.
+## Deploy — DONE 2026-10-21 evening
+1. Backup: all five blobs → `_versions/v22-live-backup-2026-10-21/`
+   (board: 211 projects, activity exactly 1000, records: 238, users: 5).
+2. Committed `5bf2394` (+ `1a2a940`, the already-finished titleblock
+   coordinator work found uncommitted in the tree), pushed, deployed
+   `npx netlify deploy --build --prod` → deploy `6ad91541…`.
+3. Post-deploy diff: **all five stores byte-identical** to the backup.
+4. Verified live: `.sf-notes-banner` + "updated Salesforce notes" in the
+   served bundle.
+
+## First real import — DONE 2026-10-21, via the live UI as Aboud
+File: his `Scope of Work Assignments - Design-2026-10-19-14-35-38.xlsx`
+(62 rows — the fixture's twin). Preview said: 10 new · 52 matched ·
+4 move to Design · **52 existing rows get updated Salesforce notes** ·
+8 cancelled imported · 4 on-board-now-cancelled flagged · 0 questions.
+One click, Import 66. After: board 221 projects, **62 rows carry sfNotes**,
+banner confirmed live on the real William Roberts draft (4 sections,
+Slack preview clean).
+
+## ⚠️ BUG FOUND AT SESSION CLOSE — server still caps activity at 1000
+`netlify/functions/lib/boardMerge.ts` has its OWN merge with its own cap —
+the client raise to 5000 (src/lib/board.ts) did NOT cover it. The import's
+~66 activity entries pushed out the oldest day (oldest kept moved
+2026-10-11 → 2026-10-12; blob still exactly 1000).
+**Recovery is possible:** the truncated entries are in
+`_versions/v22-live-backup-2026-10-21/board.json`, and activity merges as an
+append-only union by id — raise the server cap, deploy (with the full
+backup/diff ritual), then PUT a merge of backup+current activity (or simply
+let a client that still holds them push). FIRST TASK NEXT SESSION.
