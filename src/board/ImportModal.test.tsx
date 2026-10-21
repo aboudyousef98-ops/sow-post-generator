@@ -205,3 +205,55 @@ describe('ImportModal — the exported file', () => {
     expect(imported[0].plan.counts.cancelled).toBe(8);
   });
 })
+;
+
+// Salesforce notes in the preview (Aboud 2026-10-21). exceljs is imported
+// statically here only to build the seeded board — the modal itself still
+// import()s it lazily.
+import ExcelJS from 'exceljs';
+import { parseSfGrid, sheetToGrid } from '../lib/sfWorkbook';
+
+describe('ImportModal — Salesforce notes (Aboud 2026-10-21)', () => {
+  afterEach(cleanup);
+
+  const XLSX = readFileSync(resolve('src/lib/__fixtures__/sf-export-design.xlsx'));
+
+  const loadFile = async () => {
+    const file = new File([XLSX], 'Scope of Work Assignments - Design.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    fireEvent.change(screen.getByLabelText(/exported .xlsx/i), { target: { files: [file] } });
+    await screen.findByText(/found 62 of 62/, undefined, { timeout: 15_000 });
+  };
+
+  it('says when existing rows get updated notes, and the plan carries them', async () => {
+    const imported = show([proj('Eric Webber', { phaseId: 'phase-schedule' })]);
+    await loadFile();
+    expect(screen.getByText(/updated Salesforce notes/)).toBeTruthy();
+
+    fireEvent.click(importButton());
+    expect(imported[0].plan.counts.notes).toBe(1);
+    const webber = imported[0].plan.rows.find((r) => r.name === 'Eric Webber')!;
+    expect(webber.notes?.alerts).toContain('tree trims');
+  });
+
+  it('a notes-only change still enables Import — future note refreshes must not be blocked', async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(resolve('src/lib/__fixtures__/sf-export-design.xlsx'));
+    const rows = parseSfGrid(sheetToGrid(wb.worksheets[0]), ROSTER).rows;
+    // The board already matches the file exactly — except Eric's notes.
+    const projects = rows.map((r) =>
+      proj(r.name, {
+        phaseId: r.scheduled ? 'phase-schedule' : 'phase-design',
+        sfNotes: r.notes,
+      }),
+    );
+    projects.find((p) => p.name === 'Eric Webber')!.sfNotes = { alerts: 'A stale alert.' };
+
+    show(projects);
+    await loadFile();
+    const btn = importButton();
+    expect(btn.disabled).toBe(false);
+    expect(btn.textContent).toBe('Import 1');
+  });
+});

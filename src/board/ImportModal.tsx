@@ -103,7 +103,9 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
 
   const haveInput = Boolean(fromFile) || text.trim().length > 0;
   const { counts } = plan;
-  const todo = counts.create + counts.phase + (restoreArchived ? counts.archived : 0);
+  // counts.notes keeps a notes-only refresh importable — once the board has
+  // every project, re-importing a fresh export is USUALLY notes-only.
+  const todo = counts.create + counts.phase + counts.notes + (restoreArchived ? counts.archived : 0);
   const blocked = !haveInput || Boolean(report.error) || counts.maybe > 0 || todo === 0;
 
   const pick = (name: string, answer: MaybeAnswer) => setAnswers((a) => ({ ...a, [name]: answer }));
@@ -184,6 +186,14 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
                 report.kind === 'scheduled' ? 'Schedule' : 'Design'
               }`}
             />
+            {/* Aboud 2026-10-21: the export's alerts + AHJ/utility notes ride
+                along and surface on Compose. */}
+            <Line
+              n={counts.notes}
+              text={`existing row${counts.notes === 1 ? ' gets' : 's get'} updated Salesforce notes — shown on Compose`}
+            >
+              {names(plan.rows.filter((r) => r.match !== 'new' && r.notes !== undefined).map((r) => r.name))}
+            </Line>
             <Line n={plan.stickySchedule.length} text="already on Schedule — left on Schedule">
               {names(plan.stickySchedule)}
             </Line>

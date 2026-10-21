@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import ExcelJS from 'exceljs';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { hasSfNotes } from './sfNotes';
 import { parseSfGrid, sheetToGrid } from './sfWorkbook';
 
 const ROSTER = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai', 'Yarob Alnabelsi', 'Anas Yaghmour'];
@@ -84,6 +85,51 @@ describe('parseSfGrid — the exported workbook', () => {
     for (const junk of ['subtotal', 'grand total', 'total']) expect(names).not.toContain(junk);
     expect(names.some((n) => n.includes('confidential'))).toBe(false);
     expect(names.some((n) => n.includes('copyright'))).toBe(false);
+  });
+});
+
+describe('parseSfGrid — Salesforce notes (Aboud 2026-10-21)', () => {
+  it('carries the Scheduling Alerts! column, CRLF normalised', () => {
+    const webber = parseSfGrid(grid, ROSTER).rows.find((x) => x.name === 'Eric Webber')!;
+    expect(webber.notes?.alerts).toContain('tree trims');
+    expect(webber.notes?.alerts).not.toContain('\r');
+  });
+
+  it('carries the AHJ and utility requirement columns', () => {
+    const webber = parseSfGrid(grid, ROSTER).rows.find((x) => x.name === 'Eric Webber')!;
+    expect(webber.notes?.utilityDesign).toContain('main breaker');
+    expect(webber.notes?.utilityBattery).toContain('interconnections@synapticsolar.com');
+  });
+
+  it('every exported row gets a notes object — the file is authoritative', () => {
+    const r = parseSfGrid(grid, ROSTER);
+    expect(r.rows.every((x) => x.notes !== undefined)).toBe(true);
+  });
+
+  it('a row with nothing in any note column gets an EMPTY notes object, so clears can mirror', () => {
+    const r = parseSfGrid(
+      [
+        ['Scope of Work Assignments - Design'],
+        ['Project Name', 'Project Status', 'Fulfillment: Scheduling Alerts!'],
+        ['Jane Doe', 'AHJ', '   '],
+      ],
+      ROSTER,
+    );
+    expect(r.rows[0].notes).toEqual({});
+    expect(hasSfNotes(r.rows[0].notes)).toBe(false);
+  });
+
+  it('an export without the note columns leaves notes undefined — nothing to mirror', () => {
+    const r = parseSfGrid(
+      [
+        ['Scope of Work Assignments - Design'],
+        ['Project Name', 'Project Status'],
+        ['Jane Doe', 'AHJ'],
+      ],
+      ROSTER,
+    );
+    expect(r.rows).toHaveLength(1);
+    expect(r.rows[0].notes).toBeUndefined();
   });
 });
 

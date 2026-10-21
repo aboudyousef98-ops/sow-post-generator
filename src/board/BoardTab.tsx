@@ -61,6 +61,7 @@ import {
   type GroupKey,
 } from '../lib/boardViews';
 import { relativeTime, isoToUs, todayIso } from '../lib/dates';
+import { hasSfNotes, type SfNotes } from '../lib/sfNotes';
 import { matchesSearch } from '../lib/boardSearch';
 import {
   isPendingInfoLabel,
@@ -931,6 +932,7 @@ export default function BoardTab({
     const activity: BoardActivity[] = [];
     const createdIds: string[] = [];
     const phaseBefore: { id: string; phaseId: string | null }[] = [];
+    const notesBefore: { id: string; sfNotes?: SfNotes; sfNotesAt?: string }[] = [];
     const restoredIds: string[] = [];
     // Newest-on-top, and in the order the report listed them.
     let position = Date.parse(now) + plan.rows.length;
@@ -948,6 +950,8 @@ export default function BoardTab({
           // Only set when Salesforce's own status names a board status (Hold
           // today). Otherwise newProject's default label stands.
           ...(row.statusId ? { statusId: row.statusId } : {}),
+          // The export's alerts + AHJ/utility notes, shown on Compose.
+          ...(row.notes ? { sfNotes: row.notes, sfNotesAt: now } : {}),
           position: position--,
         };
         projects.push(created);
@@ -966,6 +970,11 @@ export default function BoardTab({
       const patch: ProjectPatch = {};
       if (row.match === 'archived') patch.archivedAt = undefined;
       if (row.phaseChange) patch.phaseId = row.phaseChange.toId;
+      if (row.notes !== undefined) {
+        // {} from the plan means Salesforce cleared them — mirror that.
+        patch.sfNotes = hasSfNotes(row.notes) ? row.notes : undefined;
+        patch.sfNotesAt = now;
+      }
       if (Object.keys(patch).length === 0) continue;
 
       projects[index] = patchProject(before, patch, me, now);
@@ -973,14 +982,15 @@ export default function BoardTab({
         restoredIds.push(before.id);
         activity.push(activityEntry(before.id, me, 'restore', undefined, now));
       }
-      if (row.phaseChange) {
-        phaseBefore.push({ id: before.id, phaseId: row.phaseChange.fromId });
-        const entry = activityForPatch(before, { phaseId: row.phaseChange.toId }, me, cur.labels, now);
-        if (entry) activity.push(entry);
+      if (row.phaseChange) phaseBefore.push({ id: before.id, phaseId: row.phaseChange.fromId });
+      if (row.notes !== undefined) {
+        notesBefore.push({ id: before.id, sfNotes: before.sfNotes, sfNotesAt: before.sfNotesAt });
       }
+      const entry = activityForPatch(before, patch, me, cur.labels, now);
+      if (entry) activity.push(entry);
     }
 
-    if (createdIds.length === 0 && phaseBefore.length === 0 && restoredIds.length === 0) {
+    if (createdIds.length === 0 && phaseBefore.length === 0 && restoredIds.length === 0 && notesBefore.length === 0) {
       setImportOpen(false);
       toast('Nothing to import — the board already matches that report.');
       return;
@@ -991,6 +1001,7 @@ export default function BoardTab({
 
     const parts = [`Imported ${createdIds.length} project${createdIds.length === 1 ? '' : 's'}`];
     if (phaseBefore.length) parts.push(`${phaseBefore.length} moved phase`);
+    if (notesBefore.length) parts.push(`${notesBefore.length} notes updated`);
     if (restoredIds.length) parts.push(`${restoredIds.length} restored`);
     toast(`${parts.join(' · ')}.`, {
       label: 'Undo',
@@ -1000,12 +1011,17 @@ export default function BoardTab({
         const created = new Set(createdIds);
         const restored = new Set(restoredIds);
         const phases = new Map(phaseBefore.map((p) => [p.id, p.phaseId]));
+        const notes = new Map(notesBefore.map((p) => [p.id, p]));
         setBoard({
           ...back,
           projects: back.projects.map((p) => {
             if (created.has(p.id)) return patchProject(p, { deletedAt: undone }, me, undone);
             const patch: ProjectPatch = {};
             if (phases.has(p.id)) patch.phaseId = phases.get(p.id) ?? null;
+            if (notes.has(p.id)) {
+              patch.sfNotes = notes.get(p.id)!.sfNotes;
+              patch.sfNotesAt = notes.get(p.id)!.sfNotesAt;
+            }
             if (restored.has(p.id)) patch.archivedAt = undone;
             return Object.keys(patch).length ? patchProject(p, patch, me, undone) : p;
           }),

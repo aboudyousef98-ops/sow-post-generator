@@ -7,6 +7,7 @@ import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { titleCaseName } from '../lib/nameCase';
 import { boardsOfKind, livePosts, matchAhj } from '../lib/ahj';
 import { matchAluminum } from '../lib/aluminumWiring';
+import { sfNotesSections } from '../lib/sfNotes';
 import { APPROVAL_FIELD, matchedBoard } from '../lib/template';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
 import { autoTags } from '../lib/record';
@@ -222,6 +223,11 @@ export default function ComposeTab({
   // Aluminum wiring stance from Othman's static list — independent of the
   // (hand-maintained) AHJ boards above, read-only, matched the same way.
   const aluMatch = matchAluminum(record.sf.jurisdiction);
+  // Salesforce notes (Scheduling Alerts! + AHJ/utility requirements) from the
+  // board row this customer matches — mirrored there by Import from Salesforce.
+  // Display-only, never posted (Aboud 2026-10-21: "for us to read").
+  const sfNotesProject = matchProjectByCustomer(boardProjects, record.sf.customerName);
+  const sfNoteSections = sfNotesSections(sfNotesProject?.sfNotes);
   const ahjPosts = ahjMatch ? livePosts(ahjMatch.ahj) : [];
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
 
@@ -510,6 +516,21 @@ export default function ComposeTab({
               onChange={(e) => setSf({ customerName: titleCaseName(e.target.value) }, 'customerName')}
             />
           </label>
+          {/* Salesforce notes for this customer's board row (Aboud 2026-10-21):
+              alerts + AHJ/utility requirements, display-only, never posted. */}
+          {sfNoteSections.length > 0 && (
+            <div className="sf-notes-banner">
+              <strong>
+                ⚠ Salesforce notes — {sfNotesProject!.name}
+                {sfNotesProject!.sfNotesAt ? ` (from the export of ${sfNotesProject!.sfNotesAt.slice(0, 10)})` : ''}
+              </strong>
+              {sfNoteSections.map((s) => (
+                <div key={s.key} className="sf-notes-row">
+                  <b>{s.label}:</b> {s.text}
+                </div>
+              ))}
+            </div>
+          )}
           <label className="field">
             {/* No asterisk: the date stopped being required in Phase 7 (spec/10 §1).
                 The marker was left behind and still read as "you must fill this in". */}

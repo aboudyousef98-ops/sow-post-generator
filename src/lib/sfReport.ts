@@ -19,6 +19,7 @@
 
 import { cleanName, nameKey } from './board';
 import { titleCaseName } from './nameCase';
+import type { SfNotes } from './sfNotes';
 
 export type SfReportKind = 'scheduled' | 'design' | 'unknown';
 
@@ -41,6 +42,13 @@ export interface SfReportRow {
   scheduled: boolean;
   /** Status is Cancel. Imported like any other row, but counted separately. */
   cancelled: boolean;
+  /**
+   * Scheduling Alerts! + AHJ/utility requirements. ONLY the .xlsx export sets
+   * this (the browser paste has no such columns) — undefined means "this
+   * source cannot see notes", so an import leaves the board's copy alone,
+   * while {} from an export means Salesforce really has none.
+   */
+  notes?: SfNotes;
 }
 
 export interface SfReport {

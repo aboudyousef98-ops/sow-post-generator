@@ -4,6 +4,8 @@
 // merge-by-updatedAt world as records/ahjs, and identity is the Phase 9
 // session. "Live updates" are polling, which is plenty for 3 users.
 
+import type { SfNotes } from '../lib/sfNotes';
+
 export type LabelColumnKey = 'status' | 'phase';
 
 /** A status / Design-Schedule option — data, not an enum (D6: custom labels). */
@@ -51,6 +53,16 @@ export interface BoardProject {
   rating: 1 | 2 | 3 | 4 | 5 | null; // null = not rated
   /** Manual order key; defaults to creation epoch ms → newest on top. */
   position: number;
+  /**
+   * Salesforce notes (Scheduling Alerts! + AHJ/utility requirements), mirrored
+   * from the .xlsx export by Import from Salesforce and shown read-only on
+   * Compose (Aboud 2026-10-21). OPTIONAL on purpose — rows written before this
+   * date have no such field and must not need a migration, same contract as
+   * BoardLabel.outOfScope.
+   */
+  sfNotes?: SfNotes;
+  /** When sfNotes was last mirrored — the banner's "as of" line. */
+  sfNotesAt?: string;
   archivedAt?: string;
   /** Admin "Delete permanently" tombstone — hidden everywhere, wins merges. */
   deletedAt?: string;

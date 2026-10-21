@@ -5,6 +5,7 @@
 
 import type { BoardActivity, BoardLabel, BoardProject, BoardState, LabelColumnKey } from '../board/types';
 import { renameLegacyNames } from './renames';
+import { sfNotesEqual, sfNotesSummary } from './sfNotes';
 
 // ---- labels -----------------------------------------------------------------
 
@@ -102,7 +103,10 @@ export function labelById(labels: BoardLabel[], id: string | null): BoardLabel |
 
 // ---- merge ------------------------------------------------------------------
 
-const ACTIVITY_CAP = 1000;
+// 5000, was 1000 until 2026-10-21: prod sat at exactly 1000 while a full
+// 62-row Salesforce import spends ~62 entries per run — history was being
+// truncated on every write. ~200 bytes an entry keeps the blob well under 2 MB.
+const ACTIVITY_CAP = 5000;
 
 function mergeById<T extends { id: string; updatedAt: string }>(current: T[], incoming: T[]): T[] {
   const byId = new Map(current.map((x) => [x.id, x]));
@@ -197,7 +201,11 @@ export function newProject(
 }
 
 export type ProjectPatch = Partial<
-  Pick<BoardProject, 'name' | 'coordinator' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'position' | 'archivedAt' | 'deletedAt'>
+  Pick<
+    BoardProject,
+    | 'name' | 'coordinator' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'position'
+    | 'sfNotes' | 'sfNotesAt' | 'archivedAt' | 'deletedAt'
+  >
 >;
 
 /**
@@ -247,6 +255,7 @@ const FIELD_LABELS: Record<string, string> = {
   phaseId: 'Design/Schedule',
   designedDate: 'Designed date',
   rating: 'Rating',
+  sfNotes: 'Salesforce notes',
 };
 
 export function fieldLabel(key: string): string {
@@ -265,6 +274,13 @@ export function activityForPatch(
   for (const key of Object.keys(patch) as (keyof ProjectPatch)[]) {
     if (key === 'archivedAt' || key === 'deletedAt') continue; // logged as their own actions
     if (key === 'position') continue; // drag-reorders are not activity noise
+    if (key === 'sfNotesAt') continue; // rides along with sfNotes — not its own event
+    if (key === 'sfNotes') {
+      // Object compare, and the log carries section names, never the text.
+      if (sfNotesEqual(before.sfNotes, patch.sfNotes)) continue;
+      changes.sfNotes = { old: sfNotesSummary(before.sfNotes), new: sfNotesSummary(patch.sfNotes) };
+      continue;
+    }
     if (before[key] === patch[key]) continue;
     changes[key] = {
       old: displayValue(key, before[key], labels),

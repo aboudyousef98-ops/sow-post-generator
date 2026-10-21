@@ -14,6 +14,7 @@
 // the reconciler and the write are shared and know nothing about the source.
 
 import { nameKey } from './board';
+import type { SfNotes } from './sfNotes';
 import {
   CANCELLED_STATUS_RE,
   SCHEDULED_STATUS_RE,
@@ -26,6 +27,15 @@ const COL_NAME = 'Project Name';
 const COL_COORDINATOR = 'Scope Of Work Assignment: Full Name';
 const COL_STATUS = 'Project Status';
 const COL_DOCUMENT = 'Fulfillment: Current Design: Document Name';
+
+/** The note columns — alerts + AHJ/utility requirements (Aboud 2026-10-21). */
+const NOTE_COLS: { key: keyof SfNotes; header: string }[] = [
+  { key: 'alerts', header: 'Fulfillment: Scheduling Alerts!' },
+  { key: 'ahjDesign', header: 'Fulfillment: Jurisdiction: Design/City Requirements' },
+  { key: 'ahjBattery', header: 'Fulfillment: Jurisdiction: Battery Requirements' },
+  { key: 'utilityDesign', header: 'Fulfillment: Utility Company: Requirements - Design' },
+  { key: 'utilityBattery', header: 'Fulfillment: Utility Company: Battery Requirements' },
+];
 
 
 /** Rows that are report furniture rather than projects. */
@@ -118,6 +128,9 @@ export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
   const iCoordinator = col(COL_COORDINATOR);
   const iStatus = col(COL_STATUS);
   const iDocument = col(COL_DOCUMENT);
+  // Only columns this file actually has. None at all → an older export layout;
+  // notes stays undefined so the import cannot wipe what another file wrote.
+  const noteCols = NOTE_COLS.map((n) => ({ key: n.key, i: col(n.header) })).filter((n) => n.i !== -1);
 
   const rows: SfReportRow[] = [];
   const unreadable: string[] = [];
@@ -152,12 +165,24 @@ export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
 
     const status = iStatus === -1 ? '' : (cells[iStatus] ?? '');
     const cancelled = CANCELLED_STATUS_RE.test(status);
+
+    // Excel keeps CRLF inside multi-line cells; the app is \n everywhere.
+    let notes: SfNotes | undefined;
+    if (noteCols.length > 0) {
+      notes = {};
+      for (const n of noteCols) {
+        const value = (cells[n.i] ?? '').replace(/\r\n?/g, '\n').trim();
+        if (value) notes[n.key] = value;
+      }
+    }
+
     rows.push({
       name,
       coordinator,
       status,
       scheduled: !cancelled && SCHEDULED_STATUS_RE.test(status),
       cancelled,
+      ...(notes !== undefined ? { notes } : {}),
     });
   }
 

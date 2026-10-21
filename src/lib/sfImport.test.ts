@@ -307,3 +307,70 @@ describe('planImport — cancelled projects', () => {
     expect(plan.rows[0].phaseChange).toBeUndefined();
   });
 })
+;
+
+describe('planImport — Salesforce notes (Aboud 2026-10-21)', () => {
+  const NOTES = { alerts: '4x tree trims.', utilityDesign: 'Main breaker required.' };
+
+  it('a new row carries its notes', () => {
+    const plan = planImport(report('design', [row('Duane Hallemann', { notes: NOTES })]), [], LABELS);
+    expect(find(plan, 'Duane Hallemann').notes).toEqual(NOTES);
+  });
+
+  it('a new row with an empty notes object carries none', () => {
+    const plan = planImport(report('design', [row('Duane Hallemann', { notes: {} })]), [], LABELS);
+    expect(find(plan, 'Duane Hallemann').notes).toBeUndefined();
+    expect(plan.counts.notes).toBe(0);
+  });
+
+  it('a matched row gets the notes when the board has none yet', () => {
+    const plan = planImport(
+      report('design', [row('Martha Thompson', { notes: NOTES })]),
+      [proj('Martha Thompson', { phaseId: DESIGN })],
+      LABELS,
+    );
+    expect(find(plan, 'Martha Thompson').notes).toEqual(NOTES);
+    expect(plan.counts.notes).toBe(1);
+  });
+
+  it('identical notes are not a change', () => {
+    const plan = planImport(
+      report('design', [row('Martha Thompson', { notes: NOTES })]),
+      [proj('Martha Thompson', { phaseId: DESIGN, sfNotes: { ...NOTES } })],
+      LABELS,
+    );
+    expect(find(plan, 'Martha Thompson').notes).toBeUndefined();
+    expect(plan.counts.notes).toBe(0);
+  });
+
+  it('notes cleared in Salesforce clear on the board — the export is the truth', () => {
+    const plan = planImport(
+      report('design', [row('Martha Thompson', { notes: {} })]),
+      [proj('Martha Thompson', { phaseId: DESIGN, sfNotes: NOTES })],
+      LABELS,
+    );
+    expect(find(plan, 'Martha Thompson').notes).toEqual({});
+    expect(plan.counts.notes).toBe(1);
+  });
+
+  it('a paste (no notes in the report) never touches board notes', () => {
+    const plan = planImport(
+      report('design', [row('Martha Thompson')]),
+      [proj('Martha Thompson', { phaseId: DESIGN, sfNotes: NOTES })],
+      LABELS,
+    );
+    expect(find(plan, 'Martha Thompson').notes).toBeUndefined();
+    expect(plan.counts.notes).toBe(0);
+  });
+
+  it('an unanswered near miss gets no notes — nothing is guessed', () => {
+    const plan = planImport(
+      report('design', [row('Moises Negrette', { notes: NOTES })]),
+      [proj('Moises Negrete', { phaseId: DESIGN })],
+      LABELS,
+    );
+    expect(find(plan, 'Moises Negrette').match).toBe('maybe');
+    expect(find(plan, 'Moises Negrette').notes).toBeUndefined();
+    expect(plan.counts.notes).toBe(0);
+  });
+});

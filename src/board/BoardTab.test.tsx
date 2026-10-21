@@ -994,3 +994,69 @@ describe('Last update opens the activity log', () => {
     expect(screen.getByText('Working on it', { selector: 'b' })).toBeTruthy();
   });
 });
+
+describe('BoardTab — Salesforce notes import (Aboud 2026-10-21)', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const ROSTER5 = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai', 'Yarob Alnabelsi', 'Anas Yaghmour'];
+  const XLSX = readFileSync(resolve('src/lib/__fixtures__/sf-export-design.xlsx'));
+
+  /** Eric Webber already on the board, already on Schedule — only his notes differ. */
+  function seeded(): BoardState {
+    const board = emptyBoard();
+    board.projects = [
+      {
+        ...newProject('Eric Webber', 'Aboud Yousef', seedLabels(), '2026-10-01T00:00:00.000Z'),
+        id: 'p-webber',
+        phaseId: 'phase-schedule',
+        sfNotes: { alerts: 'An old alert.' },
+        sfNotesAt: '2026-10-01T00:00:00.000Z',
+      },
+    ];
+    return board;
+  }
+
+  async function loadExport() {
+    fireEvent.click(screen.getByRole('button', { name: /Import from Salesforce/ }));
+    const file = new File([XLSX], 'Scope of Work Assignments - Design.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+    fireEvent.change(screen.getByLabelText(/exported .xlsx/i), { target: { files: [file] } });
+    await screen.findByText(/found 62 of 62/, undefined, { timeout: 15_000 });
+  }
+
+  async function importFile() {
+    await loadExport();
+    fireEvent.click(screen.getByRole('button', { name: /^Import \d+$/ }));
+  }
+
+  it('a matched row gets the export notes, logged in activity as a summary', async () => {
+    render(<Harness initial={seeded()} authors={ROSTER5} />);
+    await importFile();
+
+    expect(toasts.at(-1)?.text).toMatch(/notes updated/);
+    fireEvent.click(screen.getByText('Eric Webber').closest('tr')!.querySelector('.board-updated-cell')!);
+    expect(screen.getByText(/Salesforce notes/)).toBeTruthy();
+  });
+
+  it('Undo puts the old notes back — the same export offers the update again', async () => {
+    render(<Harness initial={seeded()} authors={ROSTER5} />);
+    await importFile();
+    act(() => toasts.at(-1)!.action!.fn());
+
+    // The created rows are gone again…
+    expect(screen.queryByText('Johann Lawrence-Brian Dsouza')).toBeNull();
+    // …and Eric's notes reverted, so the same file still has 1 notes update to offer.
+    await loadExport();
+    expect(screen.getByText(/updated Salesforce notes/)).toBeTruthy();
+  });
+});

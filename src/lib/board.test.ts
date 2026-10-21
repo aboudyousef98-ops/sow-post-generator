@@ -207,3 +207,64 @@ describe('BoardState shape', () => {
     expect(b.labels.length).toBe(5);
   });
 });
+
+describe('Salesforce notes on the board (Aboud 2026-10-21)', () => {
+  const NOTES = { alerts: 'Tree trims.', utilityDesign: 'Main breaker.' };
+
+  it('activityForPatch logs a notes change as a section summary, not the full text', () => {
+    const entry = activityForPatch(
+      proj(),
+      { sfNotes: NOTES, sfNotesAt: T2 },
+      'Omar Rajab',
+      seedLabels(),
+      T2,
+    )!;
+    expect(entry.changes!.sfNotes).toEqual({
+      old: '—',
+      new: 'Scheduling alerts · Utility — design requirements',
+    });
+    expect(entry.changes!.sfNotesAt).toBeUndefined(); // timestamp is not activity noise
+  });
+
+  it('clearing the notes logs back to the em dash', () => {
+    const entry = activityForPatch(
+      proj({ sfNotes: NOTES }),
+      { sfNotes: undefined, sfNotesAt: T2 },
+      'Omar Rajab',
+      seedLabels(),
+      T2,
+    )!;
+    expect(entry.changes!.sfNotes.old).toBe('Scheduling alerts · Utility — design requirements');
+    expect(entry.changes!.sfNotes.new).toBe('—');
+  });
+
+  it('equal notes are not a change, even as different objects', () => {
+    const entry = activityForPatch(
+      proj({ sfNotes: NOTES }),
+      { sfNotes: { ...NOTES }, sfNotesAt: T2 },
+      'Omar Rajab',
+      seedLabels(),
+      T2,
+    );
+    expect(entry).toBeNull();
+  });
+
+  it('patchProject can clear the notes with an explicit undefined', () => {
+    const cleared = patchProject(proj({ sfNotes: NOTES, sfNotesAt: T1 }), { sfNotes: undefined }, 'X', T2);
+    expect(cleared.sfNotes).toBeUndefined();
+  });
+});
+
+describe('activity cap', () => {
+  it('holds 5000 entries — a 62-row import must not truncate real history (was 1000)', () => {
+    const activity = Array.from({ length: 5100 }, (_, i) => ({
+      id: `a${i}`,
+      projectId: 'p1',
+      actor: 'X',
+      action: 'update' as const,
+      at: new Date(1700000000000 + i * 1000).toISOString(),
+    }));
+    const merged = mergeBoard({ ...emptyBoard(), activity }, {});
+    expect(merged.activity).toHaveLength(5000);
+  });
+});

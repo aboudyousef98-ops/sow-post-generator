@@ -14,6 +14,7 @@
 import type { BoardLabel, BoardProject } from '../board/types';
 import { nameKey } from './board';
 import { splitSections } from './boardViews';
+import { hasSfNotes, sfNotesEqual, type SfNotes } from './sfNotes';
 import type { SfReport, SfReportKind } from './sfReport';
 
 export type ImportMatch = 'new' | 'matched' | 'maybe' | 'archived';
@@ -39,12 +40,28 @@ export interface ImportRow {
   statusId?: string;
   /** Salesforce says this project is cancelled. */
   cancelled?: boolean;
+  /**
+   * Notes to write (Scheduling Alerts! + AHJ/utility requirements). Set on a
+   * NEW row that carries any, or on an existing row whose board copy differs —
+   * {} there means "Salesforce cleared them, clear the board's". Never set
+   * from a paste (the report has no notes), so a paste cannot wipe them.
+   */
+  notes?: SfNotes;
 }
 
 export interface ImportPlan {
   kind: SfReportKind;
   rows: ImportRow[];
-  counts: { create: number; matched: number; maybe: number; archived: number; phase: number; cancelled: number };
+  counts: {
+    create: number;
+    matched: number;
+    maybe: number;
+    archived: number;
+    phase: number;
+    cancelled: number;
+    /** EXISTING rows whose Salesforce notes will change (new rows ride on `create`). */
+    notes: number;
+  };
   /** Rows a Design paste left on Schedule — reported, never silent. */
   stickySchedule: string[];
   /**
@@ -126,7 +143,7 @@ export function planImport(
   answers: Record<string, MaybeAnswer> = {},
 ): ImportPlan {
   const { schedule, design } = phaseIds(labels);
-  const counts = { create: 0, matched: 0, maybe: 0, archived: 0, phase: 0, cancelled: 0 };
+  const counts = { create: 0, matched: 0, maybe: 0, archived: 0, phase: 0, cancelled: 0, notes: 0 };
   const stickySchedule: string[] = [];
   const cancelledOnBoard: BoardProject[] = [];
   /** Board status labels by lowercased name — for the Hold carry-over. */
@@ -172,6 +189,15 @@ export function planImport(
     if (match === 'new') {
       const mapped = statusByName.get(r.status.trim().toLowerCase());
       if (mapped) row.statusId = mapped;
+    }
+    // Notes: only a source that can see them (the .xlsx) ever sets r.notes.
+    if (r.notes !== undefined) {
+      if (match === 'new') {
+        if (hasSfNotes(r.notes)) row.notes = r.notes;
+      } else if (hit && !sfNotesEqual(r.notes, hit.sfNotes)) {
+        row.notes = r.notes; // {} here means: Salesforce cleared them
+        counts.notes++;
+      }
     }
     if (match === 'maybe') {
       row.boardName = near!.name;

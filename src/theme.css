@@ -1044,6 +1044,30 @@ table.list tr.row:hover {
   color: var(--dyn-warn-ink);
 }
 
+/* Salesforce notes for the matched board row — same dense yellow family as
+   .alu-banner, under Customer name (Aboud 2026-10-21). */
+.sf-notes-banner {
+  grid-column: 1 / -1;
+  background: var(--dyn-warn-bg);
+  border: 1px solid var(--dyn-yellow);
+  border-radius: var(--radius-card);
+  color: var(--dyn-warn-ink);
+  padding: 8px 12px;
+  font-size: 13px;
+  line-height: 1.45;
+  margin-bottom: 8px;
+}
+
+.sf-notes-banner strong {
+  color: var(--dyn-warn-ink);
+}
+
+.sf-notes-row {
+  /* Salesforce cells are multi-line bullet lists — keep their line breaks. */
+  white-space: pre-wrap;
+  margin-top: 4px;
+}
+
 .ahj-banner {
   grid-column: 1 / -1;
   background: #fffdf3;
