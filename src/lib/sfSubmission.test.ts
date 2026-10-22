@@ -138,13 +138,13 @@ describe('Installation Window and Planning', () => {
     expect(v).toContain('- Grid/service run:\n  - Offset on the wall.\n  - Used 45D and LBs.');
   });
 
-  it('battery location and special cases are NOT in the blob — they have their own SF fields', () => {
+  it('special cases ARE in the blob (Aboud 2026-10-22); battery location is not — it has its own SF field', () => {
     const r = rec({
       installNotes: { ...emptyInstallNotes(), batteryLocation: 'Garage wall', specialCases: 'Needs Cu wire' },
     });
     const v = fieldValue(r, 'window');
     expect(v).not.toContain('Garage wall');
-    expect(v).not.toContain('Needs Cu wire');
+    expect(v).toContain('- Special cases: Needs Cu wire.');
   });
 
   it('no conduit runs → no Conduit Raceway header', () => {
@@ -198,7 +198,7 @@ describe('merged note fields', () => {
     expect(fieldValue(r, 'clearanceHomeowner')).not.toMatch(/clearance requirements/i);
   });
 
-  it('site modification notes = concrete pad feedback + special cases, dashed when several', () => {
+  it('site modification notes = concrete pad feedback only (special cases moved to the window blob)', () => {
     const r = rec({
       installNotes: {
         ...emptyInstallNotes(),
@@ -206,15 +206,15 @@ describe('merged note fields', () => {
         specialCases: 'No AL wires in Missouri City',
       },
     });
-    expect(fieldValue(r, 'siteModification')).toBe(
-      '- Pads can extend past the left edge.\n- No AL wires in Missouri City.',
-    );
+    expect(fieldValue(r, 'siteModification')).toBe('Pads can extend past the left edge.');
+    expect(fieldValue(r, 'window')).toContain('- Special cases: No AL wires in Missouri City.');
   });
 
   it('site modification survives a pre-2026-10-22 record with no concretePad key', () => {
     const notes = { ...emptyInstallNotes(), specialCases: 'Old record case' };
     delete (notes as Record<string, unknown>).concretePad;
-    expect(fieldValue(rec({ installNotes: notes }), 'siteModification')).toBe('Old record case.');
+    expect(fieldValue(rec({ installNotes: notes }), 'siteModification')).toBe('');
+    expect(fieldValue(rec({ installNotes: notes }), 'window')).toContain('- Special cases: Old record case.');
   });
 
   it('site survey / design feedback fall back to the team defaults, like the post', () => {

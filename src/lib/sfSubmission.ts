@@ -71,19 +71,19 @@ function boxLines(record: PostRecord, raw: string | undefined, key: Parameters<t
 export function buildSfSubmission(record: PostRecord, settings: Settings): SfSubmissionField[] {
   const n = record.installNotes;
 
-  // Classification + the install-note sentences + conduit raceway, one fact per
-  // line. Battery location, special cases, stories and the disconnect duration
-  // are omitted — each lands in its own SF field (see the header note). The
-  // clearance boilerplate is this blob's FINAL sentence (Aboud 2026-10-22,
-  // matching his filled SF record) — strays typed into a notes box are filtered
-  // so it appears exactly once, at the end.
+  // Classification + the install-note sentences (special cases INCLUDED —
+  // Aboud 2026-10-22: "we need to put them in the installation window") +
+  // conduit raceway, one fact per line. Battery location, stories and the
+  // disconnect duration are omitted — each lands in its own SF field. The
+  // clearance boilerplate is this blob's FINAL sentence (matching his filled
+  // SF record) — strays typed into a notes box are filtered so it appears
+  // exactly once, at the end.
   const clearanceRe = /clearance requirements have been met/i;
   const windowParts = [
     `Level ${record.level} – ${LEVEL_NAMES[record.level]}.\nPlanning window: ${LEVEL_INFO[record.level].window}.`,
   ];
   const noteSentences = installNoteLines(n, record, record.sf.utility, [
     'batteryLocation',
-    'specialCases',
     'stories',
     'disconnectDuration',
   ]).filter((l) => !clearanceRe.test(l));
@@ -97,10 +97,9 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
 
   const duration = n?.disconnectDuration ?? disconnectDurationFor(n, record.sf.utility);
 
-  const siteMod = [
-    ...boxLines(record, n?.concretePad, 'install.concretePad'),
-    ...boxLines(record, n?.specialCases, 'install.specialCases'),
-  ];
+  // Concrete-pad feedback only — special cases moved into the window blob
+  // (Aboud 2026-10-22: "we need to put them in the installation window").
+  const siteMod = boxLines(record, n?.concretePad, 'install.concretePad');
 
   // Date / region / address / jurisdiction are NOT offered: Salesforce is where
   // those came from — the SF record already has them (Aboud 2026-10-22 review).
