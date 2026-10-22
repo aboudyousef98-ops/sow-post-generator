@@ -36,6 +36,22 @@ describe('buildSfSubmission — field list', () => {
     ]);
   });
 
+  it('tick/picklist/number SF fields are display-only — everything else is copyable', () => {
+    // Aboud 2026-10-22 (screenshot review): checkboxes, picklists and number
+    // inputs in SF are quicker to click than to paste — show the value, no button.
+    const copyFlags = Object.fromEntries(buildSfSubmission(rec(), defaultSettings()).map((f) => [f.id, f.copy !== false]));
+    expect(copyFlags.stories).toBe(false);
+    expect(copyFlags.installDays).toBe(false);
+    expect(copyFlags.outageExpected).toBe(false);
+    expect(copyFlags.outageDuration).toBe(false);
+    expect(copyFlags.panelFacesFront).toBe(false);
+    expect(copyFlags.window).toBe(true);
+    expect(copyFlags.batteryLocation).toBe(true);
+    expect(copyFlags.clearanceHomeowner).toBe(true);
+    expect(copyFlags.siteModification).toBe(true);
+    expect(copyFlags.installDate).toBe(true);
+  });
+
   it('uses the EXACT Salesforce labels', () => {
     const labels = Object.fromEntries(buildSfSubmission(rec(), defaultSettings()).map((f) => [f.id, f.label]));
     expect(labels.window).toBe('Installation Window and Planning');
@@ -96,7 +112,7 @@ describe('simple fields', () => {
 });
 
 describe('Installation Window and Planning', () => {
-  it('composes classification + install notes + conduit raceway as labelled lines', () => {
+  it('composes classification + install notes + conduit raceway with plain-text structure (SF strips rich format)', () => {
     const r = rec({
       level: 3,
       installNotes: {
@@ -113,13 +129,24 @@ describe('Installation Window and Planning', () => {
     const v = fieldValue(r, 'window');
     expect(v).toContain('Level 3 – Service Equipment Modification.');
     expect(v).toContain('Planning window: 1.5 to 2 crew-days.');
-    expect(v).toContain('Installation on one wall (East).');
-    expect(v).toContain('1-story house.');
-    expect(v).toContain('This project requires an MPU.');
-    expect(v).toContain('Roof rating: 8/10 (Good)');
-    expect(v).toContain('Conduit Raceway:');
-    expect(v).toContain('Grid/service run: Standard run.');
-    expect(v).toContain('Load run: Standard run.');
+    // Sections carry a dashed underline; lines carry "- " bullets — formatting
+    // that survives Salesforce's plain-text fields.
+    expect(v).toContain('Installation Notes\n------------------');
+    expect(v).toContain('- Installation on one wall (East).');
+    expect(v).toContain('- 1-story house.');
+    expect(v).toContain('- This project requires an MPU.');
+    expect(v).toContain('- Roof rating: 8/10 (Good)');
+    expect(v).toContain('Conduit Raceway\n---------------');
+    expect(v).toContain('- Grid/service run: Standard run.');
+    expect(v).toContain('- Load run: Standard run.');
+  });
+
+  it('a multi-point conduit run nests its points with indented dashes', () => {
+    const r = rec({
+      installNotes: { ...emptyInstallNotes(), serviceRun: 'Offset on the wall\nUsed 45D and LBs' },
+    });
+    const v = fieldValue(r, 'window');
+    expect(v).toContain('- Grid/service run:\n  - Offset on the wall.\n  - Used 45D and LBs.');
   });
 
   it('battery location and special cases are NOT in the blob — they have their own SF fields', () => {
@@ -147,15 +174,15 @@ describe('merged note fields', () => {
     expect(fieldValue(r, 'batteryLocation')).toBe('garage raw.');
   });
 
-  it('clearance + homeowner: boilerplate alone when no homeowner note, merged when there is one', () => {
+  it('clearance + homeowner: boilerplate alone when no homeowner note, dashed list when merged', () => {
     expect(fieldValue(rec(), 'clearanceHomeowner')).toBe('All required clearance requirements have been met.');
     const r = rec({ notes: { layout: '', siteSurvey: '', design: '', homeowner: 'Clear the garage shelves' } });
     expect(fieldValue(r, 'clearanceHomeowner')).toBe(
-      'All required clearance requirements have been met.\nClear the garage shelves.',
+      '- All required clearance requirements have been met.\n- Clear the garage shelves.',
     );
   });
 
-  it('site modification notes = concrete pad feedback + special cases', () => {
+  it('site modification notes = concrete pad feedback + special cases, dashed when several', () => {
     const r = rec({
       installNotes: {
         ...emptyInstallNotes(),
@@ -164,7 +191,7 @@ describe('merged note fields', () => {
       },
     });
     expect(fieldValue(r, 'siteModification')).toBe(
-      'Pads can extend past the left edge.\nNo AL wires in Missouri City.',
+      '- Pads can extend past the left edge.\n- No AL wires in Missouri City.',
     );
   });
 

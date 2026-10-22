@@ -7220,3 +7220,9 @@ tr:hover .board-label-cell.empty {
 .sf-submit-value.empty {
   color: var(--dyn-border, #c3c8d4);
 }
+/* Display-only SF rows (ticks/picklists/numbers): the value sits where the
+   button would be — read it, click it in SF. */
+.sf-submit-pick {
+  font-size: 13.5px;
+  font-weight: 700;
+}

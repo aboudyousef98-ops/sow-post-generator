@@ -34,8 +34,10 @@ export default function SfSubmissionCard({ record, settings, toast }: Props) {
   };
 
   const isCopied = (f: { id: string; value: string }) => !!f.value && copied[f.id] === f.value;
-  const done = fields.filter(isCopied).length;
-  const total = fields.filter((f) => f.value).length;
+  // Display-only fields (SF ticks/picklists/numbers) don't count toward the
+  // walk — there is nothing to copy, only something to read and click in SF.
+  const done = fields.filter((f) => f.copy !== false && isCopied(f)).length;
+  const total = fields.filter((f) => f.copy !== false && f.value).length;
 
   return (
     <div className="card sf-submit-card">
@@ -50,17 +52,24 @@ export default function SfSubmissionCard({ record, settings, toast }: Props) {
           <li key={f.id} className={isCopied(f) ? 'copied' : ''}>
             <div className="sf-submit-top">
               <span className="sf-submit-label">{f.label}</span>
-              <button
-                type="button"
-                className={`btn small ${isCopied(f) ? 'secondary' : 'primary'}`}
-                disabled={!f.value}
-                onClick={() => void copy(f.id, f.value)}
-                title={f.value ? `Copy the ${f.label} value` : 'Nothing to copy yet'}
-              >
-                {isCopied(f) ? '✓ Copied' : 'Copy'}
-              </button>
+              {f.copy === false ? (
+                /* A tick/picklist/number in SF — read the value, click it there. */
+                f.value && <span className="sf-submit-pick">{f.value}</span>
+              ) : (
+                <button
+                  type="button"
+                  className={`btn small ${isCopied(f) ? 'secondary' : 'primary'}`}
+                  disabled={!f.value}
+                  onClick={() => void copy(f.id, f.value)}
+                  title={f.value ? `Copy the ${f.label} value` : 'Nothing to copy yet'}
+                >
+                  {isCopied(f) ? '✓ Copied' : 'Copy'}
+                </button>
+              )}
             </div>
-            {f.value ? (
+            {f.copy === false ? (
+              !f.value && <div className="sf-submit-value empty">—</div>
+            ) : f.value ? (
               <div className={`sf-submit-value ${f.multiline ? 'multi' : ''}`}>{f.value}</div>
             ) : (
               <div className="sf-submit-value empty">—</div>
