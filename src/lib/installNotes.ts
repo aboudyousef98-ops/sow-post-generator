@@ -53,6 +53,17 @@ const WALL_WORD: Record<1 | 2 | 3 | 4 | 5, string> = {
 };
 
 /**
+ * The walls/orientations sentence — "Installation on two walls (East, West)."
+ * `lead` lets the SF Battery-and-Equipment-Location field say "Equipment on…"
+ * (Aboud 2026-10-22: that field combines battery location + equipment walls).
+ */
+export function wallsSentence(n: InstallNotes, lead = 'Installation'): string {
+  if (!n.walls) return '';
+  const or = n.orientations.slice(0, n.walls).filter(Boolean);
+  return `${lead} on ${WALL_WORD[n.walls]}${or.length ? ` (${or.join(', ')})` : ''}.`;
+}
+
+/**
  * Expected power disconnect duration — DERIVED, never picked (meeting
  * 2026-10-05): MPU or FSU work, or a TNMP utility, means the service is down
  * 4–6 hours; everything else (Duracell battery systems) is 1–2 hours.
@@ -163,30 +174,34 @@ function labelledRun(label: string, raw: string, key: PolishKey, p: PolishState)
 
 const field = (f: InstallTextField) => INSTALL_TEXT_FIELDS.find((x) => x.field === f)!;
 
+/** What `installNoteLines` may leave out — labelled boxes AND derived sentences
+ * that land in their own Salesforce field (sfSubmission.ts states each fact once). */
+export type InstallNoteOmit = InstallTextField | 'stories' | 'disconnectDuration';
+
 /**
  * The `Installation Notes` bullet's sub-bullets, in the order spec/10 §3.1
  * fixes. `utility` (sf.utility) feeds the automatic disconnect-duration line.
- * `omit` skips labelled boxes that land in their own Salesforce field, so the
- * SF "Installation window and planning" blob states each fact exactly once
+ * `omit` skips parts that land in their own Salesforce field, so the SF
+ * "Installation window and planning" blob states each fact exactly once
  * (sfSubmission.ts); the Slack post passes nothing and keeps its full shape.
  */
 export function installNoteLines(
   n: InstallNotes | undefined,
   p: PolishState,
   utility?: string,
-  omit: InstallTextField[] = [],
+  omit: InstallNoteOmit[] = [],
 ): string[] {
   if (!n) return [];
   const lines: string[] = [];
 
   // 1. Dropdown-derived sentences.
-  if (n.walls) {
-    const or = n.orientations.slice(0, n.walls).filter(Boolean);
-    lines.push(`Installation on ${WALL_WORD[n.walls]}${or.length ? ` (${or.join(', ')})` : ''}.`);
+  const walls = wallsSentence(n);
+  if (walls) lines.push(walls);
+  if (!omit.includes('stories')) {
+    if (n.stories === 'other') {
+      if (n.storiesOther.trim()) lines.push(punctuate(n.storiesOther));
+    } else if (n.stories) lines.push(`${n.stories}-story house.`);
   }
-  if (n.stories === 'other') {
-    if (n.storiesOther.trim()) lines.push(punctuate(n.storiesOther));
-  } else if (n.stories) lines.push(`${n.stories}-story house.`);
   const services = servicesOf(n);
   if (services.length) {
     // "an MPU and an FSU" / "an MPU, an FSU and an FTP" — one sentence, every
@@ -199,8 +214,10 @@ export function installNoteLines(
     lines.push(`This project requires ${joined}.`);
   }
   // Manual pin wins; otherwise the hours follow the situation automatically.
-  const duration = n.disconnectDuration ?? disconnectDurationFor(n, utility);
-  lines.push(`Expected power disconnect duration: ${DURATION_WORD[duration]}.`);
+  if (!omit.includes('disconnectDuration')) {
+    const duration = n.disconnectDuration ?? disconnectDurationFor(n, utility);
+    lines.push(`Expected power disconnect duration: ${DURATION_WORD[duration]}.`);
+  }
   if (n.roofRating) {
     const band = roofBand(n.roofRating);
     lines.push(`Roof rating: ${n.roofRating}/10 (${band.name}) — ${band.outcome}.`);

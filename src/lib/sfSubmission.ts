@@ -17,10 +17,9 @@
 
 import type { PostRecord, PostValue, Settings } from '../types';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
-import { isoToUs } from './dates';
-import { conduitRunLines, disconnectDurationFor, installNoteLines } from './installNotes';
+import { conduitRunLines, disconnectDurationFor, installNoteLines, wallsSentence } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
-import { effectiveNoteLines, regionLine } from './template';
+import { effectiveNoteLines } from './template';
 
 export interface SfSubmissionField {
   /** Stable key for React and the per-field "copied" tick. */
@@ -71,16 +70,24 @@ function boxLines(record: PostRecord, raw: string | undefined, key: Parameters<t
 
 export function buildSfSubmission(record: PostRecord, settings: Settings): SfSubmissionField[] {
   const n = record.installNotes;
-  const iso = record.sf.installScheduledDate;
 
   // Classification + the install-note sentences + conduit raceway, one fact per
-  // line. Battery location / special cases are omitted — see the header note.
+  // line. Battery location, special cases, stories and the disconnect duration
+  // are omitted — each lands in its own SF field (see the header note), and the
+  // clearance boilerplate belongs to Clearance and Homeowner Preparation even
+  // if a coordinator types it into a notes box (Aboud 2026-10-22).
+  const notInWindow = /clearance requirements have been met/i;
   const windowParts = [
     `Level ${record.level} – ${LEVEL_NAMES[record.level]}.\nPlanning window: ${LEVEL_INFO[record.level].window}.`,
   ];
-  const noteSentences = installNoteLines(n, record, record.sf.utility, ['batteryLocation', 'specialCases']);
+  const noteSentences = installNoteLines(n, record, record.sf.utility, [
+    'batteryLocation',
+    'specialCases',
+    'stories',
+    'disconnectDuration',
+  ]).filter((l) => !notInWindow.test(l));
   if (noteSentences.length) windowParts.push(`${underline('Installation Notes')}\n${dashed(noteSentences)}`);
-  const runs = conduitRunLines(n, record).flatMap(runLines);
+  const runs = conduitRunLines(n, record).flatMap(runLines).filter((l) => !notInWindow.test(l));
   if (runs.length) windowParts.push(`${underline('Conduit Raceway')}\n${runs.join('\n')}`);
 
   const stories =
@@ -94,11 +101,9 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
     ...boxLines(record, n?.specialCases, 'install.specialCases'),
   ];
 
+  // Date / region / address / jurisdiction are NOT offered: Salesforce is where
+  // those came from — the SF record already has them (Aboud 2026-10-22 review).
   return [
-    { id: 'installDate', label: 'Installation Date', value: iso ? isoToUs(iso) : '' },
-    { id: 'region', label: 'Region', value: regionLine(record) },
-    { id: 'siteAddress', label: 'Site Address', value: record.sf.siteAddress?.trim() ?? '' },
-    { id: 'jurisdiction', label: 'Jurisdiction', value: record.sf.jurisdiction?.trim() ?? '' },
     { id: 'window', label: 'Installation Window and Planning', value: windowParts.join('\n\n'), multiline: true },
     { id: 'stories', label: 'Number of Stories', value: stories, copy: false },
     { id: 'installDays', label: 'Estimated Installation Duration (Days)', value: LEVEL_DAYS[record.level], copy: false },
@@ -110,7 +115,12 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
     {
       id: 'batteryLocation',
       label: 'Battery and Equipment Location',
-      value: listy(boxLines(record, n?.batteryLocation, 'install.batteryLocation')),
+      // Battery location + the equipment walls, combined (Aboud 2026-10-22:
+      // "this must combine the batteries location and the equipment walls").
+      value: listy([
+        ...(n ? [wallsSentence(n, 'Equipment')].filter(Boolean) : []),
+        ...boxLines(record, n?.batteryLocation, 'install.batteryLocation'),
+      ]),
       multiline: true,
     },
     {

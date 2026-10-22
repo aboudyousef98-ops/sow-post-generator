@@ -16,12 +16,8 @@ function fieldValue(r: PostRecord, id: string): string {
 }
 
 describe('buildSfSubmission — field list', () => {
-  it('returns the SF fields in the order of the SF page', () => {
+  it('returns the SF fields in the order of the SF page (no date/region/address/jurisdiction — SF already has them)', () => {
     expect(buildSfSubmission(rec(), defaultSettings()).map((f) => f.id)).toEqual([
-      'installDate',
-      'region',
-      'siteAddress',
-      'jurisdiction',
       'window',
       'stories',
       'installDays',
@@ -49,7 +45,6 @@ describe('buildSfSubmission — field list', () => {
     expect(copyFlags.batteryLocation).toBe(true);
     expect(copyFlags.clearanceHomeowner).toBe(true);
     expect(copyFlags.siteModification).toBe(true);
-    expect(copyFlags.installDate).toBe(true);
   });
 
   it('uses the EXACT Salesforce labels', () => {
@@ -67,20 +62,6 @@ describe('buildSfSubmission — field list', () => {
 });
 
 describe('simple fields', () => {
-  it('maps date (US format), region, address, jurisdiction', () => {
-    const r = rec();
-    expect(fieldValue(r, 'installDate')).toBe('10/01/2026');
-    expect(fieldValue(r, 'region')).toBe('HOU');
-    expect(fieldValue(r, 'siteAddress')).toBe('1317 Skylark Rd, Pasadena, TX 77502');
-    expect(fieldValue(r, 'jurisdiction')).toBe('Pasadena');
-  });
-
-  it('no install date → empty value', () => {
-    const r = rec();
-    r.sf.installScheduledDate = '';
-    expect(fieldValue(r, 'installDate')).toBe('');
-  });
-
   it('stories: number, or the free text for "other", or empty', () => {
     expect(fieldValue(rec({ installNotes: { ...emptyInstallNotes(), stories: 2 } }), 'stories')).toBe('2');
     expect(
@@ -133,12 +114,15 @@ describe('Installation Window and Planning', () => {
     // that survives Salesforce's plain-text fields.
     expect(v).toContain('Installation Notes\n------------------');
     expect(v).toContain('- Installation on one wall (East).');
-    expect(v).toContain('- 1-story house.');
     expect(v).toContain('- This project requires an MPU.');
     expect(v).toContain('- Roof rating: 8/10 (Good)');
     expect(v).toContain('Conduit Raceway\n---------------');
     expect(v).toContain('- Grid/service run: Standard run.');
     expect(v).toContain('- Load run: Standard run.');
+    // Stories and the power-disconnect duration have their own SF fields
+    // (Aboud 2026-10-22 review) — stated once, not inside this blob.
+    expect(v).not.toContain('story house');
+    expect(v).not.toContain('power disconnect');
   });
 
   it('a multi-point conduit run nests its points with indented dashes', () => {
@@ -161,6 +145,18 @@ describe('Installation Window and Planning', () => {
   it('no conduit runs → no Conduit Raceway header', () => {
     expect(fieldValue(rec(), 'window')).not.toContain('Conduit Raceway');
   });
+
+  it('the clearance boilerplate never appears in the window blob, even typed into a notes box', () => {
+    const r = rec({
+      installNotes: {
+        ...emptyInstallNotes(),
+        other: 'Attic run\nAll required clearance requirements have been met',
+      },
+    });
+    const v = fieldValue(r, 'window');
+    expect(v).toContain('- Attic run.');
+    expect(v).not.toMatch(/clearance requirements/i);
+  });
 });
 
 describe('merged note fields', () => {
@@ -172,6 +168,20 @@ describe('merged note fields', () => {
     expect(fieldValue(r, 'batteryLocation')).toBe('Polished garage wall.');
     r.usePolished['install.batteryLocation'] = false;
     expect(fieldValue(r, 'batteryLocation')).toBe('garage raw.');
+  });
+
+  it('battery AND equipment: the equipment-walls sentence combines with the battery location', () => {
+    const r = rec({
+      installNotes: {
+        ...emptyInstallNotes(),
+        walls: 2,
+        orientations: ['East', 'Interior - Garage'],
+        batteryLocation: 'Batteries inside the garage',
+      },
+    });
+    expect(fieldValue(r, 'batteryLocation')).toBe(
+      '- Equipment on two walls (East, Interior - Garage).\n- Batteries inside the garage.',
+    );
   });
 
   it('clearance + homeowner: boilerplate alone when no homeowner note, dashed list when merged', () => {
