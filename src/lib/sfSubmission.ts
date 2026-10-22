@@ -103,15 +103,10 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
 
   // Date / region / address / jurisdiction are NOT offered: Salesforce is where
   // those came from — the SF record already has them (Aboud 2026-10-22 review).
+  // Order = the SF "Design and Installation Context" section exactly as laid
+  // out on the page: LEFT column top-to-bottom, then RIGHT column (Aboud
+  // 2026-10-22, screenshot). Wiring Route (right, #2) is filled by hand in SF.
   return [
-    { id: 'window', label: 'Installation Window and Planning', value: windowParts.join('\n\n'), multiline: true },
-    { id: 'stories', label: 'Number of Stories', value: stories, copy: false },
-    { id: 'installDays', label: 'Estimated Installation Duration (Days)', value: LEVEL_DAYS[record.level], copy: false },
-    // Every install disconnects power at least briefly — all 11 studied
-    // handoffs say Yes, so the value is constant rather than guessed.
-    { id: 'outageExpected', label: 'Power Outage Expected', value: 'Yes', copy: false },
-    { id: 'outageDuration', label: 'Estimated Power Outage Duration', value: SF_DURATION[duration], copy: false },
-    { id: 'panelFacesFront', label: 'Panel Facing Front of House', value: n?.panelFacesFront ? 'Yes' : 'No', copy: false },
     {
       id: 'batteryLocation',
       label: 'Battery and Equipment Location',
@@ -123,12 +118,20 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
       ]),
       multiline: true,
     },
+    // Every install disconnects power at least briefly — all 11 studied
+    // handoffs say Yes, so the value is constant rather than guessed.
+    { id: 'outageExpected', label: 'Power Outage Expected', value: 'Yes', copy: false },
+    { id: 'panelFacesFront', label: 'Panel Facing Front of House', value: n?.panelFacesFront ? 'Yes' : 'No', copy: false },
+    { id: 'window', label: 'Installation Window and Planning', value: windowParts.join('\n\n'), multiline: true },
     {
       id: 'clearanceHomeowner',
       label: 'Clearance and Homeowner Preparation',
       value: listy([CLEARANCE_LINE, ...homeowner]),
       multiline: true,
     },
+    { id: 'stories', label: 'Number of Stories', value: stories, copy: false },
+    { id: 'outageDuration', label: 'Estimated Power Outage Duration', value: SF_DURATION[duration], copy: false },
+    { id: 'installDays', label: 'Estimated Installation Duration (Days)', value: LEVEL_DAYS[record.level], copy: false },
     { id: 'siteModification', label: 'Site Modification Notes', value: listy(siteMod), multiline: true },
     {
       id: 'siteSurvey',

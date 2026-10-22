@@ -16,16 +16,19 @@ function fieldValue(r: PostRecord, id: string): string {
 }
 
 describe('buildSfSubmission — field list', () => {
-  it('returns the SF fields in the order of the SF page (no date/region/address/jurisdiction — SF already has them)', () => {
+  it('returns the SF fields exactly as the SF page lays them out: left column, then right', () => {
     expect(buildSfSubmission(rec(), defaultSettings()).map((f) => f.id)).toEqual([
-      'window',
-      'stories',
-      'installDays',
-      'outageExpected',
-      'outageDuration',
-      'panelFacesFront',
+      // left column, top to bottom
       'batteryLocation',
+      'outageExpected',
+      'panelFacesFront',
+      'window',
       'clearanceHomeowner',
+      // right column, top to bottom (Wiring Route is filled by hand in SF)
+      'stories',
+      'outageDuration',
+      'installDays',
+      // other SF sections
       'siteModification',
       'siteSurvey',
       'design',
