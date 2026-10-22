@@ -9,6 +9,7 @@
 import { useMemo, useState } from 'react';
 import type { DayType, ExtraWorkEntry, ExtraWorkState } from '../extrawork/types';
 import { loadCachedUsers } from '../lib/auth';
+import { isStaleChunkError, STALE_CHUNK_MESSAGE } from '../lib/staleChunk';
 import { isoToUs, todayIso } from '../lib/dates';
 import {
   dayShort,
@@ -214,8 +215,8 @@ export default function ExtraWorkTab({
       const { downloadExtraWorkXlsx } = await import('../lib/extraWorkXlsx');
       await downloadExtraWorkXlsx(report);
       toast('Excel report downloaded.');
-    } catch {
-      toast('Could not build the Excel file.');
+    } catch (e) {
+      toast(isStaleChunkError(e) ? STALE_CHUNK_MESSAGE : 'Could not build the Excel file.');
     } finally {
       setBusyExport(false);
     }
@@ -235,8 +236,8 @@ export default function ExtraWorkTab({
       const { downloadExtraWorkXlsx } = await import('../lib/extraWorkXlsx');
       await downloadExtraWorkXlsx(mine, personFileName(sel, month));
       toast(`Excel downloaded — ${sel}, ${monthLabelLong(month)}.`);
-    } catch {
-      toast('Could not build the Excel file.');
+    } catch (e) {
+      toast(isStaleChunkError(e) ? STALE_CHUNK_MESSAGE : 'Could not build the Excel file.');
     } finally {
       setBusyExport(false);
     }

@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react';
 import type { DayType, ExtraWorkEntry, ExtraWorkState } from '../extrawork/types';
 import { loadCachedUsers } from '../lib/auth';
+import { isStaleChunkError, STALE_CHUNK_MESSAGE } from '../lib/staleChunk';
 import { isoToUs, parseIsoLocal, todayIso, weekdayName } from '../lib/dates';
 import {
   canEditEntry,
@@ -116,8 +117,8 @@ export default function MobileHours({ state, setState, me, myUsername, isAdmin, 
       const { downloadExtraWorkXlsx } = await import('../lib/extraWorkXlsx');
       await downloadExtraWorkXlsx(mine, personFileName(who, month));
       toast(`Excel downloaded — ${who}.`);
-    } catch {
-      toast('Could not build the Excel file.');
+    } catch (e) {
+      toast(isStaleChunkError(e) ? STALE_CHUNK_MESSAGE : 'Could not build the Excel file.');
     }
   };
 

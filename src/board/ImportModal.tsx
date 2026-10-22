@@ -11,6 +11,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { planImport, type ImportPlan, type MaybeAnswer } from '../lib/sfImport';
 import { parseSfReport, type SfReport } from '../lib/sfReport';
 import { parseSfGrid, sheetToGrid } from '../lib/sfWorkbook';
+import { isStaleChunkError, STALE_CHUNK_MESSAGE } from '../lib/staleChunk';
 import type { BoardLabel, BoardProject } from './types';
 
 export interface ImportRequest {
@@ -81,7 +82,7 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
       const sheet = wb.worksheets[0];
       if (!sheet) throw new Error('empty workbook');
       setFromFile(parseSfGrid(sheetToGrid(sheet), roster));
-    } catch {
+    } catch (e) {
       setFromFile({
         kind: 'unknown',
         rows: [],
@@ -89,7 +90,12 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
         complete: false,
         unreadable: [],
         warnings: [],
-        error: `Could not read "${file.name}". Export the report again with Export → Details Only (.xlsx).`,
+        // A stale tab's failed chunk load is NOT the file's fault — telling the
+        // user to re-export sent Aboud through four pointless exports on
+        // 2026-10-22. Name the real fix: reload.
+        error: isStaleChunkError(e)
+          ? STALE_CHUNK_MESSAGE
+          : `Could not read "${file.name}". Export the report again with Export → Details Only (.xlsx).`,
       });
     } finally {
       setReading(false);
