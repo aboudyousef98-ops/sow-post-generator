@@ -1685,7 +1685,12 @@ export default function BoardTab({
               type="button"
               className={`btn small secondary ${isPresetActive(filters, v) ? 'board-filter-on' : ''}`}
               title={v.title}
-              onClick={() => setFilters({ ...NO_FILTERS, ...v.patch })}
+              onClick={() => {
+                setFilters({ ...NO_FILTERS, ...v.patch });
+                // Only presets that carry a sort touch it — the rest leave
+                // whatever column sort the user set alone.
+                if (v.sort) setSorting(v.sort);
+              }}
             >
               {v.label}
             </button>

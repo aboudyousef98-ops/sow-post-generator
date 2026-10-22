@@ -118,7 +118,7 @@ export default function InstallNotesCard({
         key={def.key}
         label={def.label}
         polishKey={def.key}
-        value={n[field]}
+        value={n[field] ?? ''}
         rows={rows}
         onChange={(v) => setText(field, def.key, v)}
         onKeyDown={onKeyDown}
@@ -221,6 +221,21 @@ export default function InstallNotesCard({
             ))}
           </div>
         </div>
+        {/* SF "Panel Facing Front of House" checkbox (Aboud 2026-10-22).
+            Unticked = No, matching the SF default. */}
+        <div className="field">
+          Panel facing
+          <div className="service-ticks">
+            <label className="service-tick">
+              <input
+                type="checkbox"
+                checked={n.panelFacesFront ?? false}
+                onChange={(e) => setNotes({ panelFacesFront: e.target.checked || undefined })}
+              />
+              Front of house
+            </label>
+          </div>
+        </div>
       </div>
 
       <div className="install-row install-row-even">
@@ -283,6 +298,10 @@ export default function InstallNotesCard({
         {box('specialCases', 3)}
         {box('other', 3)}
       </div>
+
+      {/* Feeds the SF "Site Modification Notes" field together with Special
+          cases (Aboud 2026-10-22) — not printed in the Slack post. */}
+      <div className="note-grid">{box('concretePad', 2)}</div>
     </div>
   );
 }

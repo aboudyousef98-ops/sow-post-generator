@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Designed date automation — mockup</title>
+<style>
+  :root {
+    --bg: #f5f6f8; --card: #ffffff; --line: #e4e7ee; --text: #1f2430;
+    --muted: #7b8294; --blue: #0073ea; --green: #00c875; --purple: #a25ddc;
+    --sky: #0086c0; --amber: #fdab3d; --red: #e2445c;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 "Segoe UI", system-ui, sans-serif;
+    display: flex; justify-content: center; padding: 28px 16px 80px;
+  }
+  .page { width: 100%; max-width: 860px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  .card {
+    background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 20px;
+  }
+  .card h2 { font-size: 17px; margin: 0 0 12px; }
+  .rules { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .rule { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .rule b { display: block; font-size: 14px; margin-bottom: 4px; }
+  .rule span { font-size: 13px; color: var(--muted); }
+  .rule .num {
+    display: inline-flex; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--blue); color: #fff; font-size: 12px; font-weight: 700;
+    align-items: center; justify-content: center; margin-bottom: 8px;
+  }
+  /* compose + board demo */
+  .demo { display: grid; grid-template-columns: 300px 1fr; gap: 16px; }
+  .panel { border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+  .panel h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--muted); margin: 0 0 10px; }
+  select, button.btn {
+    width: 100%; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line);
+    font: inherit; background: #fff; margin-bottom: 10px;
+  }
+  button.btn { cursor: pointer; }
+  button.primary { background: var(--blue); color: #fff; border-color: var(--blue); font-weight: 600; }
+  button.primary:hover { filter: brightness(1.08); }
+  button.ghost { background: #fff; color: var(--text); }
+  .hint { font-size: 12.5px; color: var(--muted); margin: 2px 0 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th { text-align: left; color: var(--muted); font-weight: 600; font-size: 12.5px;
+    padding: 6px 10px; border-bottom: 1px solid var(--line); }
+  td { padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  tr:last-child td { border-bottom: 0; }
+  .pill { display: inline-block; padding: 3px 12px; border-radius: 6px; color: #fff;
+    font-size: 12.5px; font-weight: 600; }
+  .pill.design { background: var(--purple); } .pill.schedule { background: var(--sky); }
+  .date-empty { color: #c3c8d4; }
+  .stamped { background: #e6f9f0 !important; transition: background .3s; }
+  .stamped td:nth-child(3) { color: var(--green); font-weight: 700; }
+  .kept td:nth-child(3)::after {
+    content: " manual — kept"; color: var(--amber); font-size: 11.5px; font-weight: 600;
+  }
+  .badge-auto { font-size: 11px; color: var(--green); font-weight: 700; margin-left: 6px; }
+  /* activity feed */
+  .feed { margin-top: 14px; border-top: 1px dashed var(--line); padding-top: 10px; }
+  .feed h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .4px;
+    color: var(--muted); margin: 0 0 8px; }
+  .feed-item { font-size: 13px; padding: 5px 0; color: var(--text); }
+  .feed-item .who { font-weight: 600; }
+  .feed-item .when { color: var(--muted); font-size: 12px; }
+  .feed-empty { font-size: 13px; color: var(--muted); font-style: italic; }
+  /* backfill */
+  .bf-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+  .bf-head h2 { margin: 0; flex: 1; }
+  .count { background: var(--red); color: #fff; border-radius: 999px; padding: 2px 10px;
+    font-size: 12.5px; font-weight: 700; }
+  .bf-btn { padding: 8px 16px; border-radius: 8px; border: 1px solid var(--blue);
+    background: #fff; color: var(--blue); font: inherit; font-weight: 600; cursor: pointer; }
+  .bf-btn.done { background: var(--green); border-color: var(--green); color: #fff; }
+  .bf-table-wrap { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 10px; }
+  .bf-new { color: var(--green); font-weight: 700; }
+  .arrow { color: var(--muted); padding: 0 6px; }
+  .note { font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+    background: #2b3242; color: #fff; padding: 10px 22px; border-radius: 10px;
+    font-size: 14px; opacity: 0; transition: all .25s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  @media (max-width: 720px) { .demo, .rules { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <h1>Designed date — auto-stamp from Compose</h1>
+  <p class="sub">Interactive mockup · no real data touched · based on the Oct&nbsp;11–21 activity study</p>
+
+  <!-- THE RULES -->
+  <div class="card">
+    <h2>The three rules</h2>
+    <div class="rules">
+      <div class="rule"><span class="num">1</span><b>Fill only when blank</b>
+        <span>Saving a draft stamps the linked project's Designed date — only if it's empty. 35% of your date-sets are "tomorrow" planning; those are never touched.</span></div>
+      <div class="rule"><span class="num">2</span><b>Local day, not UTC</b>
+        <span>The stamp uses the coordinator's local date. 40% of evening saves would otherwise land on yesterday.</span></div>
+      <div class="rule"><span class="num">3</span><b>Manual always wins</b>
+        <span>The column stays editable exactly as today. The stamp is a default, logged in the activity feed like any other change.</span></div>
+    </div>
+  </div>
+
+  <!-- LIVE DEMO -->
+  <div class="card">
+    <h2>Try it — save a draft, watch the board</h2>
+    <div class="demo">
+      <div class="panel">
+        <h3>Compose</h3>
+        <select id="proj"></select>
+        <button class="btn primary" onclick="saveDraft()">💾 Save draft</button>
+        <button class="btn ghost" onclick="resetDemo()">↺ Reset demo</button>
+        <p class="hint" id="hint"></p>
+      </div>
+      <div class="panel">
+        <h3>Board</h3>
+        <table>
+          <thead><tr><th>Project</th><th>Design/Schedule</th><th>Designed date</th></tr></thead>
+          <tbody id="board"></tbody>
+        </table>
+        <div class="feed">
+          <h3>Activity</h3>
+          <div id="feed"><div class="feed-empty">No changes yet — save a draft on the left.</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BACKFILL -->
+  <div class="card">
+    <div class="bf-head">
+      <h2>One-time backfill</h2>
+      <span class="count" id="bfcount">23 projects</span>
+      <button class="bf-btn" id="bfbtn" onclick="runBackfill()">Preview backfill</button>
+    </div>
+    <p class="hint" style="margin:0 0 12px">These live projects have a Compose draft but no Designed date — they're invisible to Daily Progress today. The backfill uses each draft's creation day (matches the real design day in ~89% of cases).</p>
+    <div class="bf-table-wrap">
+      <table>
+        <thead><tr><th>Project</th><th>Phase</th><th>Draft written</th><th>Designed date</th></tr></thead>
+        <tbody id="bftable"></tbody>
+      </table>
+    </div>
+    <p class="note">Mockup only — the real backfill would run once, write through the normal board patch path, and log 23 activity entries ("Designed date — backfilled from draft").</p>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ---- demo data: three projects, one per scenario -----------------------------
+const todayIso = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const tomorrowIso = () => { const d = new Date(Date.now()+86400000); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const us = iso => iso ? iso.slice(5,7)+'/'+iso.slice(8,10)+'/'+iso.slice(0,4) : '';
+
+let demo;
+function initDemo() {
+  demo = [
+    { id:'a', name:'Mike Florez',      phase:'Design',   date:null,          why:'No date → the save STAMPS today ('+us(todayIso())+').' },
+    { id:'b', name:'Susan Stark',      phase:'Design',   date:tomorrowIso(), why:'Planned ahead for tomorrow → the save KEEPS the manual date.' },
+    { id:'c', name:'Christine Burton', phase:'Schedule', date:todayIso(),    why:'Already stamped today → nothing to do.' },
+  ];
+  feed = [];
+}
+let feed = [];
+
+function render() {
+  const sel = document.getElementById('proj');
+  const cur = sel.value;
+  sel.innerHTML = demo.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  if (cur) sel.value = cur;
+  document.getElementById('hint').textContent = demo.find(p => p.id === sel.value).why;
+
+  document.getElementById('board').innerHTML = demo.map(p => `
+    <tr id="row-${p.id}" class="${p.justStamped ? 'stamped' : ''}${p.justKept ? 'kept' : ''}">
+      <td>${p.name}</td>
+      <td><span class="pill ${p.phase.toLowerCase()}">${p.phase}</span></td>
+      <td>${p.date ? us(p.date) + (p.auto ? '<span class="badge-auto">auto</span>' : '') : '<span class="date-empty">—</span>'}</td>
+    </tr>`).join('');
+
+  document.getElementById('feed').innerHTML = feed.length
+    ? feed.map(f => `<div class="feed-item"><span class="who">${f.who}</span> ${f.what} <span class="when">· just now</span></div>`).join('')
+    : '<div class="feed-empty">No changes yet — save a draft on the left.</div>';
+}
+
+function saveDraft() {
+  const id = document.getElementById('proj').value;
+  const p = demo.find(x => x.id === id);
+  demo.forEach(x => { x.justStamped = false; x.justKept = false; });
+  if (!p.date) {
+    p.date = todayIso(); p.auto = true; p.justStamped = true;
+    feed.unshift({ who:'Compose', what:`saved a draft for <b>${p.name}</b> → Designed date set to <b>${us(p.date)}</b> (was blank)` });
+    toast('✓ Draft saved — Designed date stamped: ' + us(p.date));
+  } else {
+    p.justKept = p.date > todayIso();
+    feed.unshift({ who:'Compose', what:`saved a draft for <b>${p.name}</b> → Designed date <b>unchanged</b> (${us(p.date)} was set manually)` });
+    toast('✓ Draft saved — manual Designed date kept (' + us(p.date) + ')');
+  }
+  render();
+}
+
+function resetDemo() { initDemo(); render(); toast('Demo reset'); }
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2600);
+}
+
+document.getElementById('proj') && null;
+
+// ---- backfill: the real 23 rows from the v22 backup study --------------------
+const backfill = [
+  ['Donna Rosenbaum','Design','2026-10-02'], ['Fred Mitchell','Schedule','2026-10-06'],
+  ['James Rowell','Design','2026-10-08'],    ['Arnulfo Sanchez','Design','2026-10-09'],
+  ['Anthony White','Design','2026-10-09'],   ['Patrick Tang','Schedule','2026-10-12'],
+  ['Briggette Jordan','Design','2026-10-12'],['Shikita Deruise','Design','2026-10-13'],
+  ['Arturo Carvajal','Schedule','2026-10-13'],['Alixcia Semexant','Schedule','2026-10-15'],
+  ['Marvin Hopkins','Schedule','2026-10-16'],['Donald Kennedy','Design','2026-10-19'],
+  ['David Crumrine','Design','2026-10-20'],  ['Karen Lynn Kincaid','Schedule','2026-10-20'],
+  ['Ali Dweik 2','Schedule','2026-10-20'],   ['Christine Burton','Schedule','2026-10-21'],
+  ['Ahmed Qaimaqchi','Design','2026-10-21'], ['Marcello Distefano','Design','2026-10-21'],
+  ['Mike Florez','Design','2026-10-21'],     ['William Roberts','Schedule','2026-10-21'],
+  ['Priscilla Baldwin Banks','Design','2026-10-21'], ['Juana Faz','Design','2026-10-21'],
+  ['Alonzo Burbridge','Schedule','2026-10-21'],
+];
+let filled = false;
+function renderBackfill() {
+  document.getElementById('bftable').innerHTML = backfill.map(([n, ph, d]) => `
+    <tr><td>${n}</td><td><span class="pill ${ph.toLowerCase()}">${ph}</span></td><td>${us(d)}</td>
+    <td>${filled ? '<span class="date-empty">—</span><span class="arrow">→</span><span class="bf-new">'+us(d)+'</span>' : '<span class="date-empty">—</span>'}</td></tr>`).join('');
+  document.getElementById('bfbtn').textContent = filled ? '✓ 23 dates filled (preview)' : 'Preview backfill';
+  document.getElementById('bfbtn').classList.toggle('done', filled);
+}
+function runBackfill() { filled = !filled; renderBackfill(); toast(filled ? '23 Designed dates backfilled (preview only)' : 'Preview cleared'); }
+
+initDemo();
+document.getElementById('proj').addEventListener('change', render);
+render(); renderBackfill();
+</script>
+</body>
+</html>

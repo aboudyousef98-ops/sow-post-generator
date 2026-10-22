@@ -62,6 +62,7 @@ export function hasContent(r: PostRecord): boolean {
     n?.walls !== undefined ||
     n?.stories !== undefined ||
     n?.roofRating !== undefined ||
+    n?.panelFacesFront !== undefined ||
     (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }

@@ -115,6 +115,7 @@ export type InstallTextField =
   | 'solarRun'
   | 'batteryRun'
   | 'specialCases'
+  | 'concretePad'
   | 'other';
 
 export interface InstallNotes {
@@ -143,6 +144,18 @@ export interface InstallNotes {
   solarRun: string;
   batteryRun: string;
   specialCases: string;
+  /**
+   * Concrete pad installation feedback → the SF "Site modification notes"
+   * field (Aboud 2026-10-22, SF submission restructure). OPTIONAL on purpose —
+   * records written before this date have no such field and must not need a
+   * migration, same contract as BoardLabel.outOfScope. Read with `?? ''`.
+   */
+  concretePad?: string;
+  /**
+   * SF "Panel Facing Front of House" checkbox (Aboud 2026-10-22). OPTIONAL —
+   * same no-migration contract as concretePad; undefined renders as "No".
+   */
+  panelFacesFront?: boolean;
   /** "Anything else" — free-form, rendered with no label. */
   other: string;
 }

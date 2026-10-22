@@ -17,6 +17,7 @@ export const POLISH_KEYS = [
   'install.solarRun',
   'install.batteryRun',
   'install.specialCases',
+  'install.concretePad',
   'install.other',
   'siteSurvey',
   'design',

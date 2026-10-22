@@ -27,6 +27,8 @@ import {
 } from './lib/api';
 import { boardsOfKind, mergeAhjs, replaceKind } from './lib/ahj';
 import { linkedPosts, mergeBoard } from './lib/board';
+import { isoToUs, todayIso } from './lib/dates';
+import { designStamp } from './lib/designStamp';
 import { mergeExtraWork } from './lib/extraWork';
 import type { ExtraWorkEntry, ExtraWorkState } from './extrawork/types';
 import MobileApp from './mobile/MobileApp';
@@ -429,14 +431,44 @@ export default function App({ session, onLogout }: AppProps = {}) {
   recordsRef.current = records;
   const currentRef = useRef(current);
   currentRef.current = current;
+  const boardRef = useRef(boardState);
+  boardRef.current = boardState;
 
-  /** Write the Compose record into the draft list immediately (local + queued push). */
+  // ---- toasts ------------------------------------------------------------
+
+  const toast = useCallback((text: string, action?: Toast['action']) => {
+    const id = crypto.randomUUID();
+    setToasts((ts) => [...ts, { id, text, action }]);
+    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 5000);
+  }, []);
+
+  /**
+   * Write the Compose record into the draft list immediately (local + queued
+   * push). `stamp: false` is for commits of records the user has not actually
+   * worked on (the openFromBoard prefill) — a prefill must not write a
+   * Designed date to the board.
+   */
   const commitDraft = useCallback(
-    (rec: PostRecord) => {
+    (rec: PostRecord, stamp = true) => {
       setRecords([...recordsRef.current.filter((r) => r.id !== rec.id), rec]);
       saveCurrentId(rec.id);
+      if (!stamp) return;
+      // Designed-date auto-stamp: a saved draft linked to a board project fills
+      // the project's BLANK date with the local day. Fires on every autosave but
+      // stamps at most once (blank-only), and the toast tells the coordinator
+      // the board was written on their behalf.
+      const stamped = designStamp(boardRef.current, rec, todayIso());
+      if (stamped) {
+        const name = boardRef.current.projects.find((p) => p.id === rec.projectId)?.name ?? 'the linked project';
+        // Keep the ref in step immediately: openFromBoard commits twice in one
+        // tick, and a stale ref here would rebuild the board WITHOUT this stamp
+        // and silently drop it on the second commit.
+        boardRef.current = stamped;
+        setBoard(stamped);
+        toast(`Board: Designed date set to ${isoToUs(todayIso())} for ${name}.`);
+      }
     },
-    [setRecords],
+    [setRecords, setBoard, toast],
   );
 
   // Autosave the Compose form (debounced 500 ms). A draft now exists the moment
@@ -487,14 +519,6 @@ export default function App({ session, onLogout }: AppProps = {}) {
     health()
       .then((h) => setAiStatus(h.ok && h.hasKey ? 'ok' : 'off'))
       .catch(() => setAiStatus('off'));
-  }, []);
-
-  // ---- toasts ------------------------------------------------------------
-
-  const toast = useCallback((text: string, action?: Toast['action']) => {
-    const id = crypto.randomUUID();
-    setToasts((ts) => [...ts, { id, text, action }]);
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 5000);
   }, []);
 
   // ---- record lifecycle --------------------------------------------------
@@ -668,7 +692,10 @@ export default function App({ session, onLogout }: AppProps = {}) {
         sf: { ...blank.sf, customerName: titleCaseName(project.name) },
       };
       setCurrent(rec);
-      commitDraft(rec);
+      // stamp: false — a prefilled record is not design work; stamping here
+      // would write today's Designed date on a mere "Open in Compose" click.
+      // The first REAL autosave (the user typed something) stamps as usual.
+      commitDraft(rec, false);
       setTab('compose');
     },
     [openDraft, commitDraft, settings, session, toast],

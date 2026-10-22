@@ -13,6 +13,7 @@ import { noteCheck } from '../lib/api';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
 import type { BoardProject } from '../board/types';
 import type { Ahj, PostRecord, Settings } from '../types';
+import SfSubmissionCard from './SfSubmissionCard';
 import TitleBlockCard from './TitleBlockCard';
 
 interface Props {
@@ -49,6 +50,9 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [titleBlockOpen, setTitleBlockOpen] = useState(false);
+  // SF per-field submission replaced the Slack post as the team's submission
+  // method (Aboud 2026-10-22). Slack stays one click away for the transition.
+  const [view, setView] = useState<'sf' | 'slack'>('sf');
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Click anywhere else to dismiss the ··· menu.
@@ -262,7 +266,30 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
 
       {titleBlockOpen && <TitleBlockCard record={record} boardProjects={boardProjects} toast={toast} />}
 
-      <div className="card preview-card">
+      <div className="output-view-toggle" role="tablist" aria-label="Output format">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'sf'}
+          className={`btn small ${view === 'sf' ? 'primary' : 'secondary'}`}
+          onClick={() => setView('sf')}
+        >
+          Salesforce fields
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={view === 'slack'}
+          className={`btn small ${view === 'slack' ? 'primary' : 'secondary'}`}
+          onClick={() => setView('slack')}
+        >
+          Slack post
+        </button>
+      </div>
+
+      {view === 'sf' && <SfSubmissionCard record={record} settings={settings} toast={toast} />}
+
+      <div className="card preview-card" style={view === 'sf' ? { display: 'none' } : undefined}>
         <div className="preview-head">
           <span className="section-label">Slack preview</span>
           {editing === null ? (

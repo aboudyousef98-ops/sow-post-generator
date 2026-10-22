@@ -93,3 +93,35 @@ describe('mergeBoard', () => {
     expect(merged.projects[0].updatedAt).toBe('2026-10-18T10:00:00Z');
   });
 });
+
+// The server cap was left at 1000 when the client went to 5000 (2026-10-21) —
+// every merge silently re-truncated history the client thought it had kept.
+describe('ACTIVITY_CAP parity (2026-10-22)', () => {
+  test('a merge holds well past the old 1000 cap', () => {
+    const activity = Array.from({ length: 1500 }, (_, i) => ({
+      id: `a${i}`,
+      projectId: 'p1',
+      actor: 'Aboud Yousef',
+      action: 'update',
+      at: new Date(1700000000000 + i * 1000).toISOString(),
+    }));
+    const merged = mergeBoard({ projects: [], labels: [], activity, updates: [] }, {
+      projects: [],
+      labels: [],
+      activity: [],
+      updates: [],
+    });
+    expect(merged.activity).toHaveLength(1500);
+  });
+});
+
+// Finding from the 2026-10-22 pre-deploy audit: PutSchema kept max(2000) when
+// the cap went to 5000. Clients PUT the whole board, so past 2000 entries EVERY
+// board save (projects included) would 400 — total silent write failure.
+describe('PutSchema admits a full capped activity list', () => {
+  test('a board PUT carrying 5000 activity entries parses', () => {
+    const activity = Array.from({ length: 5000 }, (_, i) => ({ id: `a${i}`, at: '2026-10-22T00:00:00Z' }));
+    const parsed = PutSchema.safeParse({ projects: [], labels: [], activity, updates: [] });
+    expect(parsed.success).toBe(true);
+  });
+});

@@ -226,13 +226,24 @@ describe('groupProjects', () => {
 });
 
 describe('viewPresets', () => {
-  it('offers All active, Mine, Needs scheduling and Needs attention', () => {
-    expect(viewPresets(LABELS).map((v) => v.id)).toEqual(['all', 'mine', 'needs-schedule', 'attention']);
+  it('offers All active, Mine, Needs scheduling, Scheduled and Needs attention', () => {
+    expect(viewPresets(LABELS).map((v) => v.id)).toEqual(['all', 'mine', 'needs-schedule', 'scheduled', 'attention']);
   });
 
   it('hides Needs scheduling when the Design label is gone', () => {
     const without = LABELS.filter((l) => l.id !== 'phase-design');
     expect(viewPresets(without).map((v) => v.id)).not.toContain('needs-schedule');
+  });
+
+  it('Scheduled filters to the Schedule phase and sorts by install date, soonest first', () => {
+    const scheduled = viewPresets(LABELS).find((v) => v.id === 'scheduled')!;
+    expect(scheduled.patch).toEqual({ phaseIds: ['phase-schedule'] });
+    expect(scheduled.sort).toEqual([{ id: 'installDate', desc: false }]);
+  });
+
+  it('hides Scheduled when the Schedule label is gone', () => {
+    const without = LABELS.filter((l) => l.id !== 'phase-schedule');
+    expect(viewPresets(without).map((v) => v.id)).not.toContain('scheduled');
   });
 
   it('uses the team’s own label name in the Needs-scheduling title', () => {

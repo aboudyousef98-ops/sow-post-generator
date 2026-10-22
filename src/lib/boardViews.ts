@@ -205,6 +205,11 @@ export interface ViewPreset {
   title: string;
   /** Applied on top of NO_FILTERS — a preset always starts from a clean slate. */
   patch: Partial<Filters>;
+  /**
+   * Column sort to apply alongside the filters (TanStack SortingState shape).
+   * Presets without one leave whatever sort is already on the table alone.
+   */
+  sort?: { id: string; desc: boolean }[];
 }
 
 /**
@@ -224,6 +229,17 @@ export function viewPresets(labels: BoardLabel[]): ViewPreset[] {
       label: `Needs scheduling`,
       title: `Still in ${design.name} — no schedule yet`,
       patch: { phaseIds: [design.id] },
+    });
+  }
+  const schedule = labelsFor(labels, 'phase').find((l) => l.id === 'phase-schedule');
+  if (schedule) {
+    presets.push({
+      id: 'scheduled',
+      label: 'Scheduled',
+      title: `In ${schedule.name} — soonest install first`,
+      patch: { phaseIds: [schedule.id] },
+      // Rows with no install date yet sort last (the column's sortUndefined).
+      sort: [{ id: 'installDate', desc: false }],
     });
   }
   presets.push({

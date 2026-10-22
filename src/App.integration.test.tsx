@@ -66,9 +66,9 @@ describe('Compose acceptance flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /Level 3/ }));
     expect(screen.getByText(/MPU, FSU, FTP, relocation ≤ 20 ft/)).toBeTruthy();
     // Wording per the 2026 standard's own table, "1.5 to 2" not "1.5–2" (spec/10 §12.2).
-    // Two hits: the helper text under the select, and the post itself, which
-    // now prints the planning window as well (spec/10 §12.1).
-    expect(screen.getAllByText(/1\.5 to 2 crew-days/)).toHaveLength(2);
+    // Three hits: the helper text under the select, the post itself (spec/10
+    // §12.1), and the SF "Installation Window and Planning" value (2026-10-22).
+    expect(screen.getAllByText(/1\.5 to 2 crew-days/)).toHaveLength(3);
 
     // Preview contains the canonical lines.
     const preview = container.querySelector('.preview')!;
@@ -830,9 +830,13 @@ describe('manual edit of the post', () => {
   });
 
   const preview = () => (document.querySelector('.preview') as HTMLElement)?.textContent ?? '';
+  // The SF per-field panel is the default output since 2026-10-22; the Slack
+  // card (and its Manual edit button) lives behind the "Slack post" tab.
+  const openSlackTab = () => fireEvent.click(screen.getByRole('tab', { name: 'Slack post' }));
 
   it('typed text replaces the generated post, and the form stops driving it', async () => {
     render(<App />);
+    openSlackTab();
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
     expect(preview()).toContain('Norca Garcia');
 
@@ -850,6 +854,7 @@ describe('manual edit of the post', () => {
 
   it('Cancel leaves the generated post alone', () => {
     render(<App />);
+    openSlackTab();
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
     fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
     fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'throw this away' } });
@@ -861,6 +866,7 @@ describe('manual edit of the post', () => {
 
   it('"Revert to generated" always gets the real post back', async () => {
     render(<App />);
+    openSlackTab();
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
     fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
     fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'hand written' } });
@@ -876,6 +882,7 @@ describe('manual edit of the post', () => {
 
   it('survives a reload, like everything else on the record', async () => {
     const { unmount } = render(<App />);
+    openSlackTab();
     fireEvent.change(screen.getByLabelText(/Customer name/i), { target: { value: 'Norca Garcia' } });
     fireEvent.click(screen.getByRole('button', { name: /Manual edit/i }));
     fireEvent.change(screen.getByLabelText('Post text'), { target: { value: 'survives the reload' } });

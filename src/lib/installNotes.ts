@@ -87,6 +87,7 @@ export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; lab
   { key: 'install.solarRun', field: 'solarRun', label: 'Solar run' },
   { key: 'install.batteryRun', field: 'batteryRun', label: 'Battery run' },
   { key: 'install.specialCases', field: 'specialCases', label: 'Special cases' },
+  { key: 'install.concretePad', field: 'concretePad', label: 'Concrete pad installation' },
   { key: 'install.other', field: 'other', label: 'Anything else' },
 ];
 
@@ -110,6 +111,7 @@ export function emptyInstallNotes(): InstallNotes {
     solarRun: '',
     batteryRun: '',
     specialCases: '',
+    concretePad: '',
     other: '',
   };
 }
@@ -118,7 +120,8 @@ export function emptyInstallNotes(): InstallNotes {
 export function rawTextFor(r: PostRecord, key: PolishKey): string {
   if (key === 'siteSurvey' || key === 'design' || key === 'homeowner') return r.notes[key];
   const f = INSTALL_TEXT_FIELDS.find((x) => x.key === key);
-  return f && r.installNotes ? r.installNotes[f.field] : '';
+  // `?? ''` — optional fields (concretePad) are absent on pre-2026-10-22 records.
+  return f && r.installNotes ? (r.installNotes[f.field] ?? '') : '';
 }
 
 /** Drop terminal punctuation so joined clauses read as one sentence. */
@@ -163,8 +166,16 @@ const field = (f: InstallTextField) => INSTALL_TEXT_FIELDS.find((x) => x.field =
 /**
  * The `Installation Notes` bullet's sub-bullets, in the order spec/10 §3.1
  * fixes. `utility` (sf.utility) feeds the automatic disconnect-duration line.
+ * `omit` skips labelled boxes that land in their own Salesforce field, so the
+ * SF "Installation window and planning" blob states each fact exactly once
+ * (sfSubmission.ts); the Slack post passes nothing and keeps its full shape.
  */
-export function installNoteLines(n: InstallNotes | undefined, p: PolishState, utility?: string): string[] {
+export function installNoteLines(
+  n: InstallNotes | undefined,
+  p: PolishState,
+  utility?: string,
+  omit: InstallTextField[] = [],
+): string[] {
   if (!n) return [];
   const lines: string[] = [];
 
@@ -197,8 +208,9 @@ export function installNoteLines(n: InstallNotes | undefined, p: PolishState, ut
 
   // 2. Labelled free text. (mainDisconnectLocation retired, meeting 2026-10-04.)
   for (const f of ['batteryLocation', 'specialCases'] as InstallTextField[]) {
+    if (omit.includes(f)) continue;
     const def = field(f);
-    lines.push(...labelled(def.label, n[f], def.key, p));
+    lines.push(...labelled(def.label, n[f] ?? '', def.key, p));
   }
 
   // 3. "Anything else" — unlabelled, one bullet per line, exactly as the old
@@ -216,6 +228,6 @@ export function conduitRunLines(n: InstallNotes | undefined, p: PolishState): Po
   const runs: InstallTextField[] = ['serviceRun', 'loadRun', 'solarRun', 'batteryRun'];
   return runs.flatMap((f) => {
     const def = field(f);
-    return labelledRun(def.label, n[f], def.key, p);
+    return labelledRun(def.label, n[f] ?? '', def.key, p);
   });
 }
