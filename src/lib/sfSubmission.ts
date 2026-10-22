@@ -73,10 +73,11 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
 
   // Classification + the install-note sentences + conduit raceway, one fact per
   // line. Battery location, special cases, stories and the disconnect duration
-  // are omitted — each lands in its own SF field (see the header note), and the
-  // clearance boilerplate belongs to Clearance and Homeowner Preparation even
-  // if a coordinator types it into a notes box (Aboud 2026-10-22).
-  const notInWindow = /clearance requirements have been met/i;
+  // are omitted — each lands in its own SF field (see the header note). The
+  // clearance boilerplate is this blob's FINAL sentence (Aboud 2026-10-22,
+  // matching his filled SF record) — strays typed into a notes box are filtered
+  // so it appears exactly once, at the end.
+  const clearanceRe = /clearance requirements have been met/i;
   const windowParts = [
     `Level ${record.level} – ${LEVEL_NAMES[record.level]}.\nPlanning window: ${LEVEL_INFO[record.level].window}.`,
   ];
@@ -85,17 +86,17 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
     'specialCases',
     'stories',
     'disconnectDuration',
-  ]).filter((l) => !notInWindow.test(l));
+  ]).filter((l) => !clearanceRe.test(l));
   if (noteSentences.length) windowParts.push(`${underline('Installation Notes')}\n${dashed(noteSentences)}`);
-  const runs = conduitRunLines(n, record).flatMap(runLines).filter((l) => !notInWindow.test(l));
+  const runs = conduitRunLines(n, record).flatMap(runLines).filter((l) => !clearanceRe.test(l));
   if (runs.length) windowParts.push(`${underline('Conduit Raceway')}\n${runs.join('\n')}`);
+  windowParts.push(CLEARANCE_LINE);
 
   const stories =
     n?.stories === 'other' ? n.storiesOther.trim() : n?.stories !== undefined ? String(n.stories) : '';
 
   const duration = n?.disconnectDuration ?? disconnectDurationFor(n, record.sf.utility);
 
-  const homeowner = boxLines(record, record.notes.homeowner, 'homeowner');
   const siteMod = [
     ...boxLines(record, n?.concretePad, 'install.concretePad'),
     ...boxLines(record, n?.specialCases, 'install.specialCases'),
@@ -126,7 +127,9 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
     {
       id: 'clearanceHomeowner',
       label: 'Clearance and Homeowner Preparation',
-      value: listy([CLEARANCE_LINE, ...homeowner]),
+      // Homeowner notes only — the clearance boilerplate closes the window blob
+      // instead (Aboud 2026-10-22). Defaults to 'No feedback.' like the post.
+      value: listy(effectiveNoteLines(record, 'homeowner', settings).map(punctuate)),
       multiline: true,
     },
     { id: 'stories', label: 'Number of Stories', value: stories, copy: false },

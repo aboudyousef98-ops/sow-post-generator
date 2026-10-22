@@ -126,6 +126,8 @@ describe('Installation Window and Planning', () => {
     // (Aboud 2026-10-22 review) — stated once, not inside this blob.
     expect(v).not.toContain('story house');
     expect(v).not.toContain('power disconnect');
+    // The clearance boilerplate closes the blob (Aboud 2026-10-22).
+    expect(v.endsWith('All required clearance requirements have been met.')).toBe(true);
   });
 
   it('a multi-point conduit run nests its points with indented dashes', () => {
@@ -149,7 +151,7 @@ describe('Installation Window and Planning', () => {
     expect(fieldValue(rec(), 'window')).not.toContain('Conduit Raceway');
   });
 
-  it('the clearance boilerplate never appears in the window blob, even typed into a notes box', () => {
+  it('the clearance boilerplate appears EXACTLY once — as the final sentence, even when typed into a notes box', () => {
     const r = rec({
       installNotes: {
         ...emptyInstallNotes(),
@@ -158,7 +160,8 @@ describe('Installation Window and Planning', () => {
     });
     const v = fieldValue(r, 'window');
     expect(v).toContain('- Attic run.');
-    expect(v).not.toMatch(/clearance requirements/i);
+    expect(v.match(/clearance requirements have been met/gi)).toHaveLength(1);
+    expect(v.endsWith('All required clearance requirements have been met.')).toBe(true);
   });
 });
 
@@ -187,12 +190,12 @@ describe('merged note fields', () => {
     );
   });
 
-  it('clearance + homeowner: boilerplate alone when no homeowner note, dashed list when merged', () => {
-    expect(fieldValue(rec(), 'clearanceHomeowner')).toBe('All required clearance requirements have been met.');
+  it('clearance/homeowner field carries homeowner notes ONLY — the boilerplate moved to the window blob', () => {
+    // No homeowner note → the team default, same as the post.
+    expect(fieldValue(rec(), 'clearanceHomeowner')).toBe('No feedback.');
     const r = rec({ notes: { layout: '', siteSurvey: '', design: '', homeowner: 'Clear the garage shelves' } });
-    expect(fieldValue(r, 'clearanceHomeowner')).toBe(
-      '- All required clearance requirements have been met.\n- Clear the garage shelves.',
-    );
+    expect(fieldValue(r, 'clearanceHomeowner')).toBe('Clear the garage shelves.');
+    expect(fieldValue(r, 'clearanceHomeowner')).not.toMatch(/clearance requirements/i);
   });
 
   it('site modification notes = concrete pad feedback + special cases, dashed when several', () => {
