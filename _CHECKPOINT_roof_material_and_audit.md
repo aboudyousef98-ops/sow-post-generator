@@ -1,5 +1,9 @@
 # CHECKPOINT — Roof material field + SF field-placement audit tool
-> Date: 2026-10-27 | Status: built + tested locally, NOT deployed (waiting for Aboud's field audit)
+> Date: 2026-10-27 | Status: DEPLOYED (commit `fbfff70`, deploy `6ae0daf4`).
+> Backup `_versions/v30-live-backup-2026-10-27/` taken BEFORE deploy; all five
+> stores re-pulled AFTER and byte-identical. Live bundle verified: new strings
+> present, no `changeme` token. Gate was green except the known pre-existing
+> flaky tests (fail MORE on clean main — load-dependent, documented below).
 
 ## What was built
 
