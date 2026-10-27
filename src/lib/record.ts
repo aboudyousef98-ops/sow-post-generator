@@ -56,12 +56,14 @@ export function hasContent(r: PostRecord): boolean {
     ...Object.values(r.notes),
     ...INSTALL_TEXT_FIELDS.map((f) => n?.[f.field]),
     n?.storiesOther,
+    n?.roofMaterialOther,
     ...(n?.orientations ?? []),
   ];
   const dropdownChosen =
     n?.walls !== undefined ||
     n?.stories !== undefined ||
     n?.roofRating !== undefined ||
+    n?.roofMaterial !== undefined ||
     n?.panelFacesFront !== undefined ||
     (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;

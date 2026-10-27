@@ -212,6 +212,43 @@ describe('InstallNotesCard', () => {
     expect(screen.getByText(/do not install/i)).toBeTruthy();
   });
 
+  it('roof material: Metal and Clay tile flag the conduit rework; Shingle does not (Aboud 2026-10-27)', () => {
+    render(<Harness />);
+    const pick = (v: string) =>
+      fireEvent.change(screen.getByLabelText(/^Roof material/i), { target: { value: v } });
+
+    pick('metal');
+    expect(screen.getByText(/Remove Solar junction box/i)).toBeTruthy();
+    expect(screen.getByText(/Metal roof/i)).toBeTruthy();
+
+    pick('clay-tile');
+    expect(screen.getByText(/Remove Solar junction box/i)).toBeTruthy();
+
+    pick('shingle');
+    expect(screen.queryByText(/Remove Solar junction box/i)).toBeNull();
+  });
+
+  it('roof material "Others…" reveals a describe box and keeps its text when toggled away and back', () => {
+    render(<Harness />);
+    const pick = (v: string) =>
+      fireEvent.change(screen.getByLabelText(/^Roof material/i), { target: { value: v } });
+
+    pick('other');
+    fireEvent.change(screen.getByLabelText(/Describe the roof material/i), {
+      target: { value: 'Flat TPO membrane' },
+    });
+    // No flag for Others — only metal / clay tile trigger the rework warning.
+    expect(screen.queryByText(/Remove Solar junction box/i)).toBeNull();
+
+    pick('tile');
+    expect(screen.queryByLabelText(/Describe the roof material/i)).toBeNull();
+
+    pick('other');
+    expect((screen.getByLabelText(/Describe the roof material/i) as HTMLInputElement).value).toBe(
+      'Flat TPO membrane',
+    );
+  });
+
   it('a migrated pre-Phase-7 draft reopens with its old text in "Anything else"', () => {
     const legacy: PostRecord = {
       ...blankRecord('Aboud Yousef', defaultSettings()),

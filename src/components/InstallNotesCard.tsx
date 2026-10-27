@@ -9,8 +9,12 @@ import {
   DURATION_WORD,
   emptyInstallNotes,
   INSTALL_TEXT_FIELDS,
+  needsRoofConduitRework,
   ORIENTATIONS,
+  ROOF_CONDUIT_REWORK,
+  ROOF_MATERIALS,
   roofBand,
+  roofMaterialLabel,
   SERVICE_WORK,
   servicesOf,
 } from '../lib/installNotes';
@@ -19,6 +23,7 @@ import type {
   Orientation,
   PolishKey,
   PostRecord,
+  RoofMaterial,
   RoofRating,
   ServiceWork,
   Settings,
@@ -255,6 +260,33 @@ export default function InstallNotesCard({
             ))}
           </select>
         </label>
+        <label className="field">
+          Roof material
+          <select
+            value={n.roofMaterial ?? ''}
+            onChange={(e) =>
+              setNotes({ roofMaterial: (e.target.value || undefined) as RoofMaterial | undefined })
+            }
+          >
+            <option value="">—</option>
+            {ROOF_MATERIALS.map((m) => (
+              <option key={m.value} value={m.value}>
+                {m.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {n.roofMaterial === 'other' && (
+          <label className="field" style={{ flex: '1 1 200px' }}>
+            Describe the roof material
+            <input
+              type="text"
+              value={n.roofMaterialOther ?? ''}
+              placeholder="e.g. Flat TPO membrane"
+              onChange={(e) => setNotes({ roofMaterialOther: e.target.value })}
+            />
+          </label>
+        )}
         {/* Defaults to Automatic (follows the ticks/utility); picking a value
             pins it (revision 2026-10-05: "if needed we change"). */}
         <label className="field">
@@ -285,6 +317,13 @@ export default function InstallNotesCard({
           {isoToUs(record.sf.installScheduledDate)}) — alert the team.
         </p>
       )}
+      {/* Metal / clay-tile conduit rework (Aboud 2026-10-27). Display-only,
+          like the aluminum-wiring banner — it is never posted. */}
+      {needsRoofConduitRework(n) && (
+        <p className="roof-warning">
+          <strong>⚠ {roofMaterialLabel(n)} roof:</strong> {ROOF_CONDUIT_REWORK}
+        </p>
+      )}
 
       {/* Two-up from here down (Phase 8, Option A). One box per row made the
           form roughly twice as tall as it needed to be.
@@ -299,8 +338,9 @@ export default function InstallNotesCard({
         {box('other', 3)}
       </div>
 
-      {/* Feeds the SF "Site Modification Notes" field together with Special
-          cases (Aboud 2026-10-22) — not printed in the Slack post. */}
+      {/* Prints as "Concrete pads will be installed …" inside the install
+          notes / SF window blob (2026-10-27 audit — moved out of the SF Site
+          Modification Notes field). */}
       <div className="note-grid">{box('concretePad', 2)}</div>
     </div>
   );

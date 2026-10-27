@@ -24,12 +24,12 @@ describe('buildSfSubmission — field list', () => {
       'panelFacesFront',
       'window',
       'clearanceHomeowner',
-      // right column, top to bottom (Wiring Route is filled by hand in SF)
+      // right column, top to bottom (Wiring Route and Site Modification Notes
+      // are filled by hand in SF — 2026-10-27 audit moved the pad to the blob)
       'stories',
       'outageDuration',
       'installDays',
       // other SF sections
-      'siteModification',
       'siteSurvey',
       'design',
     ]);
@@ -47,7 +47,6 @@ describe('buildSfSubmission — field list', () => {
     expect(copyFlags.window).toBe(true);
     expect(copyFlags.batteryLocation).toBe(true);
     expect(copyFlags.clearanceHomeowner).toBe(true);
-    expect(copyFlags.siteModification).toBe(true);
   });
 
   it('uses the EXACT Salesforce labels', () => {
@@ -60,7 +59,6 @@ describe('buildSfSubmission — field list', () => {
     expect(labels.panelFacesFront).toBe('Panel Facing Front of House');
     expect(labels.batteryLocation).toBe('Battery and Equipment Location');
     expect(labels.clearanceHomeowner).toBe('Clearance and Homeowner Preparation');
-    expect(labels.siteModification).toBe('Site Modification Notes');
   });
 });
 
@@ -116,7 +114,9 @@ describe('Installation Window and Planning', () => {
     // Sections carry a dashed underline; lines carry "- " bullets — formatting
     // that survives Salesforce's plain-text fields.
     expect(v).toContain('Installation Notes\n------------------');
-    expect(v).toContain('- Installation on one wall (East).');
+    // Walls are NOT in the blob (2026-10-27 audit) — the Battery and Equipment
+    // Location field already states them.
+    expect(v).not.toContain('Installation on one wall');
     expect(v).toContain('- This project requires an MPU.');
     expect(v).toContain('- Roof rating: 8/10 (Good)');
     expect(v).toContain('Conduit Raceway\n---------------');
@@ -166,14 +166,21 @@ describe('Installation Window and Planning', () => {
 });
 
 describe('merged note fields', () => {
-  it('battery location uses the polished text when enabled', () => {
+  it('battery location reads "Batteries will be installed …" and uses the polished text when enabled', () => {
     const r = rec({
-      installNotes: { ...emptyInstallNotes(), batteryLocation: 'garage raw' },
-      polished: { 'install.batteryLocation': 'Polished garage wall' },
+      installNotes: { ...emptyInstallNotes(), batteryLocation: 'on the garage left wall' },
+      polished: { 'install.batteryLocation': 'On the left wall of the garage' },
     });
-    expect(fieldValue(r, 'batteryLocation')).toBe('Polished garage wall.');
+    expect(fieldValue(r, 'batteryLocation')).toBe('Batteries will be installed on the left wall of the garage.');
     r.usePolished['install.batteryLocation'] = false;
-    expect(fieldValue(r, 'batteryLocation')).toBe('garage raw.');
+    expect(fieldValue(r, 'batteryLocation')).toBe('Batteries will be installed on the garage left wall.');
+  });
+
+  it('a box that already says "Batteries…" is not double-prefixed', () => {
+    const r = rec({
+      installNotes: { ...emptyInstallNotes(), batteryLocation: 'Batteries go inside the garage' },
+    });
+    expect(fieldValue(r, 'batteryLocation')).toBe('Batteries go inside the garage.');
   });
 
   it('battery AND equipment: the equipment-walls sentence combines with the battery location', () => {
@@ -182,11 +189,11 @@ describe('merged note fields', () => {
         ...emptyInstallNotes(),
         walls: 2,
         orientations: ['East', 'Interior - Garage'],
-        batteryLocation: 'Batteries inside the garage',
+        batteryLocation: 'inside the garage',
       },
     });
     expect(fieldValue(r, 'batteryLocation')).toBe(
-      '- Equipment on two walls (East, Interior - Garage).\n- Batteries inside the garage.',
+      '- Equipment will be installed on two walls (East, Interior - Garage).\n- Batteries will be installed inside the garage.',
     );
   });
 
@@ -198,23 +205,29 @@ describe('merged note fields', () => {
     expect(fieldValue(r, 'clearanceHomeowner')).not.toMatch(/clearance requirements/i);
   });
 
-  it('site modification notes = concrete pad feedback only (special cases moved to the window blob)', () => {
+  it('concrete pad prints in the window blob as "Concrete pads will be installed …", BEFORE "anything else"; special cases prints AFTER it (2026-10-27 audit)', () => {
     const r = rec({
       installNotes: {
         ...emptyInstallNotes(),
-        concretePad: 'Pads can extend past the left edge',
+        concretePad: 'On the east side of the house',
+        other: 'Attic run',
         specialCases: 'No AL wires in Missouri City',
       },
     });
-    expect(fieldValue(r, 'siteModification')).toBe('Pads can extend past the left edge.');
-    expect(fieldValue(r, 'window')).toContain('- Special cases: No AL wires in Missouri City.');
+    const v = fieldValue(r, 'window');
+    expect(v).toContain(
+      '- Concrete pads will be installed on the east side of the house.\n- Attic run.\n- Special cases: No AL wires in Missouri City.',
+    );
+    // The Site Modification Notes field is no longer offered at all.
+    expect(buildSfSubmission(r, defaultSettings()).find((f) => f.id === 'siteModification')).toBeUndefined();
   });
 
-  it('site modification survives a pre-2026-10-22 record with no concretePad key', () => {
+  it('a pre-2026-10-22 record with no concretePad key still builds, with no pad line', () => {
     const notes = { ...emptyInstallNotes(), specialCases: 'Old record case' };
     delete (notes as Record<string, unknown>).concretePad;
-    expect(fieldValue(rec({ installNotes: notes }), 'siteModification')).toBe('');
-    expect(fieldValue(rec({ installNotes: notes }), 'window')).toContain('- Special cases: Old record case.');
+    const v = fieldValue(rec({ installNotes: notes }), 'window');
+    expect(v).not.toContain('Concrete pads');
+    expect(v).toContain('- Special cases: Old record case.');
   });
 
   it('site survey / design feedback fall back to the team defaults, like the post', () => {

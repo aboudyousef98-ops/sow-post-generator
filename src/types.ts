@@ -99,6 +99,10 @@ export type ServiceWork = 'MPU' | 'FSU' | 'FTP';
  * 9–10 Prime · 7–8 Good · 5–6 Conditional · 3–4 Poor · 1–2 Unviable. */
 export type RoofRating = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
 
+/** Roof material picklist (Aboud 2026-10-27). Metal and clay tile trigger the
+ * conduit-rework flag in the form — see needsRoofConduitRework(). */
+export type RoofMaterial = 'shingle' | 'metal' | 'clay-tile' | 'tile' | 'other';
+
 /**
  * One value under a post bullet. A plain string is a single sub-bullet; the
  * object form carries its own points beneath it, which is how a conduit run
@@ -135,6 +139,13 @@ export interface InstallNotes {
    * (derived from services/utility — see disconnectDurationFor). */
   disconnectDuration?: '1-2' | '4-6';
   roofRating?: RoofRating;
+  /**
+   * Roof material (Aboud 2026-10-27). OPTIONAL — same no-migration contract as
+   * concretePad: records written before this date have no such field.
+   */
+  roofMaterial?: RoofMaterial;
+  /** Free text, rendered only when `roofMaterial === 'other'`. Read with `?? ''`. */
+  roofMaterialOther?: string;
   batteryLocation: string;
   /** @deprecated Meeting 2026-10-04 — removed from the form and the post. Kept so stored drafts still parse. */
   mainDisconnectLocation: string;
@@ -145,8 +156,9 @@ export interface InstallNotes {
   batteryRun: string;
   specialCases: string;
   /**
-   * Concrete pad installation feedback → the SF "Site modification notes"
-   * field (Aboud 2026-10-22, SF submission restructure). OPTIONAL on purpose —
+   * Concrete pad installation feedback → "Concrete pads will be installed …"
+   * inside the install notes (2026-10-27 audit; until then it fed the SF
+   * "Site modification notes" field). OPTIONAL on purpose —
    * records written before this date have no such field and must not need a
    * migration, same contract as BoardLabel.outOfScope. Read with `?? ''`.
    */

@@ -12,6 +12,7 @@ import type {
   PolishKey,
   PostRecord,
   PostValue,
+  RoofMaterial,
   RoofRating,
   ServiceWork,
 } from '../types';
@@ -88,6 +89,35 @@ export function roofBand(rating: RoofRating): { name: string; outcome: string } 
   if (rating >= 3) return { name: 'Poor', outcome: 'the roof must be repaired or replaced before mounting' };
   return { name: 'Unviable', outcome: 'do not install' };
 }
+
+/** Roof material picklist, in the form's dropdown order (Aboud 2026-10-27). */
+export const ROOF_MATERIALS: { value: RoofMaterial; label: string }[] = [
+  { value: 'shingle', label: 'Shingle' },
+  { value: 'metal', label: 'Metal' },
+  { value: 'clay-tile', label: 'Clay tile' },
+  { value: 'tile', label: 'Tile' },
+  { value: 'other', label: 'Others…' },
+];
+
+/** The picked material's display label; 'other' resolves to the free text. */
+export function roofMaterialLabel(n: InstallNotes): string {
+  if (!n.roofMaterial) return '';
+  if (n.roofMaterial === 'other') return (n.roofMaterialOther ?? '').trim();
+  return ROOF_MATERIALS.find((m) => m.value === n.roofMaterial)!.label;
+}
+
+/**
+ * Metal and clay-tile roofs need the conduit rework (Aboud 2026-10-27) — the
+ * form flags them with ROOF_CONDUIT_REWORK in a yellow box. Display-only, like
+ * the aluminum-wiring banner: it tells the coordinator, it is never posted.
+ */
+export function needsRoofConduitRework(n: InstallNotes | undefined): boolean {
+  return n?.roofMaterial === 'metal' || n?.roofMaterial === 'clay-tile';
+}
+
+export const ROOF_CONDUIT_REWORK =
+  'Remove Solar junction box, and add LB condulet to go over the roof, ' +
+  'add extra 3/4" conduits with fitting, hangers, compressions to this job.';
 
 /** Every free-text box inside InstallNotes, with its polish key and post label. */
 export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; label: string }[] = [
@@ -176,7 +206,32 @@ const field = (f: InstallTextField) => INSTALL_TEXT_FIELDS.find((x) => x.field =
 
 /** What `installNoteLines` may leave out — labelled boxes AND derived sentences
  * that land in their own Salesforce field (sfSubmission.ts states each fact once). */
-export type InstallNoteOmit = InstallTextField | 'stories' | 'disconnectDuration';
+export type InstallNoteOmit = InstallTextField | 'stories' | 'disconnectDuration' | 'walls';
+
+/**
+ * A prefixed sentence (Aboud 2026-10-27 audit): the box holds the where/what
+ * ("on the east side of the house"), the line reads "<lead> on the east side
+ * of the house." Several lines join with "; " into the one sentence. A
+ * designer who already wrote the subject ("Concrete pads go past the edge")
+ * is not double-prefixed — `already` matching the first clause keeps their
+ * wording as typed.
+ */
+export function leadSentence(
+  lead: string,
+  already: RegExp,
+  raw: string,
+  key: PolishKey,
+  p: PolishState,
+): string[] {
+  const parts = effectiveText(raw, key, p).split('\n').map(stripBullet).map(clause).filter(Boolean);
+  if (!parts.length) return [];
+  if (already.test(parts[0])) return [`${parts.join('; ')}.`];
+  // Mid-sentence, the box text loses its leading capital — unless the word is
+  // all-caps (an acronym or model name like "TPO").
+  const first = parts[0];
+  const decap = /^[A-Z][a-z]/.test(first) ? first[0].toLowerCase() + first.slice(1) : first;
+  return [`${lead} ${[decap, ...parts.slice(1)].join('; ')}.`];
+}
 
 /**
  * The `Installation Notes` bullet's sub-bullets, in the order spec/10 §3.1
@@ -194,9 +249,12 @@ export function installNoteLines(
   if (!n) return [];
   const lines: string[] = [];
 
-  // 1. Dropdown-derived sentences.
-  const walls = wallsSentence(n);
-  if (walls) lines.push(walls);
+  // 1. Dropdown-derived sentences. Walls can be omitted (2026-10-27 audit):
+  //    the SF Battery and Equipment Location field already states them.
+  if (!omit.includes('walls')) {
+    const walls = wallsSentence(n);
+    if (walls) lines.push(walls);
+  }
   if (!omit.includes('stories')) {
     if (n.stories === 'other') {
       if (n.storiesOther.trim()) lines.push(punctuate(n.storiesOther));
@@ -222,17 +280,35 @@ export function installNoteLines(
     const band = roofBand(n.roofRating);
     lines.push(`Roof rating: ${n.roofRating}/10 (${band.name}) — ${band.outcome}.`);
   }
+  // "Others…" with its box left blank drops the line, mirroring storiesOther.
+  const material = roofMaterialLabel(n);
+  if (material) lines.push(`Roof material: ${clause(material)}.`);
 
-  // 2. Labelled free text. (mainDisconnectLocation retired, meeting 2026-10-04.)
-  for (const f of ['batteryLocation', 'specialCases'] as InstallTextField[]) {
-    if (omit.includes(f)) continue;
-    const def = field(f);
-    lines.push(...labelled(def.label, n[f] ?? '', def.key, p));
+  // 2. Free text, in the order fixed by the 2026-10-27 audit: battery
+  //    location, concrete pad, "anything else", and special cases LAST
+  //    (Aboud: "lets have it below the Anything else").
+  //    (mainDisconnectLocation retired, meeting 2026-10-04.)
+  if (!omit.includes('batteryLocation')) {
+    const def = field('batteryLocation');
+    lines.push(...labelled(def.label, n.batteryLocation ?? '', def.key, p));
+  }
+  // Concrete pad reads as a prefixed sentence, not a labelled one (2026-10-27
+  // audit: "we need a prefix 'Concrete pads will be installed on …'"). Until
+  // that audit it fed the SF Site Modification Notes field instead.
+  if (!omit.includes('concretePad')) {
+    lines.push(
+      ...leadSentence('Concrete pads will be installed', /^concrete/i, n.concretePad ?? '', 'install.concretePad', p),
+    );
   }
 
   // 3. "Anything else" — unlabelled, one bullet per line, exactly as the old
   //    free-text Installation Layout note rendered. Keeps the migration invisible.
   lines.push(...noteLines(effectiveText(n.other, 'install.other', p)));
+
+  if (!omit.includes('specialCases')) {
+    const def = field('specialCases');
+    lines.push(...labelled(def.label, n.specialCases ?? '', def.key, p));
+  }
 
   return lines;
 }

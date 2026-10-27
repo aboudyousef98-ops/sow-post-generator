@@ -5,20 +5,21 @@
 // per SF field, in the SF page's order, so Compose can offer one copy button
 // per field.
 //
-// Shape decisions (from the 2026-10-22 study of 11 real handoff posts):
+// Shape decisions (2026-10-22 study of 11 real handoff posts, revised by the
+// 2026-10-27 field audit):
 // - "Installation Window and Planning" carries the classification + install
-//   notes + conduit raceway as labelled lines — the structured variant of what
+//   notes (concrete pad before "anything else", special cases after it) +
+//   conduit raceway as labelled lines — the structured variant of what
 //   coordinators were pasting by hand.
-// - Battery location and special cases are OMITTED from that blob because each
-//   lands in its own SF field (Battery and Equipment Location / Site
-//   Modification Notes) — every fact is stated exactly once.
-// - Wiring Route is deliberately NOT generated (Aboud: no picker; filled by
-//   hand in SF).
+// - Walls and battery location are OMITTED from that blob because both land in
+//   Battery and Equipment Location — every fact is stated exactly once.
+// - Wiring Route and Site Modification Notes are deliberately NOT generated
+//   (filled by hand in SF; the pad moved to the window blob, 2026-10-27).
 
 import type { PostRecord, PostValue, Settings } from '../types';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
-import { conduitRunLines, disconnectDurationFor, installNoteLines, wallsSentence } from './installNotes';
-import { effectiveText, noteLines, punctuate } from './noteText';
+import { conduitRunLines, disconnectDurationFor, installNoteLines, leadSentence, wallsSentence } from './installNotes';
+import { punctuate } from './noteText';
 import { effectiveNoteLines } from './template';
 
 export interface SfSubmissionField {
@@ -63,26 +64,23 @@ function runLines(v: PostValue): string[] {
   return [`- ${v.label}:`, ...v.sub.map((s) => `  - ${s}`)];
 }
 
-/** A note box's effective (polished-aware) text as punctuated lines. */
-function boxLines(record: PostRecord, raw: string | undefined, key: Parameters<typeof effectiveText>[1]): string[] {
-  return noteLines(effectiveText(raw ?? '', key, record));
-}
-
 export function buildSfSubmission(record: PostRecord, settings: Settings): SfSubmissionField[] {
   const n = record.installNotes;
 
-  // Classification + the install-note sentences (special cases INCLUDED —
-  // Aboud 2026-10-22: "we need to put them in the installation window") +
-  // conduit raceway, one fact per line. Battery location, stories and the
-  // disconnect duration are omitted — each lands in its own SF field. The
-  // clearance boilerplate is this blob's FINAL sentence (matching his filled
-  // SF record) — strays typed into a notes box are filtered so it appears
-  // exactly once, at the end.
+  // Classification + the install-note sentences (special cases and concrete
+  // pad INCLUDED — 2026-10-27 audit: pad before "anything else", special
+  // cases after it) + conduit raceway, one fact per line. Walls, battery
+  // location, stories and the disconnect duration are omitted — each lands in
+  // its own SF field (walls: the Battery and Equipment Location sentence, per
+  // the same audit). The clearance boilerplate is this blob's FINAL sentence
+  // (matching his filled SF record) — strays typed into a notes box are
+  // filtered so it appears exactly once, at the end.
   const clearanceRe = /clearance requirements have been met/i;
   const windowParts = [
     `Level ${record.level} – ${LEVEL_NAMES[record.level]}.\nPlanning window: ${LEVEL_INFO[record.level].window}.`,
   ];
   const noteSentences = installNoteLines(n, record, record.sf.utility, [
+    'walls',
     'batteryLocation',
     'stories',
     'disconnectDuration',
@@ -97,10 +95,6 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
 
   const duration = n?.disconnectDuration ?? disconnectDurationFor(n, record.sf.utility);
 
-  // Concrete-pad feedback only — special cases moved into the window blob
-  // (Aboud 2026-10-22: "we need to put them in the installation window").
-  const siteMod = boxLines(record, n?.concretePad, 'install.concretePad');
-
   // Date / region / address / jurisdiction are NOT offered: Salesforce is where
   // those came from — the SF record already has them (Aboud 2026-10-22 review).
   // Order = the SF "Design and Installation Context" section exactly as laid
@@ -112,9 +106,13 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
       label: 'Battery and Equipment Location',
       // Battery location + the equipment walls, combined (Aboud 2026-10-22:
       // "this must combine the batteries location and the equipment walls").
+      // Both read as full sentences — "Equipment will be installed on…" /
+      // "Batteries will be installed…" (2026-10-27 audit).
       value: listy([
-        ...(n ? [wallsSentence(n, 'Equipment')].filter(Boolean) : []),
-        ...boxLines(record, n?.batteryLocation, 'install.batteryLocation'),
+        ...(n ? [wallsSentence(n, 'Equipment will be installed')].filter(Boolean) : []),
+        ...(n
+          ? leadSentence('Batteries will be installed', /^batter/i, n.batteryLocation ?? '', 'install.batteryLocation', record)
+          : []),
       ]),
       multiline: true,
     },
@@ -134,7 +132,9 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
     { id: 'stories', label: 'Number of Stories', value: stories, copy: false },
     { id: 'outageDuration', label: 'Estimated Power Outage Duration', value: SF_DURATION[duration], copy: false },
     { id: 'installDays', label: 'Estimated Installation Duration (Days)', value: LEVEL_DAYS[record.level], copy: false },
-    { id: 'siteModification', label: 'Site Modification Notes', value: listy(siteMod), multiline: true },
+    // Site Modification Notes is no longer generated (2026-10-27 audit): the
+    // concrete pad moved into the window blob. Like Wiring Route, the SF field
+    // is filled by hand if ever needed.
     {
       id: 'siteSurvey',
       label: 'Site Survey Feedback',

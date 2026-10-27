@@ -5,6 +5,7 @@ import {
   disconnectDurationFor,
   emptyInstallNotes,
   installNoteLines,
+  needsRoofConduitRework,
   rawTextFor,
 } from './installNotes';
 import { makeRecord } from './__fixtures__/makeRecord';
@@ -193,6 +194,46 @@ describe('installNoteLines — roof rating (Roof Rating System, design-sow-team 
   });
 });
 
+describe('installNoteLines — roof material (Aboud 2026-10-27)', () => {
+  it('renders each picked material with its display label', () => {
+    expect(installNoteLines(n({ roofMaterial: 'shingle' }), off)).toEqual([DUR_12, 'Roof material: Shingle.']);
+    expect(installNoteLines(n({ roofMaterial: 'metal' }), off)).toEqual([DUR_12, 'Roof material: Metal.']);
+    expect(installNoteLines(n({ roofMaterial: 'clay-tile' }), off)).toEqual([DUR_12, 'Roof material: Clay tile.']);
+    expect(installNoteLines(n({ roofMaterial: 'tile' }), off)).toEqual([DUR_12, 'Roof material: Tile.']);
+  });
+
+  it('others uses the free text', () => {
+    expect(installNoteLines(n({ roofMaterial: 'other', roofMaterialOther: 'Flat TPO membrane' }), off)).toEqual([
+      DUR_12,
+      'Roof material: Flat TPO membrane.',
+    ]);
+  });
+
+  it('others with no text drops the line; no material chosen → no line', () => {
+    expect(installNoteLines(n({ roofMaterial: 'other', roofMaterialOther: '  ' }), off)).toEqual([DUR_12]);
+    expect(installNoteLines(n({ roofMaterial: 'other' }), off)).toEqual([DUR_12]);
+    expect(installNoteLines(n(), off)).toEqual([DUR_12]);
+  });
+
+  it('renders after the roof rating line', () => {
+    expect(installNoteLines(n({ roofRating: 8, roofMaterial: 'metal' }), off)).toEqual([
+      DUR_12,
+      'Roof rating: 8/10 (Good) — workable with small adjustments.',
+      'Roof material: Metal.',
+    ]);
+  });
+
+  it('needsRoofConduitRework flags metal and clay tile only', () => {
+    expect(needsRoofConduitRework(n({ roofMaterial: 'metal' }))).toBe(true);
+    expect(needsRoofConduitRework(n({ roofMaterial: 'clay-tile' }))).toBe(true);
+    expect(needsRoofConduitRework(n({ roofMaterial: 'shingle' }))).toBe(false);
+    expect(needsRoofConduitRework(n({ roofMaterial: 'tile' }))).toBe(false);
+    expect(needsRoofConduitRework(n({ roofMaterial: 'other', roofMaterialOther: 'metal-ish' }))).toBe(false);
+    expect(needsRoofConduitRework(n())).toBe(false);
+    expect(needsRoofConduitRework(undefined)).toBe(false);
+  });
+});
+
 describe('installNoteLines — labelled free text', () => {
   it('joins multiple lines with "; " under one label and strips typed bullets', () => {
     expect(
@@ -248,6 +289,46 @@ describe('installNoteLines — labelled free text', () => {
   it('a block with nothing chosen still carries the automatic duration; no notes at all yields nothing', () => {
     expect(installNoteLines(n(), off)).toEqual([DUR_12]);
     expect(installNoteLines(undefined, off)).toEqual([]);
+  });
+});
+
+describe('installNoteLines — 2026-10-27 audit: order, concrete pad prefix, walls omit', () => {
+  it('special cases renders BELOW "anything else"; concrete pad ABOVE it, prefixed', () => {
+    expect(
+      installNoteLines(
+        n({ concretePad: 'On the east side', other: 'Attic run', specialCases: 'Window closed off' }),
+        off,
+      ),
+    ).toEqual([
+      DUR_12,
+      'Concrete pads will be installed on the east side.',
+      'Attic run.',
+      'Special cases: Window closed off.',
+    ]);
+  });
+
+  it('a pad box that already says "Concrete…" is not double-prefixed', () => {
+    expect(installNoteLines(n({ concretePad: 'Concrete pads can extend past the left edge' }), off)).toEqual([
+      DUR_12,
+      'Concrete pads can extend past the left edge.',
+    ]);
+  });
+
+  it('pad lines join with "; " into the one sentence; an all-caps start keeps its capital', () => {
+    expect(installNoteLines(n({ concretePad: 'On the east side\n4x4 ft each' }), off)).toEqual([
+      DUR_12,
+      'Concrete pads will be installed on the east side; 4x4 ft each.',
+    ]);
+    expect(installNoteLines(n({ concretePad: 'TPO walkway pads under the units' }), off)).toEqual([
+      DUR_12,
+      'Concrete pads will be installed TPO walkway pads under the units.',
+    ]);
+  });
+
+  it("omit 'walls' drops the walls sentence (it lives in the SF Battery and Equipment Location field)", () => {
+    const notes = n({ walls: 2, orientations: ['North', 'West'] });
+    expect(installNoteLines(notes, off, undefined, ['walls'])).toEqual([DUR_12]);
+    expect(installNoteLines(notes, off)).toEqual(['Installation on two walls (North, West).', DUR_12]);
   });
 });
 
