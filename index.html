@@ -14,7 +14,98 @@
     <title>SOW Operational Tool — Dynamic EcoHome</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Boot skeleton: static shell shown while the JS bundle downloads;
+         React's first render replaces everything inside #root. Colours are
+         hand-copies of theme.css tokens — theme.css itself ships inside the
+         bundle, so it is not available yet. -->
+    <style>
+      .boot-skel {
+        margin: 0;
+        min-height: 100vh;
+        background: #f4f6f7;
+        font-family: 'Figtree', system-ui, sans-serif;
+      }
+      .boot-skel .boot-topbar {
+        height: 52px;
+        background: #043d4f;
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 0 20px;
+      }
+      .boot-skel .boot-bone {
+        display: block;
+        height: 14px;
+        border-radius: 6px;
+        background: #eef1f2;
+        animation: boot-pulse 1.6s ease-in-out infinite;
+      }
+      .boot-skel .boot-topbar .boot-bone {
+        background: rgba(255, 255, 255, 0.18);
+      }
+      .boot-skel .boot-page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .boot-skel .boot-card {
+        background: #fff;
+        border: 1px solid #e3e8ea;
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .boot-skel .boot-card .boot-bone {
+        margin-bottom: 14px;
+      }
+      .boot-skel .boot-card .boot-bone:last-child {
+        margin-bottom: 0;
+      }
+      .boot-skel .boot-hidden {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+        white-space: nowrap;
+      }
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.45;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-skel .boot-bone {
+          animation: none;
+        }
+      }
+    </style>
+    <div id="root">
+      <div class="boot-skel">
+        <p class="boot-hidden" role="status">Loading SOW Operational Tool…</p>
+        <div aria-hidden="true">
+          <div class="boot-topbar">
+            <span class="boot-bone" style="width: 32px; height: 32px; border-radius: 8px"></span>
+            <span class="boot-bone" style="width: 150px"></span>
+            <span class="boot-bone" style="width: 220px; height: 12px"></span>
+          </div>
+          <div class="boot-page">
+            <div class="boot-card">
+              <span class="boot-bone" style="width: 30%; height: 18px"></span>
+              <span class="boot-bone" style="width: 90%"></span>
+              <span class="boot-bone" style="width: 75%"></span>
+              <span class="boot-bone" style="width: 85%"></span>
+              <span class="boot-bone" style="width: 60%"></span>
+              <span class="boot-bone" style="width: 80%"></span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -16,6 +16,7 @@ import {
   verifyPassword,
 } from '../lib/auth';
 import type { Session, TeamUser, UserRole } from '../types';
+import { Bone, SkeletonStatus } from './Skeleton';
 
 interface Props {
   session: Session;
@@ -157,7 +158,40 @@ export default function UsersTab({ session, toast }: Props) {
     <div className="users-tab">
       <div className="card">
         <h3>Team members</h3>
-        {loaded === 'loading' && <p>Loading the roster…</p>}
+        {loaded === 'loading' && (
+          // Same table the roster renders into, drawn in bones: the loaded
+          // list replaces this without the card changing height or shape.
+          <SkeletonStatus message="Loading the roster…">
+            <table className="users-table">
+              <thead>
+                <tr>
+                  <th>Username</th>
+                  <th>Name</th>
+                  <th>Role</th>
+                  <th aria-label="actions" />
+                </tr>
+              </thead>
+              <tbody>
+                {[0, 1, 2, 3, 4].map((i) => (
+                  <tr key={i}>
+                    <td>
+                      <Bone style={{ width: 72 }} />
+                    </td>
+                    <td>
+                      <Bone style={{ width: 120 }} />
+                    </td>
+                    <td>
+                      <Bone style={{ width: 52 }} />
+                    </td>
+                    <td>
+                      <Bone style={{ width: 90 }} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </SkeletonStatus>
+        )}
         {loaded === 'error' && <p>Could not load the roster — check the connection and reload.</p>}
         {loaded === 'ok' && (
           <table className="users-table">

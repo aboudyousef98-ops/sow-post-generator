@@ -7226,3 +7226,42 @@ tr:hover .board-label-cell.empty {
   font-size: 13.5px;
   font-weight: 700;
 }
+
+/* ── Skeleton loading bones ─────────────────────────────────────────────────
+   Placeholder geometry shown while something real is on its way (the roster
+   fetch, the boot shell in index.html mirrors these by hand). The pulse sits
+   on the bones only — cards and the topbar hold still. */
+.skel-bone {
+  display: block;
+  height: 14px;
+  border-radius: 6px;
+  background: var(--dyn-line);
+  animation: skel-pulse 1.6s ease-in-out infinite;
+}
+@keyframes skel-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel-bone {
+    animation: none;
+  }
+}
+
+/* Screen-reader-only text (the skeleton's role="status" announcement). */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
