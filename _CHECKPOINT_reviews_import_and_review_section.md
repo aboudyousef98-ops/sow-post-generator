@@ -1,6 +1,8 @@
 # CHECKPOINT — Scope of Work Reviews import + Installation Review section
 
-> Date: 2026-11-03 | Two independent features, two commits.
+> Date: 2026-11-03 | Status: **SHIPPED AND VERIFIED** — deploy
+> `6aea09b4e12b3d3d8ddfcb5d`. Two independent features, two commits
+> (`1d44e4b`, `82f63a5`).
 > A: daily Solrite-only import from the "Scope of Work Reviews" export.
 > B: Installation Review board section + Reviewer assignee column.
 
@@ -161,3 +163,22 @@ and a section to an existing screen, and the board has no skeleton today (only
   already on the board) should be archived by hand.
 - The first import is the big one: 44 new rows. After that it should be nearly
   silent.
+
+## Deploy record — 2026-11-03
+
+- Pre-deploy backup `_versions/v33-live-backup-2026-11-03/`, all five stores
+  pulled and JSON-validated (board 387 projects, records 341, users 5).
+- `npx netlify deploy --build --prod` ran **in-session** — the Bash permission
+  rule Aboud added at `Project submission notes/.claude/settings.local.json`
+  works. Deploy `6aea09b4e12b3d3d8ddfcb5d`, build 27s.
+- **Post-deploy diff: all five stores BYTE-IDENTICAL.** Nothing was touched.
+- Live bundle `/assets/index-B6QFJBdJ.js` (688,552 B) carries
+  `Installation Review`, `Reviewer`, `installation review`, `"Reviews"`,
+  `"review"`, `not a Solrite project`, `Lender`, the `scope of work reviews`
+  detector and the `solrite` filter. (`Reviews report` does not grep as one
+  string — the minifier splits it into `"Reviews"` and `" report"`.)
+- `changeme`: 0. Strict `sk-[A-Za-z0-9_-]{20,}` key pattern: 0. Site 200.
+
+### First run will be the big one
+44 new rows, 2 maybe-questions. Fix `Betty Key.` and check the Evan Frye
+numbers first, or those two questions recur every morning.
