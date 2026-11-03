@@ -341,10 +341,12 @@ export default function InstallNotesCard({
       <div className="note-grid">{box('batteryLocation', 1)}</div>
 
       {/* Battery installation analysis (Aboud 2026-11-03). Grouped with the
-          battery location, above the conduit runs. Every dropdown here is
-          REQUIRED — see missingRequired() — which is why the yes/no questions
-          are selects with a blank "—" rather than checkboxes: a checkbox
-          cannot say "not answered yet". Replaced the Concrete pad box. */}
+          battery location, above the conduit runs. Replaced the Concrete pad
+          box. NOT required (he dropped that gate — see missingRequired): an
+          unanswered question simply prints nothing. The yes/no questions are
+          still selects with a blank "—" rather than checkboxes, because
+          "unanswered" and "No" mean different things here — No prints a real
+          sentence, blank prints nothing. */}
       <div className="install-subhead">Battery installation analysis</div>
       <div className="install-row">
         <label className="field">

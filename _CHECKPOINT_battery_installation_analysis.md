@@ -1,14 +1,17 @@
-# CHECKPOINT — Battery Installation Analysis (required fields)
+# CHECKPOINT — Battery Installation Analysis
 
-> Date: 2026-11-03 | Status: **BUILT, TESTED, NOT DEPLOYED, NOT COMMITTED TO MAIN**
-> Branch: `feat/battery-installation-analysis`
-> Deploy is deliberately held — see "Before you deploy" at the bottom. This
-> change makes 255 open drafts read as "not ready to post" the moment it ships,
-> so it is a team-wide event, not a silent patch.
+> Date: 2026-11-03 | Status: **SHIPPED** — see "Deploy record" at the bottom.
+>
+> **The required-fields part was DROPPED before deploy.** Aboud: "just skip the
+> require thing and yallaaaa go deploy". Built required first; requiring it
+> would have flipped ~255 open drafts to "not ready to post" on the spot, so
+> the gate came out and only the fields shipped. That removed the entire
+> team-wide risk this checkpoint originally warned about.
 
 ## What Aboud asked for (2026-11-03)
 
-A new **Battery installation analysis** group, all of it **required**:
+A new **Battery installation analysis** group (originally **required** — gate
+dropped before deploy, see above):
 
 1. **Battery base** — concrete pad / wall mount / on existing ground
    - concrete pad → does the base need extra work? → if yes, describe it
@@ -38,9 +41,9 @@ His decisions on the proposal:
   (so they get chips, AI polish, autosave detection and `rawTextFor` for free).
 - `concretePad` marked **`@deprecated`** and kept so stored drafts still parse — the
   same treatment `mainDisconnectLocation` got. It is no longer rendered anywhere.
-- The three yes/no answers are **tri-state booleans**, not checkboxes: `undefined`
-  means "not answered yet", which is the only thing that makes them enforceable
-  as required. A checkbox cannot express it.
+- The three yes/no answers are **tri-state booleans**, not checkboxes.
+  `undefined` = "not answered" prints nothing; `false` = "No" prints a real
+  sentence for two of them. A checkbox cannot tell those apart.
 
 ### Sentences — `src/lib/installNotes.ts`
 - `BATTERY_BASES` picklist; new `batteryAnalysisLines(n, p)` builder.
@@ -67,9 +70,11 @@ His decisions on the proposal:
 ### Slack post — `src/lib/template.ts`
 - New top-level `Battery Installation Analysis` bullet, structurally identical
   to `Conduit Raceway`.
-- `missingBatteryAnalysis(record)` exported; `missingRequired()` now appends it.
-  Conditional: the base and both wall answers are ALWAYS required, the branch
-  follow-up only on its own branch, the battery "anything else" box never.
+- `missingRequired()` is **unchanged** — the battery questions do not gate
+  anything. `missingBatteryAnalysis()` existed briefly and was removed with the
+  gate. `OutputColumn.readiness.test.tsx` now pins the opposite behaviour: an
+  untouched battery block must never block Copy for Slack or Mark as posted,
+  and must never appear in the readiness tick-list.
 
 ### Form — `src/components/InstallNotesCard.tsx`
 - `Battery installation analysis` sub-head grouped under the Battery location
@@ -80,11 +85,10 @@ His decisions on the proposal:
 - The "Concrete pad installation" box is gone.
 
 ### Readiness — `src/components/OutputColumn.tsx`
-- Unanswered battery questions are listed **individually** with an "Answer"
-  action ("3 things before posting" with no detail would send the coordinator
-  hunting through the form); they collapse to one done row when all answered.
-- Replaced the `checks.splice(3, …)` Region-text hack with a plain conditional
-  spread while in there.
+- The battery questions are deliberately ABSENT from the tick-list: they are
+  not required, so they must not read as a gap.
+- Kept one cleanup from the required version: the `checks.splice(3, …)`
+  Region-text hack is now a plain conditional spread.
 
 ### Elsewhere
 - `src/lib/record.ts` — `hasContent()` counts the new answers. The tri-states are
@@ -95,8 +99,8 @@ His decisions on the proposal:
 - `netlify/functions/lib/rewriteSchema.ts` — the server-side POLISH_KEYS list,
   which its own sync test caught immediately. Working as designed.
 - `src/lib/__fixtures__/makeRecord.ts` — new `answeredInstallNotes()` fixture for
-  tests that need a record the gate considers ready. `makeRecord()` deliberately
-  does NOT use it, so post-shape goldens stay minimal.
+  tests that want the battery block to actually render. `makeRecord()`
+  deliberately does NOT use it, so post-shape goldens stay minimal.
 
 ## Tested
 
@@ -106,12 +110,13 @@ failure was confirmed to be "feature missing" rather than a typo.
 - `installNotes.test.ts` — 3 new suites, 20 tests: all 4 base outcomes, all 4
   wall-support outcomes, graceful-empty branches, order, polish, a pre-2026-11-03
   record, and the retired pad line.
-- `template.test.ts` — 10 new tests on the conditional required logic.
+- `template.test.ts` — the 10 required-logic tests were deleted with the gate;
+  the 4 pre-existing `missingRequired` tests are back to their original form.
 - `sfSubmission.test.ts` — 7 new tests: placement between the right sections,
   underline length, every line a plain `- ` bullet, no leak into Battery and
   Equipment Location, section absent when unanswered, clearance still last.
-- `OutputColumn.readiness.test.tsx` — NEW file, 6 tests: the gate disables Copy
-  for Slack and Mark as posted, names each gap, collapses when complete.
+- `OutputColumn.readiness.test.tsx` — NEW file, 5 tests pinning that the battery
+  analysis never gates posting (and that the Salesforce fields still do).
 - `InstallNotesCard.test.tsx` — 9 new tests on the conditional reveals.
 - `record.test.ts` — 5 new autosave tests.
 
@@ -122,9 +127,10 @@ failure was confirmed to be "feature missing" rather than a typo.
 | | Tests | Files |
 |---|---|---|
 | clean `main` | 184 failed, 754 passed (938) | 19 failed, 43 passed |
-| this branch | 184 failed, **810 passed** (994) | 19 failed, 44 passed |
+| shipped | 184 failed, **799 passed** (983) | 19 failed, 44 passed |
 
-**+56 passing tests, zero new failures, identical failing-file set.**
+**+45 passing tests, zero new failures, identical failing-file set.**
+(It was +56 while the gate existed; dropping it removed 11 of those tests.)
 
 ### ⚠ Separate pre-existing problem found (NOT caused by this change)
 
@@ -161,8 +167,10 @@ questions Aboud specified.
 
 ### The 12 drafts and their suggested new answers
 
-Their `concretePad` text stays stored but stops printing, so each needs its
-answers re-entered. Suggested mapping — **the two ambiguous ones need a designer**:
+Their `concretePad` text stays stored but **stops printing**, so each needs its
+answers re-entered. Nothing blocks them in the meantime — the questions are not
+required — so these 12 will simply have no battery section until someone fills
+it in. Suggested mapping — **the two ambiguous ones need a designer**:
 
 | Customer | Suggested base | Follow-up |
 |---|---|---|
@@ -188,17 +196,9 @@ answers re-entered. Suggested mapping — **the two ambiguous ones need a design
   and Planning, the pad row removed, header and the top note rewritten.
 - `spec/` needed no change — those docs predate these fields.
 
-## Before you deploy — MANDATORY
+## Deploy record
 
-1. **Pull all five live Blobs stores into `_versions/v32-live-backup-2026-11-03/`**
-   (CLAUDE.md deploy rule). The newest backup on disk is v30, from 2026-10-27.
-2. **Re-grep the FRESH `records.json` for non-empty `concretePad`** — the list
-   above is a week old and someone may have typed more since.
-3. Deploy, then re-pull all five stores and diff against the backup. Any
-   unexplained difference = STOP.
-4. **Tell the team first.** The gate flips ~255 open drafts to "not ready to
-   post" instantly. That is intended, but it should not be a surprise on a
-   Monday morning.
+See the end of this file — filled in during the 2026-11-03 deploy.
 
 ## Pending / open questions for Aboud
 
@@ -206,8 +206,11 @@ answers re-entered. Suggested mapping — **the two ambiguous ones need a design
   battery facts grouped in one place* rather than split across two SF fields,
   which is what the next instruction asked for too. If he meant something else
   about scenario 2's formatting, the section shape is a one-line change.
-- The two ambiguous drafts above (Steven Clifton, Brenda Thompson).
+- **The 12 drafts** whose retired pad text no longer prints (list above); two
+  of them (Steven Clifton, Brenda Thompson) are ambiguous and need a designer.
 - Whether the AI should be allowed to polish `batteryElevation` at all — it
   currently can, like `loadRun`, and it holds a measurement. The dropped-token
   and drift guards still apply, and polish is opt-in per box.
+- Should the battery questions become required LATER, once the backlog of open
+  drafts has been worked through? The gate is ~10 lines to re-add.
 - Unrelated, now blocking real verification: the jsdom `localStorage` breakage.

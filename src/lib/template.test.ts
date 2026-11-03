@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { BoardProject } from '../board/types';
-import type { InstallNotes, PostRecord } from '../types';
-import { answeredInstallNotes, makeRecord } from './__fixtures__/makeRecord';
+import type { PostRecord } from '../types';
+import { makeRecord } from './__fixtures__/makeRecord';
 import { POLISH_KEYS, emptyInstallNotes } from './installNotes';
 import { defaultSettings } from './storage';
 import {
@@ -19,13 +19,6 @@ function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
   return makeRecord(overrides);
 }
 
-/**
- * A battery block with every required question answered (Aboud 2026-11-03).
- * Tests about the SALESFORCE side of `missingRequired` start from this, so
- * they keep asserting only their own fields — the battery questions have
- * their own describe below.
- */
-const BATTERY_ANSWERED: InstallNotes = answeredInstallNotes();
 
 // Expected output — spec/06 §2 revised per Aboud (2026-09-26): bullets instead
 // of numbers, Jurisdiction + Site Address as their own lines, empty lines dropped.
@@ -122,11 +115,11 @@ describe('buildPostText', () => {
 
 describe('missingRequired', () => {
   it('empty when the major fields are filled', () => {
-    expect(missingRequired(norcaRecord({ installNotes: BATTERY_ANSWERED }))).toEqual([]);
+    expect(missingRequired(norcaRecord())).toEqual([]);
   });
 
   it('lists every missing major field', () => {
-    const rec = norcaRecord({ installNotes: BATTERY_ANSWERED });
+    const rec = norcaRecord();
     rec.sf.customerName = '';
     rec.sf.installScheduledDate = '';
     rec.sf.jurisdiction = undefined;
@@ -146,72 +139,10 @@ describe('missingRequired', () => {
   });
 });
 
-// ---- Battery installation analysis is required (Aboud 2026-11-03) ----------
-// Every SOW has batteries, so the base and both wall-support answers are
-// always required; the branch follow-up is required only on its own branch.
-
-describe('missingRequired — battery installation analysis', () => {
-  /** A record whose battery questions are all answered, then overridden. */
-  const answered = (over: Partial<InstallNotes> = {}) =>
-    norcaRecord({ installNotes: { ...BATTERY_ANSWERED, ...over } });
-
-  it('a fully answered battery block adds nothing to the list', () => {
-    expect(missingRequired(answered())).toEqual([]);
-  });
-
-  it('an untouched battery block asks for the base and both wall questions', () => {
-    expect(missingRequired(norcaRecord())).toEqual([
-      'Battery base',
-      'Supporting wall evenness',
-      'Push batteries from wall',
-    ]);
-  });
-
-  it('a concrete pad must say whether the base needs extra work', () => {
-    const rec = answered({ batteryBase: 'concrete-pad', batteryElevation: '' });
-    expect(missingRequired(rec)).toEqual(['Battery base extra work']);
-  });
-
-  it('extra work = Yes must be described', () => {
-    const rec = answered({ batteryBase: 'concrete-pad', batteryBaseNeedsWork: true, batteryBaseWork: '  ' });
-    expect(missingRequired(rec)).toEqual(['Battery base work description']);
-  });
-
-  it('extra work = No needs no description', () => {
-    expect(missingRequired(answered({ batteryBase: 'concrete-pad', batteryBaseNeedsWork: false }))).toEqual([]);
-  });
-
-  it('wall mount must state the elevation', () => {
-    expect(missingRequired(answered({ batteryElevation: '' }))).toEqual(['Battery elevation']);
-  });
-
-  it('existing ground must be described', () => {
-    expect(missingRequired(answered({ batteryBase: 'existing-ground' }))).toEqual(['Existing ground description']);
-  });
-
-  it('both wall questions are required on their own, including push = No', () => {
-    expect(missingRequired(answered({ wallEven: undefined }))).toEqual(['Supporting wall evenness']);
-    expect(missingRequired(answered({ batteryPushFromWall: undefined }))).toEqual(['Push batteries from wall']);
-  });
-
-  it('the battery "anything else" box is never required', () => {
-    expect(missingRequired(answered({ batteryOther: '' }))).toEqual([]);
-  });
-
-  it('a record with no installNotes at all still reports the battery questions, not a crash', () => {
-    expect(missingRequired(norcaRecord({ installNotes: undefined }))).toEqual([
-      'Battery base',
-      'Supporting wall evenness',
-      'Push batteries from wall',
-    ]);
-  });
-});
-
 describe('missingRequired (spec/10 §1)', () => {
   it('does not require an install date', () => {
     const r = norcaRecord({
       sf: { ...norcaRecord().sf, installScheduledDate: '' },
-      installNotes: BATTERY_ANSWERED,
     });
     expect(missingRequired(r)).toEqual([]);
   });
@@ -219,7 +150,6 @@ describe('missingRequired (spec/10 §1)', () => {
   it('still requires customer, jurisdiction and address', () => {
     const r = norcaRecord({
       sf: { ...norcaRecord().sf, customerName: '', jurisdiction: '', siteAddress: '' },
-      installNotes: BATTERY_ANSWERED,
     });
     expect(missingRequired(r)).toEqual(['Customer name', 'Jurisdiction', 'Site address']);
   });

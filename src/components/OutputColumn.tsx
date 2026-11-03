@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
-import { buildPostHtml, buildPostText, missingBatteryAnalysis, missingRequired } from '../lib/template';
+import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import { noteCheck } from '../lib/api';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
 import type { BoardProject } from '../board/types';
@@ -169,15 +169,8 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
   // boards since 2026-10-08, and a utility must not match a Jurisdiction.
   const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
-  // The battery questions are listed INDIVIDUALLY while any is unanswered
-  // (Aboud 2026-11-03) — "3 things before posting" with no detail would send
-  // the coordinator hunting through the form — and collapse to a single done
-  // row once they are all answered, so the card stays short in the happy case.
-  const batteryMissing = missingBatteryAnalysis(record);
-  const batteryChecks: Check[] = batteryMissing.length
-    ? batteryMissing.map((label) => ({ label, done: false, action: 'Answer' }))
-    : [{ label: 'Battery installation analysis answered', done: true }];
-
+  // The battery installation analysis is deliberately absent from this list
+  // (Aboud 2026-11-03) — it is not required, so it must not read as a gap.
   const checks: Check[] = [
     { label: 'Customer name', done: !missing.includes('Customer name'), action: 'Fill in' },
     { label: 'Jurisdiction', done: !missing.includes('Jurisdiction'), action: 'Fill in' },
@@ -185,7 +178,6 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
     ...(missing.includes('Region text')
       ? [{ label: 'Region text', done: false, action: 'Fill in' } as Check]
       : []),
-    ...batteryChecks,
     { label: `Level ${record.level} chosen · ${LEVEL_NAMES[record.level]}`, done: true },
     {
       label: ahjMatch

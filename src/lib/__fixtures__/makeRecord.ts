@@ -5,13 +5,12 @@ import type { InstallNotes, PostRecord } from '../../types';
 import { emptyInstallNotes } from '../installNotes';
 
 /**
- * Installation notes with every REQUIRED question answered — i.e. the battery
- * installation analysis (Aboud 2026-11-03), which `missingRequired()` gates
- * "Copy for Slack" and "Mark as posted" on.
+ * Installation notes with the battery installation analysis answered (Aboud
+ * 2026-11-03). These questions are NOT required — see `missingRequired()` —
+ * so this is for tests that want the battery block to actually render.
  *
  * `makeRecord()` deliberately does NOT use this: most tests assert post shape,
- * and a battery block there would add a section to every golden. Tests that
- * need a record the gate considers READY start from this instead.
+ * and a battery block there would add a section to every golden.
  *
  * `over` wins, so a test can answer the questions differently.
  */
