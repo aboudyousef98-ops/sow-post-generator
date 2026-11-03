@@ -58,7 +58,7 @@ describe('InstallNotesCard', () => {
 
     fireEvent.click(screen.getByText('Quick chip phrase'));
 
-    const ta = screen.getByLabelText(/^Anything else/i) as HTMLTextAreaElement;
+    const ta = screen.getByLabelText('Anything else') as HTMLTextAreaElement;
     expect(ta.value).toBe('First line\nQuick chip phrase');
     // The chip click changed the raw text, so the stale polished preview is gone.
     expect(screen.queryByText(/Old AI text/)).toBeNull();
@@ -127,7 +127,7 @@ describe('InstallNotesCard', () => {
 
     expect(screen.getByText(/Polished preview text/)).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText(/^Anything else/i), { target: { value: 'Raw draft, edited' } });
+    fireEvent.change(screen.getByLabelText('Anything else'), { target: { value: 'Raw draft, edited' } });
 
     expect(screen.queryByText(/Polished preview text/)).toBeNull();
   });
@@ -258,8 +258,100 @@ describe('InstallNotesCard', () => {
     const migrated = migrateRecord(legacy);
     render(<Harness initial={migrated} />);
 
-    expect((screen.getByLabelText(/^Anything else/i) as HTMLTextAreaElement).value).toBe(
+    // Exact label — "Anything else (battery installation)" also starts with
+    // "Anything else" since the 2026-11-03 battery group was added.
+    expect((screen.getByLabelText('Anything else') as HTMLTextAreaElement).value).toBe(
       'Conduit through the attic to the garage.',
     );
+  });
+});
+
+// ---- Battery installation analysis (Aboud 2026-11-03) ----------------------
+
+describe('InstallNotesCard — battery installation analysis', () => {
+  afterEach(cleanup);
+
+  const pickBase = (v: string) =>
+    fireEvent.change(screen.getByLabelText('Battery base'), { target: { value: v } });
+
+  it('asks nothing extra until a base is chosen', () => {
+    render(<Harness />);
+    expect((screen.getByLabelText('Battery base') as HTMLSelectElement).value).toBe('');
+    expect(screen.queryByLabelText(/^Does the base need extra work\?/)).toBeNull();
+    expect(screen.queryByLabelText('Battery elevation')).toBeNull();
+    expect(screen.queryByLabelText('Existing ground')).toBeNull();
+  });
+
+  it('concrete pad asks only whether the base needs extra work', () => {
+    render(<Harness />);
+    pickBase('concrete-pad');
+    expect(screen.getByLabelText(/^Does the base need extra work\?/)).toBeTruthy();
+    expect(screen.queryByLabelText('Battery elevation')).toBeNull();
+    expect(screen.queryByLabelText('Existing ground')).toBeNull();
+    // The description only appears once the answer is Yes.
+    expect(screen.queryByLabelText('Battery base extra work')).toBeNull();
+  });
+
+  it('extra work = Yes reveals the description box, No hides it again', () => {
+    render(<Harness />);
+    pickBase('concrete-pad');
+    const work = () => screen.getByLabelText(/^Does the base need extra work\?/);
+
+    fireEvent.change(work(), { target: { value: 'yes' } });
+    expect(screen.getByLabelText('Battery base extra work')).toBeTruthy();
+
+    fireEvent.change(work(), { target: { value: 'no' } });
+    expect(screen.queryByLabelText('Battery base extra work')).toBeNull();
+    // "No" is a real answer, not a reset back to unanswered.
+    expect((work() as HTMLSelectElement).value).toBe('no');
+  });
+
+  it('wall mount asks only for the elevation', () => {
+    render(<Harness />);
+    pickBase('wall-mount');
+    expect(screen.getByLabelText('Battery elevation')).toBeTruthy();
+    expect(screen.queryByLabelText(/^Does the base need extra work\?/)).toBeNull();
+    expect(screen.queryByLabelText('Existing ground')).toBeNull();
+  });
+
+  it('existing ground asks only for the ground description', () => {
+    render(<Harness />);
+    pickBase('existing-ground');
+    expect(screen.getByLabelText('Existing ground')).toBeTruthy();
+    expect(screen.queryByLabelText('Battery elevation')).toBeNull();
+    expect(screen.queryByLabelText(/^Does the base need extra work\?/)).toBeNull();
+  });
+
+  it('a branch box keeps its text when the base is switched away and back', () => {
+    render(<Harness />);
+    pickBase('wall-mount');
+    fireEvent.change(screen.getByLabelText('Battery elevation'), {
+      target: { value: '48 in above the garage floor' },
+    });
+
+    pickBase('concrete-pad');
+    expect(screen.queryByLabelText('Battery elevation')).toBeNull();
+
+    pickBase('wall-mount');
+    expect((screen.getByLabelText('Battery elevation') as HTMLTextAreaElement).value).toBe(
+      '48 in above the garage floor',
+    );
+  });
+
+  it('both wall-support questions are always asked, and start unanswered', () => {
+    render(<Harness />);
+    expect((screen.getByLabelText(/^Supporting wall even \(flat\)\?/) as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText(/^Push the batteries out from the wall\?/) as HTMLSelectElement).value).toBe('');
+  });
+
+  it('has its own "Anything else" box, separate from the main one', () => {
+    render(<Harness />);
+    expect(screen.getByLabelText('Anything else (battery installation)')).toBeTruthy();
+    expect(screen.getByLabelText('Anything else')).toBeTruthy();
+  });
+
+  it('the retired "Concrete pad installation" box is gone from the form', () => {
+    render(<Harness />);
+    expect(screen.queryByLabelText(/Concrete pad installation/i)).toBeNull();
   });
 });

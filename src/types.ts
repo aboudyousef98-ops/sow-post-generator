@@ -110,6 +110,12 @@ export type RoofMaterial = 'shingle' | 'metal' | 'clay-tile' | 'tile' | 'other';
  */
 export type PostValue = string | { label?: string; text: string; sub: string[] };
 
+/**
+ * Battery base picklist (Aboud 2026-11-03). Every SOW has batteries, so there
+ * is deliberately no "none" escape hatch — the base is always required.
+ */
+export type BatteryBase = 'concrete-pad' | 'wall-mount' | 'existing-ground';
+
 /** The free-text boxes inside InstallNotes, i.e. the ones the AI may polish. */
 export type InstallTextField =
   | 'batteryLocation'
@@ -120,6 +126,10 @@ export type InstallTextField =
   | 'batteryRun'
   | 'specialCases'
   | 'concretePad'
+  | 'batteryBaseWork'
+  | 'batteryElevation'
+  | 'batteryGround'
+  | 'batteryOther'
   | 'other';
 
 export interface InstallNotes {
@@ -156,13 +166,41 @@ export interface InstallNotes {
   batteryRun: string;
   specialCases: string;
   /**
-   * Concrete pad installation feedback → "Concrete pads will be installed …"
-   * inside the install notes (2026-10-27 audit; until then it fed the SF
-   * "Site modification notes" field). OPTIONAL on purpose —
-   * records written before this date have no such field and must not need a
-   * migration, same contract as BoardLabel.outOfScope. Read with `?? ''`.
+   * @deprecated Aboud 2026-11-03 — the "Concrete pads will be installed …"
+   * logic was retired and replaced by the Battery installation analysis block
+   * (`batteryBase` and friends below). Kept so stored drafts still parse and
+   * `rawTextFor`/`polished` keys still resolve, exactly like
+   * `mainDisconnectLocation`; it is no longer rendered anywhere.
    */
   concretePad?: string;
+
+  // ---- Battery installation analysis (Aboud 2026-11-03) -------------------
+  // Two required dropdown groups — what the batteries sit on, and whether the
+  // wall behind them can carry them — plus a free box. All OPTIONAL fields:
+  // the same no-migration contract roofMaterial used, so records written
+  // before this date simply have no such key. Required-ness is enforced in
+  // `missingRequired()`, not by the type.
+
+  /** What the batteries sit on. Drives which follow-up question is asked. */
+  batteryBase?: BatteryBase;
+  /**
+   * Concrete-pad branch only: does the ground need prep before the pad goes
+   * in? Tri-state on purpose — `undefined` is "not answered yet", which is
+   * what makes it enforceable as required (a checkbox could not say this).
+   */
+  batteryBaseNeedsWork?: boolean;
+  /** Concrete-pad branch, when `batteryBaseNeedsWork` is true. */
+  batteryBaseWork?: string;
+  /** Wall-mount branch: how high the batteries sit. */
+  batteryElevation?: string;
+  /** Existing-ground branch: what the batteries will stand on. */
+  batteryGround?: string;
+  /** Is the supporting wall even (flat)? Tri-state, same reason as above. */
+  wallEven?: boolean;
+  /** Must the batteries be pushed out off the wall? Tri-state. */
+  batteryPushFromWall?: boolean;
+  /** Anything the structured battery questions do not cover. Unlabelled in the output. */
+  batteryOther?: string;
   /**
    * SF "Panel Facing Front of House" checkbox (Aboud 2026-10-22). OPTIONAL —
    * same no-migration contract as concretePad; undefined renders as "No".

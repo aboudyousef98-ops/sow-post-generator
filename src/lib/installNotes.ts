@@ -6,6 +6,7 @@
 // or an MPU can never be altered by the model.
 
 import type {
+  BatteryBase,
   InstallNotes,
   InstallTextField,
   Orientation,
@@ -119,6 +120,13 @@ export const ROOF_CONDUIT_REWORK =
   'Remove Solar junction box, and add LB condulet to go over the roof, ' +
   'add extra 3/4" conduits with fitting, hangers, compressions to this job.';
 
+/** Battery base picklist, in the form's dropdown order (Aboud 2026-11-03). */
+export const BATTERY_BASES: { value: BatteryBase; label: string }[] = [
+  { value: 'concrete-pad', label: 'Concrete pad' },
+  { value: 'wall-mount', label: 'Wall mount' },
+  { value: 'existing-ground', label: 'On existing ground' },
+];
+
 /** Every free-text box inside InstallNotes, with its polish key and post label. */
 export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; label: string }[] = [
   { key: 'install.batteryLocation', field: 'batteryLocation', label: 'Battery location' },
@@ -128,7 +136,13 @@ export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; lab
   { key: 'install.solarRun', field: 'solarRun', label: 'Solar run' },
   { key: 'install.batteryRun', field: 'batteryRun', label: 'Battery run' },
   { key: 'install.specialCases', field: 'specialCases', label: 'Special cases' },
+  // Retired 2026-11-03 (see InstallNotes.concretePad) — kept so stored polish
+  // keys and rawTextFor still resolve, like mainDisconnectLocation.
   { key: 'install.concretePad', field: 'concretePad', label: 'Concrete pad installation' },
+  { key: 'install.batteryBaseWork', field: 'batteryBaseWork', label: 'Battery base extra work' },
+  { key: 'install.batteryElevation', field: 'batteryElevation', label: 'Battery elevation' },
+  { key: 'install.batteryGround', field: 'batteryGround', label: 'Existing ground' },
+  { key: 'install.batteryOther', field: 'batteryOther', label: 'Anything else (battery installation)' },
   { key: 'install.other', field: 'other', label: 'Anything else' },
 ];
 
@@ -168,6 +182,15 @@ export function rawTextFor(r: PostRecord, key: PolishKey): string {
 /** Drop terminal punctuation so joined clauses read as one sentence. */
 function clause(s: string): string {
   return s.replace(/[.;,!?…]+$/, '').trim();
+}
+
+/**
+ * A box's effective text as mid-sentence clauses joined with "; ", or '' when
+ * the box is empty. The shared primitive behind `labelled`, `leadSentence` and
+ * the battery-base branches — each of which then wraps it differently.
+ */
+function clauses(raw: string, key: PolishKey, p: PolishState): string {
+  return effectiveText(raw, key, p).split('\n').map(stripBullet).map(clause).filter(Boolean).join('; ');
 }
 
 /**
@@ -285,20 +308,14 @@ export function installNoteLines(
   if (material) lines.push(`Roof material: ${clause(material)}.`);
 
   // 2. Free text, in the order fixed by the 2026-10-27 audit: battery
-  //    location, concrete pad, "anything else", and special cases LAST
-  //    (Aboud: "lets have it below the Anything else").
-  //    (mainDisconnectLocation retired, meeting 2026-10-04.)
+  //    location, "anything else", and special cases LAST (Aboud: "lets have
+  //    it below the Anything else").
+  //    (mainDisconnectLocation retired, meeting 2026-10-04; concretePad
+  //    retired 2026-11-03 — the Battery installation analysis block replaced
+  //    it, see batteryAnalysisLines.)
   if (!omit.includes('batteryLocation')) {
     const def = field('batteryLocation');
     lines.push(...labelled(def.label, n.batteryLocation ?? '', def.key, p));
-  }
-  // Concrete pad reads as a prefixed sentence, not a labelled one (2026-10-27
-  // audit: "we need a prefix 'Concrete pads will be installed on …'"). Until
-  // that audit it fed the SF Site Modification Notes field instead.
-  if (!omit.includes('concretePad')) {
-    lines.push(
-      ...leadSentence('Concrete pads will be installed', /^concrete/i, n.concretePad ?? '', 'install.concretePad', p),
-    );
   }
 
   // 3. "Anything else" — unlabelled, one bullet per line, exactly as the old
@@ -309,6 +326,68 @@ export function installNoteLines(
     const def = field('specialCases');
     lines.push(...labelled(def.label, n.specialCases ?? '', def.key, p));
   }
+
+  return lines;
+}
+
+/**
+ * The `Battery Installation Analysis` block (Aboud 2026-11-03) — its own
+ * section, sibling to Installation Notes and Conduit Raceway in both the Slack
+ * post and the SF "Installation Window and Planning" field.
+ *
+ * Four lines at most, always in this order: what the batteries sit on, the
+ * ground work that base needs, how the wall behind them carries them, then
+ * anything the questions did not cover.
+ *
+ * Every branch degrades gracefully when its follow-up box is still empty — the
+ * form requires those answers (see `missingRequired`), but a half-filled draft
+ * must still render something sensible rather than a dangling sentence.
+ */
+export function batteryAnalysisLines(n: InstallNotes | undefined, p: PolishState): string[] {
+  if (!n) return [];
+  const lines: string[] = [];
+
+  // 1 + 2. The base, and the ground work it needs.
+  if (n.batteryBase === 'concrete-pad') {
+    lines.push('The batteries will be installed on a new concrete pad.');
+    if (n.batteryBaseNeedsWork === true) {
+      const def = field('batteryBaseWork');
+      lines.push(...labelled(def.label, n.batteryBaseWork ?? '', def.key, p));
+    } else if (n.batteryBaseNeedsWork === false) {
+      // Stated out loud rather than left silent (Aboud 2026-11-03): the crew
+      // needs to see the question was actually answered, not skipped.
+      lines.push('No additional ground work is required for the battery base.');
+    }
+  } else if (n.batteryBase === 'wall-mount') {
+    const elevation = clauses(n.batteryElevation ?? '', 'install.batteryElevation', p);
+    lines.push(
+      elevation ? `The batteries will be wall-mounted at an elevation of ${elevation}.` : 'The batteries will be wall-mounted.',
+    );
+  } else if (n.batteryBase === 'existing-ground') {
+    const ground = clauses(n.batteryGround ?? '', 'install.batteryGround', p);
+    const lead = 'The batteries will be installed on the existing ground';
+    lines.push(ground ? `${lead} — ${ground}.` : `${lead}.`);
+  }
+
+  // 3. The supporting wall. An uneven wall that must ALSO be pushed out reads
+  //    as one sentence — generated as two, it says "unistruts" twice in
+  //    consecutive bullets and looks like a duplication bug.
+  const push = n.batteryPushFromWall === true;
+  if (n.wallEven === true) {
+    lines.push('The supporting wall is even — the batteries installation will be wall supported normally.');
+    if (push) lines.push('Unistruts will be used to push the batteries further from the wall.');
+  } else if (n.wallEven === false) {
+    lines.push(
+      push
+        ? 'The supporting wall is not even — unistruts with spring nuts will be used, and additional unistruts will push the batteries further from the wall.'
+        : 'The supporting wall is not even — unistruts with spring nuts will be used to support the batteries.',
+    );
+  } else if (push) {
+    lines.push('Unistruts will be used to push the batteries further from the wall.');
+  }
+
+  // 4. Anything else — unlabelled, one bullet per line, like the main box.
+  lines.push(...noteLines(effectiveText(n.batteryOther ?? '', 'install.batteryOther', p)));
 
   return lines;
 }

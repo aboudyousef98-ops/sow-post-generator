@@ -169,10 +169,15 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
   // boards since 2026-10-08, and a utility must not match a Jurisdiction.
   const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
+  // The battery installation analysis is deliberately absent from this list
+  // (Aboud 2026-11-03) — it is not required, so it must not read as a gap.
   const checks: Check[] = [
     { label: 'Customer name', done: !missing.includes('Customer name'), action: 'Fill in' },
     { label: 'Jurisdiction', done: !missing.includes('Jurisdiction'), action: 'Fill in' },
     { label: 'Site address', done: !missing.includes('Site address'), action: 'Fill in' },
+    ...(missing.includes('Region text')
+      ? [{ label: 'Region text', done: false, action: 'Fill in' } as Check]
+      : []),
     { label: `Level ${record.level} chosen · ${LEVEL_NAMES[record.level]}`, done: true },
     {
       label: ahjMatch
@@ -183,9 +188,6 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
       done: true,
     },
   ];
-  if (missing.includes('Region text')) {
-    checks.splice(3, 0, { label: 'Region text', done: false, action: 'Fill in' });
-  }
 
   return (
     <aside className="compose-aside">

@@ -19,6 +19,7 @@ function norcaRecord(overrides: Partial<PostRecord> = {}): PostRecord {
   return makeRecord(overrides);
 }
 
+
 // Expected output — spec/06 §2 revised per Aboud (2026-09-26): bullets instead
 // of numbers, Jurisdiction + Site Address as their own lines, empty lines dropped.
 const NORCA_EXPECTED = `Hello Team,
@@ -140,7 +141,9 @@ describe('missingRequired', () => {
 
 describe('missingRequired (spec/10 §1)', () => {
   it('does not require an install date', () => {
-    const r = norcaRecord({ sf: { ...norcaRecord().sf, installScheduledDate: '' } });
+    const r = norcaRecord({
+      sf: { ...norcaRecord().sf, installScheduledDate: '' },
+    });
     expect(missingRequired(r)).toEqual([]);
   });
 

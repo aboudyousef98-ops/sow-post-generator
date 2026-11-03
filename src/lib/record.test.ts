@@ -41,6 +41,33 @@ describe('hasContent — installNotes (carried fix, Phase 7 review)', () => {
     expect(hasContent(r)).toBe(true);
   });
 
+  // Battery installation analysis (Aboud 2026-11-03) — a draft holding only
+  // one of these answers must still autosave, like every other dropdown.
+  it('a record with ONLY a battery base chosen counts as content', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), batteryBase: 'wall-mount' } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY the wall-evenness answer counts as content', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), wallEven: false } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY "push from wall" answered No counts as content', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), batteryPushFromWall: false } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY the extra-work answer counts as content', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), batteryBaseNeedsWork: false } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY the battery elevation typed counts as content', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), batteryElevation: '48 in' } });
+    expect(hasContent(r)).toBe(true);
+  });
+
   it('a completely blank record from blankRecord() has no content', () => {
     expect(hasContent(blankRecord('Aboud Yousef', defaultSettings()))).toBe(false);
   });

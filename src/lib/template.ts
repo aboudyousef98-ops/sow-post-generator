@@ -5,7 +5,7 @@ import type { Ahj, PostRecord, PostValue, Settings } from '../types';
 import { boardsOfKind, livePosts, matchAhj } from './ahj';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
-import { conduitRunLines, installNoteLines } from './installNotes';
+import { batteryAnalysisLines, conduitRunLines, installNoteLines } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
 
 /** A feedback note's bullet lines: polished when available+enabled, else raw; the default phrase when empty. */
@@ -92,6 +92,13 @@ export function titleBlockTsv(record: PostRecord, boardProjects?: BoardProject[]
  * spec/10 §1 — projects are now designed before a date is scheduled). The copy
  * buttons and "Mark as posted" stay disabled until these are filled. Notes are
  * NOT required — empty note bullets are simply dropped from the post.
+ *
+ * The battery installation analysis (2026-11-03) is deliberately NOT here.
+ * It was built as a required group, but requiring it would have flipped every
+ * open draft to "not ready to post" the moment it shipped — ~255 of them —
+ * so Aboud dropped the gate ("just skip the require thing"). The questions are
+ * asked in the form and printed when answered; nothing is withheld if they are
+ * not. Pinned by OutputColumn.readiness.test.tsx.
  */
 export function missingRequired(record: PostRecord): string[] {
   const missing: string[] = [];
@@ -167,6 +174,9 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
       ],
     },
     { label: 'Installation Notes', values: installNoteLines(record.installNotes, record, record.sf.utility) },
+    // Its own bullet rather than more sub-bullets under Installation Notes
+    // (Aboud 2026-11-03), structurally identical to Conduit Raceway below.
+    { label: 'Battery Installation Analysis', values: batteryAnalysisLines(record.installNotes, record) },
     { label: 'Conduit Raceway', values: conduitRunLines(record.installNotes, record) },
     { label: 'Clearance', values: ['All required clearance requirements have been met.'] },
     { label: 'Site Survey Feedback', values: effectiveNoteLines(record, 'siteSurvey', settings) },

@@ -50,6 +50,16 @@ export function defaultSettings(): Settings {
         'Small junction boxes to be relocated.',
         'Existing equipment to be moved.',
       ],
+      // Battery installation analysis (Aboud 2026-11-03). Lowercase fragments,
+      // not sentences: these boxes are joined INTO a sentence — "Battery base
+      // extra work: cut the ground …" / "… on the existing ground — inside the
+      // garage on concrete ground." A capitalised chip would read mid-sentence.
+      'install.batteryBaseWork': [
+        'cut the ground to fit the concrete pad',
+        'clean the ground',
+        'level the ground',
+      ],
+      'install.batteryGround': ['inside the garage on concrete ground', 'concrete ground'],
       siteSurvey: [
         'Some of the uploaded photos in Salesforce appear to belong to another project.',
         'Please take sufficient measurements of all walls.',
