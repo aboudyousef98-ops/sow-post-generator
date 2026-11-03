@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { InstallNotes } from '../types';
 import {
+  batteryAnalysisLines,
   conduitRunLines,
   disconnectDurationFor,
   emptyInstallNotes,
@@ -292,36 +293,12 @@ describe('installNoteLines — labelled free text', () => {
   });
 });
 
-describe('installNoteLines — 2026-10-27 audit: order, concrete pad prefix, walls omit', () => {
-  it('special cases renders BELOW "anything else"; concrete pad ABOVE it, prefixed', () => {
-    expect(
-      installNoteLines(
-        n({ concretePad: 'On the east side', other: 'Attic run', specialCases: 'Window closed off' }),
-        off,
-      ),
-    ).toEqual([
+describe('installNoteLines — 2026-10-27 audit: order, walls omit', () => {
+  it('special cases renders BELOW "anything else"', () => {
+    expect(installNoteLines(n({ other: 'Attic run', specialCases: 'Window closed off' }), off)).toEqual([
       DUR_12,
-      'Concrete pads will be installed on the east side.',
       'Attic run.',
       'Special cases: Window closed off.',
-    ]);
-  });
-
-  it('a pad box that already says "Concrete…" is not double-prefixed', () => {
-    expect(installNoteLines(n({ concretePad: 'Concrete pads can extend past the left edge' }), off)).toEqual([
-      DUR_12,
-      'Concrete pads can extend past the left edge.',
-    ]);
-  });
-
-  it('pad lines join with "; " into the one sentence; an all-caps start keeps its capital', () => {
-    expect(installNoteLines(n({ concretePad: 'On the east side\n4x4 ft each' }), off)).toEqual([
-      DUR_12,
-      'Concrete pads will be installed on the east side; 4x4 ft each.',
-    ]);
-    expect(installNoteLines(n({ concretePad: 'TPO walkway pads under the units' }), off)).toEqual([
-      DUR_12,
-      'Concrete pads will be installed TPO walkway pads under the units.',
     ]);
   });
 
@@ -394,5 +371,190 @@ describe('rawTextFor', () => {
 
   it('returns empty string when the record has no installNotes yet', () => {
     expect(rawTextFor(makeRecord({ installNotes: undefined }), 'install.loadRun')).toBe('');
+  });
+});
+
+// ---- Battery installation analysis (Aboud 2026-11-03) ----------------------
+// Replaces the retired `concretePad` box. Two required dropdown groups — the
+// battery base and the supporting wall — plus a free "anything else" box, all
+// rendered as one block of its own under Installation Notes.
+
+describe('batteryAnalysisLines — battery base', () => {
+  it('a concrete pad needing no extra work says so explicitly', () => {
+    expect(batteryAnalysisLines(n({ batteryBase: 'concrete-pad', batteryBaseNeedsWork: false }), off)).toEqual([
+      'The batteries will be installed on a new concrete pad.',
+      'No additional ground work is required for the battery base.',
+    ]);
+  });
+
+  it('a concrete pad needing extra work labels the work instead', () => {
+    expect(
+      batteryAnalysisLines(
+        n({
+          batteryBase: 'concrete-pad',
+          batteryBaseNeedsWork: true,
+          batteryBaseWork: 'cut the ground to fit the concrete pad\nlevel the ground',
+        }),
+        off,
+      ),
+    ).toEqual([
+      'The batteries will be installed on a new concrete pad.',
+      'Battery base extra work: cut the ground to fit the concrete pad; level the ground.',
+    ]);
+  });
+
+  it('extra work ticked but not yet described drops the work line, keeping the pad line', () => {
+    expect(
+      batteryAnalysisLines(
+        n({ batteryBase: 'concrete-pad', batteryBaseNeedsWork: true, batteryBaseWork: '  ' }),
+        off,
+      ),
+    ).toEqual(['The batteries will be installed on a new concrete pad.']);
+  });
+
+  it('an unanswered extra-work question prints the pad line alone', () => {
+    expect(batteryAnalysisLines(n({ batteryBase: 'concrete-pad' }), off)).toEqual([
+      'The batteries will be installed on a new concrete pad.',
+    ]);
+  });
+
+  it('wall mount prints the elevation inside the sentence', () => {
+    expect(
+      batteryAnalysisLines(n({ batteryBase: 'wall-mount', batteryElevation: '48 in above the garage floor' }), off),
+    ).toEqual(['The batteries will be wall-mounted at an elevation of 48 in above the garage floor.']);
+  });
+
+  it('wall mount with no elevation yet still states the mount', () => {
+    expect(batteryAnalysisLines(n({ batteryBase: 'wall-mount' }), off)).toEqual([
+      'The batteries will be wall-mounted.',
+    ]);
+  });
+
+  it('existing ground joins the description after an em dash', () => {
+    expect(
+      batteryAnalysisLines(
+        n({ batteryBase: 'existing-ground', batteryGround: 'inside the garage on concrete ground' }),
+        off,
+      ),
+    ).toEqual(['The batteries will be installed on the existing ground — inside the garage on concrete ground.']);
+  });
+
+  it('existing ground with no description yet still states the ground', () => {
+    expect(batteryAnalysisLines(n({ batteryBase: 'existing-ground' }), off)).toEqual([
+      'The batteries will be installed on the existing ground.',
+    ]);
+  });
+
+  it('several description lines join with "; " into the one sentence', () => {
+    expect(
+      batteryAnalysisLines(
+        n({ batteryBase: 'existing-ground', batteryGround: 'concrete ground\nslopes slightly east' }),
+        off,
+      ),
+    ).toEqual(['The batteries will be installed on the existing ground — concrete ground; slopes slightly east.']);
+  });
+
+  it('no base chosen and no notes at all yield nothing', () => {
+    expect(batteryAnalysisLines(n(), off)).toEqual([]);
+    expect(batteryAnalysisLines(undefined, off)).toEqual([]);
+  });
+});
+
+describe('batteryAnalysisLines — wall support', () => {
+  it('an even wall is supported normally', () => {
+    expect(batteryAnalysisLines(n({ wallEven: true, batteryPushFromWall: false }), off)).toEqual([
+      'The supporting wall is even — the batteries installation will be wall supported normally.',
+    ]);
+  });
+
+  it('an even wall that must be pushed out adds the unistrut line', () => {
+    expect(batteryAnalysisLines(n({ wallEven: true, batteryPushFromWall: true }), off)).toEqual([
+      'The supporting wall is even — the batteries installation will be wall supported normally.',
+      'Unistruts will be used to push the batteries further from the wall.',
+    ]);
+  });
+
+  it('an uneven wall calls for unistruts with spring nuts', () => {
+    expect(batteryAnalysisLines(n({ wallEven: false, batteryPushFromWall: false }), off)).toEqual([
+      'The supporting wall is not even — unistruts with spring nuts will be used to support the batteries.',
+    ]);
+  });
+
+  it('an uneven wall that must also be pushed out reads as ONE sentence, not two unistrut lines', () => {
+    expect(batteryAnalysisLines(n({ wallEven: false, batteryPushFromWall: true }), off)).toEqual([
+      'The supporting wall is not even — unistruts with spring nuts will be used, and additional unistruts will push the batteries further from the wall.',
+    ]);
+  });
+
+  it('push = No prints nothing of its own', () => {
+    expect(batteryAnalysisLines(n({ batteryPushFromWall: false }), off)).toEqual([]);
+  });
+
+  it('push = Yes before the evenness question is answered still prints', () => {
+    expect(batteryAnalysisLines(n({ batteryPushFromWall: true }), off)).toEqual([
+      'Unistruts will be used to push the batteries further from the wall.',
+    ]);
+  });
+});
+
+describe('batteryAnalysisLines — anything else, order and polish', () => {
+  it('the free box renders unlabelled, one bullet per line, LAST', () => {
+    expect(
+      batteryAnalysisLines(
+        n({
+          batteryBase: 'concrete-pad',
+          batteryBaseNeedsWork: false,
+          wallEven: true,
+          batteryPushFromWall: false,
+          // Printed exactly as typed, like the main "Anything else" box — the
+          // designer's own wording and capitalisation survive.
+          batteryOther: '4x4 ft pad under the battery stack\nHomeowner to clear the shelving',
+        }),
+        off,
+      ),
+    ).toEqual([
+      'The batteries will be installed on a new concrete pad.',
+      'No additional ground work is required for the battery base.',
+      'The supporting wall is even — the batteries installation will be wall supported normally.',
+      '4x4 ft pad under the battery stack.',
+      'Homeowner to clear the shelving.',
+    ]);
+  });
+
+  it('uses the polished text for the work box when one is enabled', () => {
+    const notes = n({ batteryBase: 'concrete-pad', batteryBaseNeedsWork: true, batteryBaseWork: 'cut ground' });
+    const on = { usePolished: {}, polished: { 'install.batteryBaseWork': 'saw-cut the slab to fit the pad' } };
+    expect(batteryAnalysisLines(notes, on)).toEqual([
+      'The batteries will be installed on a new concrete pad.',
+      'Battery base extra work: saw-cut the slab to fit the pad.',
+    ]);
+  });
+
+  it('a pre-2026-11-03 record with none of the battery keys yields nothing', () => {
+    const notes = n();
+    const keys = [
+      'batteryBase',
+      'batteryBaseNeedsWork',
+      'batteryBaseWork',
+      'batteryElevation',
+      'batteryGround',
+      'wallEven',
+      'batteryPushFromWall',
+      'batteryOther',
+    ];
+    for (const k of keys) delete (notes as unknown as Record<string, unknown>)[k];
+    expect(batteryAnalysisLines(notes, off)).toEqual([]);
+  });
+});
+
+describe('installNoteLines — the retired concrete pad box (Aboud 2026-11-03)', () => {
+  it('no longer prints a "Concrete pads will be installed …" line', () => {
+    const notes = n({ other: 'Attic run' });
+    (notes as unknown as Record<string, unknown>).concretePad = 'On the east side';
+    expect(installNoteLines(notes, off)).toEqual([DUR_12, 'Attic run.']);
+  });
+
+  it('does not print battery-analysis lines either — they are their own block', () => {
+    expect(installNoteLines(n({ batteryBase: 'wall-mount', batteryElevation: '48 in' }), off)).toEqual([DUR_12]);
   });
 });

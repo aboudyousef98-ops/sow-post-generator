@@ -5,7 +5,7 @@ import type { Ahj, PostRecord, PostValue, Settings } from '../types';
 import { boardsOfKind, livePosts, matchAhj } from './ahj';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
-import { conduitRunLines, installNoteLines } from './installNotes';
+import { batteryAnalysisLines, conduitRunLines, installNoteLines } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
 
 /** A feedback note's bullet lines: polished when available+enabled, else raw; the default phrase when empty. */
@@ -88,10 +88,45 @@ export function titleBlockTsv(record: PostRecord, boardProjects?: BoardProject[]
 }
 
 /**
+ * The battery questions that still need an answer (Aboud 2026-11-03).
+ *
+ * Every SOW has batteries, so the base and both wall-support answers are
+ * ALWAYS required; the follow-up is required only on the branch that asks it.
+ * The battery "anything else" box is never required.
+ *
+ * Exported for the readiness tick-list, which groups these under their own
+ * heading instead of listing them beside the Salesforce fields.
+ */
+export function missingBatteryAnalysis(record: PostRecord): string[] {
+  const n = record.installNotes;
+  const missing: string[] = [];
+
+  if (!n?.batteryBase) {
+    missing.push('Battery base');
+  } else if (n.batteryBase === 'concrete-pad') {
+    if (n.batteryBaseNeedsWork === undefined) missing.push('Battery base extra work');
+    else if (n.batteryBaseNeedsWork && !n.batteryBaseWork?.trim()) missing.push('Battery base work description');
+  } else if (n.batteryBase === 'wall-mount') {
+    if (!n.batteryElevation?.trim()) missing.push('Battery elevation');
+  } else if (n.batteryBase === 'existing-ground') {
+    if (!n.batteryGround?.trim()) missing.push('Existing ground description');
+  }
+
+  if (n?.wallEven === undefined) missing.push('Supporting wall evenness');
+  if (n?.batteryPushFromWall === undefined) missing.push('Push batteries from wall');
+
+  return missing;
+}
+
+/**
  * Required fields (Aboud, 2026-09-26; install date dropped 2026-09-30 per
  * spec/10 §1 — projects are now designed before a date is scheduled). The copy
  * buttons and "Mark as posted" stay disabled until these are filled. Notes are
  * NOT required — empty note bullets are simply dropped from the post.
+ *
+ * The battery installation analysis joined this list on 2026-11-03, which is
+ * why every draft opened before that date reads as "not ready" until its
+ * battery questions are answered.
  */
 export function missingRequired(record: PostRecord): string[] {
   const missing: string[] = [];
@@ -99,6 +134,7 @@ export function missingRequired(record: PostRecord): string[] {
   if (record.sf.region === 'OTHER' && !record.sf.installRegionRaw?.trim()) missing.push('Region text');
   if (!record.sf.jurisdiction?.trim()) missing.push('Jurisdiction');
   if (!record.sf.siteAddress?.trim()) missing.push('Site address');
+  missing.push(...missingBatteryAnalysis(record));
   return missing;
 }
 
@@ -167,6 +203,9 @@ function buildLines(record: PostRecord, settings: Settings): PostLines {
       ],
     },
     { label: 'Installation Notes', values: installNoteLines(record.installNotes, record, record.sf.utility) },
+    // Its own bullet rather than more sub-bullets under Installation Notes
+    // (Aboud 2026-11-03), structurally identical to Conduit Raceway below.
+    { label: 'Battery Installation Analysis', values: batteryAnalysisLines(record.installNotes, record) },
     { label: 'Conduit Raceway', values: conduitRunLines(record.installNotes, record) },
     { label: 'Clearance', values: ['All required clearance requirements have been met.'] },
     { label: 'Site Survey Feedback', values: effectiveNoteLines(record, 'siteSurvey', settings) },

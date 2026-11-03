@@ -6,19 +6,29 @@
 // per field.
 //
 // Shape decisions (2026-10-22 study of 11 real handoff posts, revised by the
-// 2026-10-27 field audit):
+// 2026-10-27 field audit and the 2026-11-03 battery change):
 // - "Installation Window and Planning" carries the classification + install
-//   notes (concrete pad before "anything else", special cases after it) +
-//   conduit raceway as labelled lines — the structured variant of what
+//   notes (special cases last) + the battery installation analysis + conduit
+//   raceway as labelled sections — the structured variant of what
 //   coordinators were pasting by hand.
 // - Walls and battery location are OMITTED from that blob because both land in
 //   Battery and Equipment Location — every fact is stated exactly once.
+// - The battery installation analysis goes in the WINDOW blob, not beside the
+//   battery location (Aboud 2026-11-03: he wants the whole analysis in one
+//   place, under Installation Notes).
 // - Wiring Route and Site Modification Notes are deliberately NOT generated
-//   (filled by hand in SF; the pad moved to the window blob, 2026-10-27).
+//   (filled by hand in SF; the concrete pad box was retired 2026-11-03).
 
 import type { PostRecord, PostValue, Settings } from '../types';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
-import { conduitRunLines, disconnectDurationFor, installNoteLines, leadSentence, wallsSentence } from './installNotes';
+import {
+  batteryAnalysisLines,
+  conduitRunLines,
+  disconnectDurationFor,
+  installNoteLines,
+  leadSentence,
+  wallsSentence,
+} from './installNotes';
 import { punctuate } from './noteText';
 import { effectiveNoteLines } from './template';
 
@@ -86,6 +96,14 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
     'disconnectDuration',
   ]).filter((l) => !clearanceRe.test(l));
   if (noteSentences.length) windowParts.push(`${underline('Installation Notes')}\n${dashed(noteSentences)}`);
+  // Battery installation analysis — its own section between Installation Notes
+  // and Conduit Raceway (Aboud 2026-11-03). He asked for the WHOLE analysis
+  // under Installation Notes rather than split across two SF fields; a
+  // sibling section rather than an indented sub-list, because SF strips
+  // formatting and these sentences are long enough to soft-wrap, which would
+  // flatten any indentation back into the list above it.
+  const battery = batteryAnalysisLines(n, record).filter((l) => !clearanceRe.test(l));
+  if (battery.length) windowParts.push(`${underline('Battery Installation Analysis')}\n${dashed(battery)}`);
   const runs = conduitRunLines(n, record).flatMap(runLines).filter((l) => !clearanceRe.test(l));
   if (runs.length) windowParts.push(`${underline('Conduit Raceway')}\n${runs.join('\n')}`);
   windowParts.push(CLEARANCE_LINE);

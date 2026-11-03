@@ -9,7 +9,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { defaultSettings } from '../lib/storage';
-import { makeRecord } from '../lib/__fixtures__/makeRecord';
+import { answeredInstallNotes, makeRecord } from '../lib/__fixtures__/makeRecord';
 import type { Ahj, AhjPost, PostRecord } from '../types';
 import OutputColumn from './OutputColumn';
 
@@ -37,6 +37,10 @@ function Harness({ initial, ahjs = [harris] }: { initial?: Partial<PostRecord>; 
   const [record, setRecord] = useState<PostRecord>(() => {
     const r = makeRecord(initial);
     r.sf = { ...r.sf, jurisdiction: 'Harris County' };
+    // The note check gates "Copy for Slack", which the readiness gate disables
+    // until the battery questions are answered (Aboud 2026-11-03) — so this
+    // harness needs a record the gate already considers ready.
+    r.installNotes = answeredInstallNotes(r.installNotes);
     return r;
   });
   lastRecord = record;

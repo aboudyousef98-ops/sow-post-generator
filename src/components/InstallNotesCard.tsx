@@ -5,6 +5,7 @@
 
 import { isoToUs } from '../lib/dates';
 import {
+  BATTERY_BASES,
   disconnectDurationFor,
   DURATION_WORD,
   emptyInstallNotes,
@@ -19,6 +20,7 @@ import {
   servicesOf,
 } from '../lib/installNotes';
 import type {
+  BatteryBase,
   InstallNotes,
   Orientation,
   PolishKey,
@@ -32,6 +34,14 @@ import NoteBox from './NoteBox';
 
 /** 10 → 1, labelled with the Roof Rating System band names. */
 const ROOF_OPTIONS: RoofRating[] = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1];
+
+/**
+ * The battery questions are tri-state: '' is "not answered yet", which is what
+ * makes them enforceable as required. These two keep that mapping in one place
+ * so a `false` answer is never confused with an unanswered one.
+ */
+const yesNoValue = (v: boolean | undefined) => (v === undefined ? '' : v ? 'yes' : 'no');
+const yesNoParse = (v: string) => (v === '' ? undefined : v === 'yes');
 
 interface Props {
   record: PostRecord;
@@ -330,6 +340,75 @@ export default function InstallNotesCard({
           (Main disconnect location retired, meeting 2026-10-04.) */}
       <div className="note-grid">{box('batteryLocation', 1)}</div>
 
+      {/* Battery installation analysis (Aboud 2026-11-03). Grouped with the
+          battery location, above the conduit runs. Every dropdown here is
+          REQUIRED — see missingRequired() — which is why the yes/no questions
+          are selects with a blank "—" rather than checkboxes: a checkbox
+          cannot say "not answered yet". Replaced the Concrete pad box. */}
+      <div className="install-subhead">Battery installation analysis</div>
+      <div className="install-row">
+        <label className="field">
+          Battery base
+          <select
+            value={n.batteryBase ?? ''}
+            onChange={(e) => setNotes({ batteryBase: (e.target.value || undefined) as BatteryBase | undefined })}
+          >
+            <option value="">—</option>
+            {BATTERY_BASES.map((b) => (
+              <option key={b.value} value={b.value}>
+                {b.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        {n.batteryBase === 'concrete-pad' && (
+          <label className="field">
+            Does the base need extra work?
+            <select
+              value={yesNoValue(n.batteryBaseNeedsWork)}
+              onChange={(e) => setNotes({ batteryBaseNeedsWork: yesNoParse(e.target.value) })}
+            >
+              <option value="">—</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+            <span className="field-hint">No → “No additional ground work is required for the battery base.”</span>
+          </label>
+        )}
+      </div>
+      {/* The branch's own box. Text survives a switch away and back, mirroring
+          storiesOther / roofMaterialOther. */}
+      {n.batteryBase === 'concrete-pad' && n.batteryBaseNeedsWork === true && (
+        <div className="note-grid">{box('batteryBaseWork', 2)}</div>
+      )}
+      {n.batteryBase === 'wall-mount' && <div className="note-grid">{box('batteryElevation', 1)}</div>}
+      {n.batteryBase === 'existing-ground' && <div className="note-grid">{box('batteryGround', 2)}</div>}
+
+      <div className="install-row">
+        <label className="field">
+          Supporting wall even (flat)?
+          <select value={yesNoValue(n.wallEven)} onChange={(e) => setNotes({ wallEven: yesNoParse(e.target.value) })}>
+            <option value="">—</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+          <span className="field-hint">No → unistruts with spring nuts</span>
+        </label>
+        <label className="field">
+          Push the batteries out from the wall?
+          <select
+            value={yesNoValue(n.batteryPushFromWall)}
+            onChange={(e) => setNotes({ batteryPushFromWall: yesNoParse(e.target.value) })}
+          >
+            <option value="">—</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+          <span className="field-hint">No prints nothing</span>
+        </label>
+      </div>
+      <div className="note-grid">{box('batteryOther', 2)}</div>
+
       <div className="install-subhead">Conduit raceway</div>
       <div className="note-grid">{RUN_FIELDS.map((f) => box(f, 2))}</div>
 
@@ -337,11 +416,6 @@ export default function InstallNotesCard({
         {box('specialCases', 3)}
         {box('other', 3)}
       </div>
-
-      {/* Prints as "Concrete pads will be installed …" inside the install
-          notes / SF window blob (2026-10-27 audit — moved out of the SF Site
-          Modification Notes field). */}
-      <div className="note-grid">{box('concretePad', 2)}</div>
     </div>
   );
 }

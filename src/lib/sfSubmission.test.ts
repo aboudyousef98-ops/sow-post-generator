@@ -205,24 +205,18 @@ describe('merged note fields', () => {
     expect(fieldValue(r, 'clearanceHomeowner')).not.toMatch(/clearance requirements/i);
   });
 
-  it('concrete pad prints in the window blob as "Concrete pads will be installed …", BEFORE "anything else"; special cases prints AFTER it (2026-10-27 audit)', () => {
-    const r = rec({
-      installNotes: {
-        ...emptyInstallNotes(),
-        concretePad: 'On the east side of the house',
-        other: 'Attic run',
-        specialCases: 'No AL wires in Missouri City',
-      },
-    });
+  it('the retired concrete pad box no longer reaches the window blob (Aboud 2026-11-03)', () => {
+    const notes = { ...emptyInstallNotes(), other: 'Attic run', specialCases: 'No AL wires in Missouri City' };
+    (notes as Record<string, unknown>).concretePad = 'On the east side of the house';
+    const r = rec({ installNotes: notes });
     const v = fieldValue(r, 'window');
-    expect(v).toContain(
-      '- Concrete pads will be installed on the east side of the house.\n- Attic run.\n- Special cases: No AL wires in Missouri City.',
-    );
-    // The Site Modification Notes field is no longer offered at all.
+    expect(v).not.toContain('Concrete pads');
+    expect(v).toContain('- Attic run.\n- Special cases: No AL wires in Missouri City.');
+    // The Site Modification Notes field is still not offered at all.
     expect(buildSfSubmission(r, defaultSettings()).find((f) => f.id === 'siteModification')).toBeUndefined();
   });
 
-  it('a pre-2026-10-22 record with no concretePad key still builds, with no pad line', () => {
+  it('a pre-2026-10-22 record with no concretePad key still builds', () => {
     const notes = { ...emptyInstallNotes(), specialCases: 'Old record case' };
     delete (notes as Record<string, unknown>).concretePad;
     const v = fieldValue(rec({ installNotes: notes }), 'window');
@@ -235,5 +229,76 @@ describe('merged note fields', () => {
     expect(fieldValue(rec(), 'design')).toBe('All good.');
     const r = rec({ notes: { layout: '', siteSurvey: 'Missing wall pictures', design: '', homeowner: '' } });
     expect(fieldValue(r, 'siteSurvey')).toBe('Missing wall pictures.');
+  });
+});
+
+// ---- Battery installation analysis in the window blob (Aboud 2026-11-03) ---
+// Aboud's call: the WHOLE analysis lives under Installation Notes rather than
+// being split across two SF fields — as its own underlined section, because SF
+// strips formatting and an indented sub-list loses its grouping the moment a
+// long sentence soft-wraps.
+
+describe('battery installation analysis — SF placement and plain-text shape', () => {
+  const full = () =>
+    rec({
+      installNotes: {
+        ...emptyInstallNotes(),
+        batteryBase: 'concrete-pad',
+        batteryBaseNeedsWork: true,
+        batteryBaseWork: 'cut the ground to fit the concrete pad\nlevel the ground',
+        wallEven: false,
+        batteryPushFromWall: true,
+        batteryOther: '4x4 ft pad under the battery stack',
+        specialCases: 'Window to be closed off',
+      },
+    });
+
+  it('renders as its own underlined section inside the window blob', () => {
+    expect(fieldValue(full(), 'window')).toContain(
+      [
+        'Battery Installation Analysis',
+        '-----------------------------',
+        '- The batteries will be installed on a new concrete pad.',
+        '- Battery base extra work: cut the ground to fit the concrete pad; level the ground.',
+        '- The supporting wall is not even — unistruts with spring nuts will be used, and additional unistruts will push the batteries further from the wall.',
+        '- 4x4 ft pad under the battery stack.',
+      ].join('\n'),
+    );
+  });
+
+  it('sits AFTER Installation Notes and BEFORE Conduit Raceway', () => {
+    const r = full();
+    r.installNotes!.serviceRun = '2" PVC, 12 ft';
+    const v = fieldValue(r, 'window');
+    expect(v.indexOf('Installation Notes')).toBeLessThan(v.indexOf('Battery Installation Analysis'));
+    expect(v.indexOf('Battery Installation Analysis')).toBeLessThan(v.indexOf('Conduit Raceway'));
+  });
+
+  it('the underline is exactly as long as its title, like the other sections', () => {
+    const v = fieldValue(full(), 'window');
+    const [title, rule] = v.split('\n').slice(v.split('\n').indexOf('Battery Installation Analysis'));
+    expect(rule).toBe('-'.repeat(title.length));
+  });
+
+  it('every line is a plain "- " bullet — no indentation to survive SF', () => {
+    const v = fieldValue(full(), 'window');
+    const section = v.split('Battery Installation Analysis\n')[1].split('\n\n')[0].split('\n').slice(1);
+    for (const line of section) expect(line.startsWith('- ')).toBe(true);
+  });
+
+  it('does NOT leak into the Battery and Equipment Location field', () => {
+    const v = fieldValue(full(), 'batteryLocation');
+    expect(v).not.toContain('concrete pad');
+    expect(v).not.toContain('unistruts');
+  });
+
+  it('the section disappears entirely while no battery question is answered', () => {
+    const v = fieldValue(rec({ installNotes: { ...emptyInstallNotes(), other: 'Attic run' } }), 'window');
+    expect(v).not.toContain('Battery Installation Analysis');
+  });
+
+  it('the clearance boilerplate still closes the blob, after the new section', () => {
+    const v = fieldValue(full(), 'window');
+    expect(v.endsWith('All required clearance requirements have been met.')).toBe(true);
   });
 });
