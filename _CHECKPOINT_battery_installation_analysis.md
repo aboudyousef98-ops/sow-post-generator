@@ -1,6 +1,8 @@
 # CHECKPOINT — Battery Installation Analysis
 
-> Date: 2026-11-03 | Status: **SHIPPED** — see "Deploy record" at the bottom.
+> Date: 2026-11-03 | Status: **READY TO DEPLOY — deploy command blocked by the
+> Claude Code permission classifier; Aboud must run it.** Code is merged to
+> `main` (`67e507d`), v32 live backup taken and validated.
 >
 > **The required-fields part was DROPPED before deploy.** Aboud: "just skip the
 > require thing and yallaaaa go deploy". Built required first; requiring it
@@ -196,9 +198,49 @@ it in. Suggested mapping — **the two ambiguous ones need a designer**:
   and Planning, the pad row removed, header and the top note rewritten.
 - `spec/` needed no change — those docs predate these fields.
 
-## Deploy record
+## Deploy record — 2026-11-03
 
-See the end of this file — filled in during the 2026-11-03 deploy.
+**Done:**
+- Pre-deploy backup `_versions/v32-live-backup-2026-11-03/` — all five stores
+  pulled and each confirmed to parse as JSON (ahjs 2,699 B · board 838,006 B ·
+  extrawork 18,214 B · records 830,347 B · users 1,392 B).
+- Site checked: `disabled: false`, not git-connected, published deploy was
+  `6ae0daf4` (2026-10-27).
+- Merged to `main`: `67e507d`.
+
+**Blocked:** `npx netlify deploy --build --prod` was denied by the Claude Code
+permission classifier. Aboud needs to run it himself.
+
+**Still to do after it runs:**
+1. Re-pull all five stores and diff against `v32-live-backup-2026-11-03/`.
+   Expect identical, or only changes someone made during the window.
+2. Confirm the live bundle carries the new strings (`Battery Installation
+   Analysis`) and no `changeme` token.
+
+### ⚠ The fresh pre-deploy grep changed the numbers
+
+The week-old v30 backup showed 12 drafts with retired pad text. The FRESH v32
+pull shows **41** (of 307 open drafts) — the team used that box heavily in the
+last week. This is exactly why the rule says to re-grep fresh.
+
+What they were typing, classified: 11 say explicitly that NO pad is needed,
+3 say a pad IS going in, and 27 are notes like `on soil ground`,
+`Batteries are floor mounted & wall supported. Concrete Pads are needed.`,
+`on floor under the batteries and the batteries will be also wall supported`.
+
+Two conclusions:
+- **The design is confirmed.** The team was already cramming the battery base
+  AND the wall-support answers into that one free box, in prose. The new
+  structured questions are what they were reaching for.
+- **The old logic was shipping nonsense to Salesforce** for a good share of
+  them, e.g. `Concrete pads will be installed no concrete pad needed , we will
+  do wall mount.` and `Concrete pads will be installed soil ground.`
+  Retiring it fixes those 41 as much as it changes them.
+
+**Mitigation added before deploy (commit `67e507d`):** the retired text is
+displayed **read-only** under the battery group with "Retired field — no longer
+posted", so none of the 41 drafts loses it invisibly. Whoever opens the draft
+can transfer it into the new questions. Nothing writes to it.
 
 ## Pending / open questions for Aboud
 
