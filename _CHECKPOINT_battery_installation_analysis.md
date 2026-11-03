@@ -1,8 +1,9 @@
 # CHECKPOINT — Battery Installation Analysis
 
-> Date: 2026-11-03 | Status: **READY TO DEPLOY — deploy command blocked by the
-> Claude Code permission classifier; Aboud must run it.** Code is merged to
-> `main` (`67e507d`), v32 live backup taken and validated.
+> Date: 2026-11-03 | Status: **SHIPPED AND VERIFIED.** Deploy
+> `6ae994bd9f773d653377bfcb`, published 2026-11-03T08:01:01Z, state `ready`.
+> Aboud ran the deploy himself (the CLI command was blocked by the Claude Code
+> permission classifier). Post-deploy data diff clean — see Deploy record.
 >
 > **The required-fields part was DROPPED before deploy.** Aboud: "just skip the
 > require thing and yallaaaa go deploy". Built required first; requiring it
@@ -208,14 +209,46 @@ it in. Suggested mapping — **the two ambiguous ones need a designer**:
   `6ae0daf4` (2026-10-27).
 - Merged to `main`: `67e507d`.
 
-**Blocked:** `npx netlify deploy --build --prod` was denied by the Claude Code
-permission classifier. Aboud needs to run it himself.
+**Deploy:** `npx netlify deploy --build --prod` was denied by the Claude Code
+permission classifier, so **Aboud ran it himself**. Published deploy
+`6ae994bd9f773d653377bfcb` at 08:01:01Z, state `ready`, previous was
+`6ae0daf4` (2026-10-27). If this recurs, a Bash permission rule for
+`netlify deploy` would let it run in-session.
 
-**Still to do after it runs:**
-1. Re-pull all five stores and diff against `v32-live-backup-2026-11-03/`.
-   Expect identical, or only changes someone made during the window.
-2. Confirm the live bundle carries the new strings (`Battery Installation
-   Analysis`) and no `changeme` token.
+**Post-deploy data diff — CLEAN.** All five stores re-pulled and compared to
+`_versions/v32-live-backup-2026-11-03/`:
+
+| Store | Result |
+|---|---|
+| ahjs | byte-identical |
+| board | byte-identical |
+| extrawork | byte-identical |
+| users | byte-identical |
+| records | +701 bytes — **one** addition, explained below |
+
+The single records difference: 329 → 330, **zero** records changed, **zero**
+removed. The addition is an empty draft by Aboud himself, created
+08:01:32Z — 31 seconds after the deploy went live, i.e. him opening the site to
+try it. It carries `batteryBaseNeedsWork: true` with no `batteryBase`, which is
+the designed branch-preservation behaviour (he picked Concrete pad → Yes, then
+set the base back to "—"; the answer is kept but prints nothing). Harmless, and
+it is live proof the new dropdowns work in production.
+
+The 41 drafts holding retired pad text are intact: 41 before, 41 after.
+
+**Live bundle verified** (`/assets/index-CW9UkFn6.js`, 686,116 B — byte-identical
+to the locally built `dist/` asset, so the deployed code is this code):
+- PRESENT: `Battery Installation Analysis`, `Battery installation analysis`,
+  `The batteries will be installed on a new concrete pad`,
+  `No additional ground work is required for the battery base`,
+  `unistruts with spring nuts`, `push the batteries further from the wall`,
+  `Retired field`, `Does the base need extra work`, `Supporting wall even`.
+- GONE: `Concrete pads will be installed` — 0 occurrences.
+- `changeme` token: **0 occurrences**. No `sb_secret_` / `service_role` /
+  `OPENAI_API_KEY`. The single `sk-` hit is React's `"maskType","mask-type"`
+  CSS mapping; the strict `sk-[A-Za-z0-9_-]{20,}` key pattern matches 0 times,
+  and `scripts/check-no-secrets.mjs` passes.
+- Site responds 200, `disabled: false`.
 
 ### ⚠ The fresh pre-deploy grep changed the numbers
 
