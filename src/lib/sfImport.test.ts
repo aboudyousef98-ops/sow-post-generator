@@ -39,6 +39,7 @@ function report(kind: 'scheduled' | 'design', rows: SfReportRow[], over: Partial
     totalRecords: rows.length,
     complete: true,
     unreadable: [],
+    skipped: [],
     warnings: [],
     ...over,
   };
@@ -372,5 +373,83 @@ describe('planImport — Salesforce notes (Aboud 2026-10-21)', () => {
     expect(find(plan, 'Moises Negrette').match).toBe('maybe');
     expect(find(plan, 'Moises Negrette').notes).toBeUndefined();
     expect(plan.counts.notes).toBe(0);
+  });
+});
+
+// ---- Scope of Work Reviews, imported daily (Aboud 2026-11-03) --------------
+// Two rules exist only because this one runs EVERY morning:
+//   - phase is set on NEW rows only, so a daily run never drags a row someone
+//     deliberately moved to Design back onto Schedule.
+//   - lender-skipped names count as seen, so 30 live non-Solrite projects do
+//     not appear as "not on this report" every single day.
+
+function reviewReport(rows: SfReportRow[], skipped: string[] = []): SfReport {
+  return {
+    kind: 'review',
+    rows,
+    totalRecords: rows.length,
+    complete: true,
+    unreadable: [],
+    skipped,
+    warnings: [],
+  };
+}
+
+/** The Reviews report has no Project Status column: '' status, always scheduled. */
+const reviewRow = (name: string, over: Partial<SfReportRow> = {}): SfReportRow =>
+  row(name, { status: '', scheduled: true, ...over });
+
+describe('planImport — review report', () => {
+  it('puts a NEW row on Schedule', () => {
+    const plan = planImport(reviewReport([reviewRow('Jane Doe')]), [], LABELS);
+    expect(find(plan, 'Jane Doe').match).toBe('new');
+    expect(find(plan, 'Jane Doe').phaseChange).toEqual({ fromId: null, toId: SCHEDULE });
+  });
+
+  it('leaves an existing row on Design alone — no daily tug-of-war', () => {
+    const board = [proj('Jane Doe', { phaseId: DESIGN })];
+    const plan = planImport(reviewReport([reviewRow('Jane Doe')]), board, LABELS);
+    expect(find(plan, 'Jane Doe').match).toBe('matched');
+    expect(find(plan, 'Jane Doe').phaseChange).toBeUndefined();
+    expect(plan.counts.phase).toBe(0);
+    expect(plan.stickySchedule).toEqual([]);
+  });
+
+  it('leaves an existing row with NO phase alone too', () => {
+    const board = [proj('Jane Doe', { phaseId: null })];
+    const plan = planImport(reviewReport([reviewRow('Jane Doe')]), board, LABELS);
+    expect(find(plan, 'Jane Doe').phaseChange).toBeUndefined();
+    expect(plan.counts.phase).toBe(0);
+  });
+
+  it('a lender-skipped project is NOT reported as missing from the board', () => {
+    const board = [proj('Jane Doe'), proj('Cash Carl')];
+    const plan = planImport(reviewReport([reviewRow('Jane Doe')], ['Cash Carl']), board, LABELS);
+    expect(plan.absent.map((p) => p.name)).toEqual([]);
+  });
+
+  it('a board row on neither the report nor the skip list is still reported missing', () => {
+    const board = [proj('Jane Doe'), proj('Cash Carl'), proj('Forgotten Fred')];
+    const plan = planImport(reviewReport([reviewRow('Jane Doe')], ['Cash Carl']), board, LABELS);
+    expect(plan.absent.map((p) => p.name)).toEqual(['Forgotten Fred']);
+  });
+
+  it('still mirrors notes onto an existing row, like the other reports', () => {
+    const board = [proj('Jane Doe')];
+    const rows = [reviewRow('Jane Doe', { notes: { alerts: 'Two attics' } })];
+    const plan = planImport(reviewReport(rows), board, LABELS);
+    expect(find(plan, 'Jane Doe').notes).toEqual({ alerts: 'Two attics' });
+    expect(plan.counts.notes).toBe(1);
+  });
+
+  it('the scheduled report still forces Schedule on existing rows — unchanged', () => {
+    const board = [proj('Jane Doe', { phaseId: DESIGN })];
+    const scheduled: SfReport = {
+      ...reviewReport([row('Jane Doe', { status: 'Install Scheduled', scheduled: true })]),
+      kind: 'scheduled',
+    };
+    const plan = planImport(scheduled, board, LABELS);
+    expect(find(plan, 'Jane Doe').phaseChange).toEqual({ fromId: DESIGN, toId: SCHEDULE });
+    expect(plan.counts.phase).toBe(1);
   });
 });

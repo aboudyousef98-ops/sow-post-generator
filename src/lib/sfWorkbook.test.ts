@@ -146,3 +146,131 @@ describe('parseSfGrid — refusals', () => {
     expect(r.rows).toEqual([]);
   });
 });
+
+// ---- Scope of Work Reviews report (Aboud 2026-11-03) ------------------------
+// A third report kind, imported DAILY. Solrite only: every other lender is
+// skipped, and the skipped names are reported rather than silently dropped so
+// the reconciler can tell "we chose to skip this" from "not on the report".
+
+const REVIEW_TITLE = 'Scope of Work Reviews';
+
+/** A minimal Reviews grid: title, header row, then the given data rows. */
+function reviewGrid(rows: string[][]): string[][] {
+  return [
+    [REVIEW_TITLE],
+    ['Project Name', 'Scope Of Work Assignment: Full Name', 'Lender', 'Fulfillment: Scheduling Alerts!'],
+    ...rows,
+  ];
+}
+
+describe('parseSfGrid — Scope of Work Reviews', () => {
+  it('recognises the report by its title', () => {
+    expect(parseSfGrid(reviewGrid([['Jane Doe', 'Aboud Yousef', 'SOLRITE', '']]), ROSTER).kind).toBe('review');
+  });
+
+  it('keeps Solrite rows and skips every other lender, by name', () => {
+    const r = parseSfGrid(
+      reviewGrid([
+        ['Jane Doe', 'Aboud Yousef', 'SOLRITE', ''],
+        ['Cash Carl', 'Aboud Yousef', 'Cash', ''],
+        ['Goody Leap', 'Aboud Yousef', 'GoodLeap', ''],
+        ['Light Reach', 'Aboud Yousef', 'LightReach', ''],
+      ]),
+      ROSTER,
+    );
+    expect(r.rows.map((x) => x.name)).toEqual(['Jane Doe']);
+    expect(r.skipped).toEqual(['Cash Carl', 'Goody Leap', 'Light Reach']);
+  });
+
+  it('matches the lender case-insensitively', () => {
+    const r = parseSfGrid(
+      reviewGrid([
+        ['Lower Case', 'Aboud Yousef', 'solrite', ''],
+        ['Mixed Case', 'Aboud Yousef', 'Solrite', ''],
+      ]),
+      ROSTER,
+    );
+    expect(r.rows.map((x) => x.name)).toEqual(['Lower Case', 'Mixed Case']);
+    expect(r.skipped).toEqual([]);
+  });
+
+  it('skips a blank lender rather than guessing it is ours', () => {
+    const r = parseSfGrid(reviewGrid([['No Lender', 'Aboud Yousef', '', '']]), ROSTER);
+    expect(r.rows).toEqual([]);
+    expect(r.skipped).toEqual(['No Lender']);
+  });
+
+  it('has no Project Status column, so rows carry no status but count as scheduled', () => {
+    const r = parseSfGrid(reviewGrid([['Jane Doe', 'Aboud Yousef', 'SOLRITE', '']]), ROSTER);
+    expect(r.rows[0].status).toBe('');
+    expect(r.rows[0].scheduled).toBe(true);
+    expect(r.rows[0].cancelled).toBe(false);
+  });
+
+  it('still mirrors the Salesforce note columns', () => {
+    const r = parseSfGrid(reviewGrid([['Jane Doe', 'Aboud Yousef', 'SOLRITE', 'Two attics']]), ROSTER);
+    expect(r.rows[0].notes).toEqual({ alerts: 'Two attics' });
+  });
+
+  it('the other two report kinds are unaffected and never carry skipped names', () => {
+    const r = parseSfGrid(
+      [['Scope of Work Assignments - Design'], ['Project Name', 'Lender'], ['Jane Doe', 'Cash']],
+      ROSTER,
+    );
+    expect(r.kind).toBe('design');
+    expect(r.rows.map((x) => x.name)).toEqual(['Jane Doe']);
+    expect(r.skipped).toEqual([]);
+  });
+});
+
+describe('parseSfGrid — the real Reviews export (2026-11-03)', () => {
+  let reviews: string[][];
+
+  beforeAll(async () => {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.readFile(fileURLToPath(new URL('./__fixtures__/sf-export-reviews.xlsx', import.meta.url)));
+    reviews = sheetToGrid(wb.worksheets[0]);
+  });
+
+  it('reads 240 Solrite projects from 242 rows and reports 30 genuinely skipped', () => {
+    // 242 Solrite ROWS, but "Anthony Mcdowell" and "Carlos Flores Sr" each
+    // appear under two install-date groups — one project apiece, not two.
+    // 36 non-Solrite rows, less the 6 dual-lender ones that imported anyway.
+    const r = parseSfGrid(reviews, ROSTER);
+    expect(r.kind).toBe('review');
+    expect(r.error).toBeUndefined();
+    expect(r.rows).toHaveLength(240);
+    expect(r.skipped).toHaveLength(30);
+  });
+
+  it('a skipped lender never consumes the de-dup slot of a Solrite row', () => {
+    // Regression: with the lender gate after the de-dup bookkeeping, 6 Solrite
+    // projects vanished because a non-Solrite row had claimed their name key.
+    // These six carry TWO lender rows on the real export (GoodLeap or FCC
+    // Finance AND Solrite) and must import on the strength of the Solrite one.
+    const r = parseSfGrid(reviews, ROSTER);
+    const names = new Set(r.rows.map((x) => x.name));
+    for (const dual of ['Ada Delgadillo', 'Glenda Hodge', 'Sylvester Hernandez', 'Deborah Hueber', 'Donna Luce', 'Sherry Miles']) {
+      expect(names.has(dual)).toBe(true);
+    }
+  });
+
+  it('never reports a project as skipped when another row imported it', () => {
+    const r = parseSfGrid(reviews, ROSTER);
+    const names = new Set(r.rows.map((x) => x.name));
+    for (const s of r.skipped) expect(names.has(s)).toBe(false);
+    // 36 non-Solrite rows, 6 of which are dual-lender and did import.
+    expect(r.skipped).toHaveLength(30);
+  });
+
+  it('drops the grouped report subtotal/count furniture', () => {
+    const r = parseSfGrid(reviews, ROSTER);
+    expect(r.rows.some((x) => /^(subtotal|count|sum|grand total)/i.test(x.name))).toBe(false);
+  });
+
+  it('mirrors the note columns from the real file', () => {
+    const r = parseSfGrid(reviews, ROSTER);
+    expect(r.rows.some((x) => (x.notes?.alerts ?? '').length > 0)).toBe(true);
+    expect(r.rows.some((x) => (x.notes?.utilityBattery ?? '').length > 0)).toBe(true);
+  });
+});

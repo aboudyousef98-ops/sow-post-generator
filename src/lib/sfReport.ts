@@ -21,7 +21,12 @@ import { cleanName, nameKey } from './board';
 import { titleCaseName } from './nameCase';
 import type { SfNotes } from './sfNotes';
 
-export type SfReportKind = 'scheduled' | 'design' | 'unknown';
+/**
+ * `review` is the "Scope of Work Reviews" export (Aboud 2026-11-03), imported
+ * daily and filtered to Solrite. Unlike the other two it has no Project Status
+ * column — see parseSfGrid for what that means for `status`/`scheduled`.
+ */
+export type SfReportKind = 'scheduled' | 'design' | 'review' | 'unknown';
 
 export interface SfReportRow {
   /** Project/customer name, cleaned and title-cased. */
@@ -60,6 +65,14 @@ export interface SfReport {
   complete: boolean;
   /** One human-readable line per row that could not be trusted. */
   unreadable: string[];
+  /**
+   * Project names this source deliberately left out — today, the non-Solrite
+   * rows of a `review` report (Aboud 2026-11-03). Reported rather than
+   * silently dropped: the reconciler needs to tell "we chose to skip this"
+   * from "this was not on the report", or 36 perfectly live projects would be
+   * listed as missing every single morning. Always [] for the other kinds.
+   */
+  skipped: string[];
   warnings: string[];
   /** Set → nothing can be imported from this paste. */
   error?: string;
@@ -165,7 +178,7 @@ export function parseSfReport(input: string, roster: string[]): SfReport {
 
   const kind = detectKind(lines);
   const totalRecords = readTotalRecords(lines);
-  const base: SfReport = { kind, rows: [], totalRecords, complete: false, unreadable: [], warnings: [] };
+  const base: SfReport = { kind, rows: [], totalRecords, complete: false, unreadable: [], skipped: [], warnings: [] };
 
   if (kind === 'unknown') {
     return {

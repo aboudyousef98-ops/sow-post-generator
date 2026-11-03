@@ -89,6 +89,7 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
         totalRecords: null,
         complete: false,
         unreadable: [],
+        skipped: [],
         warnings: [],
         // A stale tab's failed chunk load is NOT the file's fault — telling the
         // user to re-export sent Aboud through four pointless exports on
@@ -173,7 +174,7 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
         {haveInput && !report.error && (
           <div className="board-import-report">
             <p className="board-import-head">
-              <b>{report.kind === 'scheduled' ? 'Scheduled' : 'Design'} report</b>
+              <b>{report.kind === 'scheduled' ? 'Scheduled' : report.kind === 'review' ? 'Reviews' : 'Design'} report</b>
               {' · '}
               found {report.rows.length}
               {report.totalRecords !== null ? ` of ${report.totalRecords}` : ''} record
@@ -192,6 +193,12 @@ export default function ImportModal({ projects, labels, roster, onImport, onClos
                 report.kind === 'scheduled' ? 'Schedule' : 'Design'
               }`}
             />
+            {/* Solrite-only filter on the daily Reviews import (Aboud
+                2026-11-03). Listed, never silent: a row missing from the board
+                should be explainable without re-reading the spreadsheet. */}
+            <Line n={report.skipped.length} text="skipped — not a Solrite project">
+              {names(report.skipped)}
+            </Line>
             {/* Aboud 2026-10-21: the export's alerts + AHJ/utility notes ride
                 along and surface on Compose. */}
             <Line

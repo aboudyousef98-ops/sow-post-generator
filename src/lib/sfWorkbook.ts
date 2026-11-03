@@ -27,6 +27,15 @@ const COL_NAME = 'Project Name';
 const COL_COORDINATOR = 'Scope Of Work Assignment: Full Name';
 const COL_STATUS = 'Project Status';
 const COL_DOCUMENT = 'Fulfillment: Current Design: Document Name';
+/** Reviews report only — the lender this project is financed by. */
+const COL_LENDER = 'Lender';
+
+/**
+ * The only lender we take off a Reviews report (Aboud 2026-11-03: "we need to
+ * import only solrite projects, dont include cash or any other lender").
+ * Substring + case-insensitive, because Salesforce writes SOLRITE / Solrite.
+ */
+const SOLRITE_RE = /solrite/i;
 
 /** The note columns — alerts + AHJ/utility requirements (Aboud 2026-10-21). */
 const NOTE_COLS: { key: keyof SfNotes; header: string }[] = [
@@ -77,6 +86,7 @@ function detectKind(grid: string[][]): SfReportKind {
     for (const cell of row) {
       if (/scope of work assignments\s*[-–]\s*scheduled/i.test(cell)) return 'scheduled';
       if (/scope of work assignments\s*[-–]\s*design/i.test(cell)) return 'design';
+      if (/scope of work reviews/i.test(cell)) return 'review';
     }
   }
   return 'unknown';
@@ -107,7 +117,7 @@ function matchRoster(raw: string, roster: string[]): string | null {
 
 export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
   const kind = detectKind(grid);
-  const base: SfReport = { kind, rows: [], totalRecords: null, complete: false, unreadable: [], warnings: [] };
+  const base: SfReport = { kind, rows: [], totalRecords: null, complete: false, unreadable: [], skipped: [], warnings: [] };
 
   if (kind === 'unknown') {
     return {
@@ -128,6 +138,10 @@ export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
   const iCoordinator = col(COL_COORDINATOR);
   const iStatus = col(COL_STATUS);
   const iDocument = col(COL_DOCUMENT);
+  // Solrite-only, and ONLY on the Reviews report. The other two reports are
+  // left exactly as they were, even if a Lender column ever appears on them —
+  // narrowing an existing import silently is how rows go missing.
+  const iLender = kind === 'review' ? col(COL_LENDER) : -1;
   // Only columns this file actually has. None at all → an older export layout;
   // notes stays undefined so the import cannot wipe what another file wrote.
   const noteCols = NOTE_COLS.map((n) => ({ key: n.key, i: col(n.header) })).filter((n) => n.i !== -1);
@@ -135,6 +149,7 @@ export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
   const rows: SfReportRow[] = [];
   const unreadable: string[] = [];
   const warnings: string[] = [];
+  const skipped: string[] = [];
   const seen = new Set<string>();
 
   for (let r = headerRow + 1; r < grid.length; r++) {
@@ -143,6 +158,15 @@ export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
     if (!rawName || JUNK_ROW_RE.test(rawName)) continue;
 
     const name = cleanProjectName(rawName);
+
+    // Lender gate FIRST, so a skipped row never consumes the de-dup slot of a
+    // Solrite row with the same name. A blank lender is skipped too — on a
+    // Solrite-only import, "unknown" must not be read as "ours".
+    if (iLender !== -1 && !SOLRITE_RE.test(cells[iLender] ?? '')) {
+      if (!skipped.includes(name)) skipped.push(name);
+      continue;
+    }
+
     const key = nameKey(name);
     if (seen.has(key)) continue; // a project listed under two groups is one project
     seen.add(key);
@@ -180,13 +204,23 @@ export function parseSfGrid(grid: string[][], roster: string[]): SfReport {
       name,
       coordinator,
       status,
-      scheduled: !cancelled && SCHEDULED_STATUS_RE.test(status),
+      // The Reviews report has no Project Status column at all, but it is
+      // filtered on Install Scheduled Date, so every row on it is scheduled by
+      // construction. `status` stays '' on purpose — a new row then falls to
+      // the board's default label instead of one invented here.
+      scheduled: kind === 'review' ? true : !cancelled && SCHEDULED_STATUS_RE.test(status),
       cancelled,
       ...(notes !== undefined ? { notes } : {}),
     });
   }
 
+  // Six projects on the 2026-11-03 export carry TWO lender rows — one GoodLeap
+  // (or FCC Finance) and one SOLRITE. The Solrite row imports them, so naming
+  // them as "skipped" would be a lie in the preview. Only report a skip when
+  // the project did not make it in by some other row.
+  const reallySkipped = skipped.filter((n) => !seen.has(nameKey(n)));
+
   // A file holds every record by definition — there is no half-rendered export,
   // so the paste parser's "found N of M" warning has nothing to warn about.
-  return { ...base, rows, totalRecords: rows.length, complete: true, unreadable, warnings };
+  return { ...base, rows, totalRecords: rows.length, complete: true, unreadable, skipped: reallySkipped, warnings };
 }

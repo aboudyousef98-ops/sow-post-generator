@@ -211,7 +211,13 @@ export function planImport(
     // Which phase this row belongs on. Salesforce's own per-row status wins
     // over the report it was copied from, which is how a Design-report row
     // that is already scheduled lands on Schedule.
-    const toId = r.scheduled || report.kind === 'scheduled' ? schedule : design;
+    //
+    // The Reviews report is the exception: it is imported EVERY morning, so it
+    // only ever seeds the phase of a row it creates. Letting it set the phase
+    // of existing rows would drag anything a coordinator moved to Design back
+    // onto Schedule overnight, every night (Aboud 2026-11-03).
+    const seedsPhaseOnly = report.kind === 'review' && match !== 'new';
+    const toId = seedsPhaseOnly ? null : r.scheduled || report.kind === 'scheduled' ? schedule : design;
     if (toId) {
       const fromId = match === 'new' ? null : (hit?.phaseId ?? null);
       if (fromId !== toId) {
@@ -234,13 +240,22 @@ export function planImport(
 
   // Only worth saying on a complete paste, and only about rows that could have
   // been on the report at all — completed and out-of-scope rows could not.
+  //
+  // A project the SOURCE deliberately left out (a non-Solrite row on a Reviews
+  // import) was never a candidate either, so it counts as seen. Without this,
+  // 30 perfectly live projects would be listed as "not on this report" every
+  // morning and the real misses would be lost in the noise.
   let absent: BoardProject[] = [];
   if (report.complete) {
+    const skippedKeys = new Set(report.skipped.map(nameKey));
     const { active } = splitSections(
       candidates.filter((p) => !p.archivedAt),
       labels,
     );
-    absent = active.filter((p) => !hitKeys.has(nameKey(p.name)));
+    absent = active.filter((p) => {
+      const k = nameKey(p.name);
+      return !hitKeys.has(k) && !skippedKeys.has(k);
+    });
   }
 
   return { kind: report.kind, rows, counts, stickySchedule, cancelledOnBoard, absent, warnings };
