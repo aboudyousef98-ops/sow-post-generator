@@ -46,6 +46,8 @@ export function columnDisplayValue(p: BoardProject, columnId: string, ctx: Colum
       return p.name.trim() || EMPTY_VALUE;
     case 'coordinator':
       return p.coordinator.trim() || EMPTY_VALUE;
+    case 'reviewer':
+      return (p.reviewer ?? '').trim() || EMPTY_VALUE;
     case 'status':
       return labelName(ctx.labels, p.statusId);
     case 'phase':

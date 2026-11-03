@@ -3042,6 +3042,15 @@ tr:hover .board-label-cell.empty {
   background: #fdab3d;
 }
 
+/* Installation Review — live work waiting on a reviewer, so it gets the
+   status label's own crimson rather than the parked amber (Aboud 2026-11-03). */
+.board-review .board-done-toggle {
+  color: #a81f38;
+}
+.board-review .board-done-count {
+  background: #c4314b;
+}
+
 /* Post column (board → Compose) */
 .board-post-cell {
   width: 100%;

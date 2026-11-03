@@ -4,7 +4,7 @@
 // rows still use the label). System labels can be renamed/recolored only.
 
 import { useMemo, useState } from 'react';
-import { LABEL_PALETTE, isOutOfScopeLabel, labelsFor } from '../lib/board';
+import { LABEL_PALETTE, isOutOfScopeLabel, isReviewLabel, labelsFor } from '../lib/board';
 import type { BoardLabel, BoardProject, LabelColumnKey } from './types';
 import Popover from './Popover';
 
@@ -104,7 +104,7 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
     const used = new Set(options.map((l) => l.color));
     const color = LABEL_PALETTE.find((c) => !used.has(c)) ?? LABEL_PALETTE[options.length % LABEL_PALETTE.length];
     // After the working labels, before the parked and finished ones.
-    const maxOrder = Math.max(0, ...options.filter((l) => !l.isDone && !isOutOfScopeLabel(l)).map((l) => l.sortOrder));
+    const maxOrder = Math.max(0, ...options.filter((l) => !l.isDone && !isOutOfScopeLabel(l) && !isReviewLabel(l)).map((l) => l.sortOrder));
     onUpdate([
       {
         id: crypto.randomUUID(),
@@ -200,13 +200,41 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                         <input
                           type="checkbox"
                           checked={l.isDone}
-                          // Mutually exclusive with "out of scope": a row has
-                          // exactly one section, so a label must not claim two.
+                          // Mutually exclusive with "installation review" and
+                          // "out of scope": a row has exactly one section, so
+                          // a label must not claim two.
                           onChange={(e) =>
-                            onUpdate([{ ...l, isDone: e.target.checked, outOfScope: e.target.checked ? false : l.outOfScope }])
+                            onUpdate([
+                              {
+                                ...l,
+                                isDone: e.target.checked,
+                                review: e.target.checked ? false : l.review,
+                                outOfScope: e.target.checked ? false : l.outOfScope,
+                              },
+                            ])
                           }
                         />
                         done
+                      </label>
+                      <label
+                        className="board-label-flag"
+                        title="Waiting on an installation review — these rows move to the “Installation Review” section"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isReviewLabel(l)}
+                          onChange={(e) =>
+                            onUpdate([
+                              {
+                                ...l,
+                                review: e.target.checked,
+                                isDone: e.target.checked ? false : l.isDone,
+                                outOfScope: e.target.checked ? false : l.outOfScope,
+                              },
+                            ])
+                          }
+                        />
+                        installation review
                       </label>
                       <label
                         className="board-label-flag"
@@ -216,7 +244,14 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                           type="checkbox"
                           checked={isOutOfScopeLabel(l)}
                           onChange={(e) =>
-                            onUpdate([{ ...l, outOfScope: e.target.checked, isDone: e.target.checked ? false : l.isDone }])
+                            onUpdate([
+                              {
+                                ...l,
+                                outOfScope: e.target.checked,
+                                isDone: e.target.checked ? false : l.isDone,
+                                review: e.target.checked ? false : l.review,
+                              },
+                            ])
                           }
                         />
                         out of scope

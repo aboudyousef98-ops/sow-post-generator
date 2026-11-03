@@ -146,11 +146,14 @@ export function PersonCell({
   authors,
   me,
   onPick,
+  label = 'SOW coordinator',
 }: {
   value: string;
   authors: string[];
   me: string;
   onPick: (name: string) => void;
+  /** Accessible name for the listbox — two person columns must not collide. */
+  label?: string;
 }) {
   const [open, setOpen] = useState(false);
   // A coordinator removed from the roster must stay visible on the row.
@@ -173,7 +176,7 @@ export function PersonCell({
         </button>
       }
     >
-      <div className="board-menu" role="listbox" aria-label="SOW coordinator">
+      <div className="board-menu" role="listbox" aria-label={label}>
         {me && value !== me && (
           <button type="button" className="board-menu-item strong" onClick={() => { setOpen(false); onPick(me); }}>
             Assign to me

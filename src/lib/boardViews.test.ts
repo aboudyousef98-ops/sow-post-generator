@@ -3,6 +3,7 @@ import type { BoardProject } from '../board/types';
 import { seedLabels } from './board';
 import type { LinkedPosts } from './board';
 import {
+  GROUP_OPTIONS,
   NO_FILTERS,
   agingState,
   daysSince,
@@ -284,5 +285,71 @@ describe('selectedRows', () => {
 
   it('ignores ids explicitly set to false', () => {
     expect(selectedRows([p({ id: 'a' })], { a: false })).toEqual([]);
+  });
+});
+
+// ---- Installation Review section (Aboud 2026-11-03) ------------------------
+// A fourth section, driven by a label flag exactly like out-of-scope, so the
+// section can be pointed at a different status later without a code change.
+
+describe('splitSections — Installation Review', () => {
+  const review = { ...LABELS[0], id: 'rev', name: 'Installation Review', isDefault: false, review: true };
+  const hold = { ...LABELS[0], id: 'hold', name: 'Hold', isDefault: false, outOfScope: undefined };
+  const labels = [...LABELS, review, hold];
+
+  it('gives review rows their own section, out of the active table', () => {
+    const rows = [
+      p({ id: 'a', statusId: 'status-working' }),
+      p({ id: 'b', statusId: 'rev' }),
+      p({ id: 'c', statusId: 'hold' }),
+      p({ id: 'd', statusId: 'status-done' }),
+    ];
+    const { active, installReview, outOfScope, completed } = splitSections(rows, labels);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(installReview.map((r) => r.id)).toEqual(['b']);
+    expect(outOfScope.map((r) => r.id)).toEqual(['c']);
+    expect(completed.map((r) => r.id)).toEqual(['d']);
+  });
+
+  it('matches by name when no flag is stored, so the label works out of the box', () => {
+    const unflagged = [{ ...LABELS[0], id: 'r2', name: 'Installation Review', isDefault: false }];
+    const { active, installReview } = splitSections([p({ id: 'a', statusId: 'r2' })], [...LABELS, ...unflagged]);
+    expect(active).toHaveLength(0);
+    expect(installReview.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('an explicit review:false beats the name default', () => {
+    const kept = [{ ...LABELS[0], id: 'r3', name: 'Installation Review', isDefault: false, review: false }];
+    const { active, installReview } = splitSections([p({ id: 'a', statusId: 'r3' })], [...LABELS, ...kept]);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(installReview).toHaveLength(0);
+  });
+
+  it('works on any label name once the flag is ticked', () => {
+    const custom = [{ ...LABELS[0], id: 'qa', name: 'QA pass', isDefault: false, review: true }];
+    const { active, installReview } = splitSections([p({ id: 'a', statusId: 'qa' })], [...LABELS, ...custom]);
+    expect(active).toHaveLength(0);
+    expect(installReview.map((r) => r.id)).toEqual(['a']);
+  });
+
+  it('Done still wins over Review, and Review wins over out-of-scope', () => {
+    const both = [{ ...LABELS[0], id: 'x', name: 'Odd', isDefault: false, isDone: true, review: true }];
+    const rev = [{ ...LABELS[0], id: 'y', name: 'Odd2', isDefault: false, review: true, outOfScope: true }];
+    const s = splitSections([p({ id: 'a', statusId: 'x' }), p({ id: 'b', statusId: 'y' })], [...LABELS, ...both, ...rev]);
+    expect(s.completed.map((r) => r.id)).toEqual(['a']);
+    expect(s.installReview.map((r) => r.id)).toEqual(['b']);
+    expect(s.outOfScope).toHaveLength(0);
+  });
+
+  it('a board with no review label leaves the section empty and the table untouched', () => {
+    const { active, installReview } = splitSections([p({ id: 'a', statusId: 'status-working' })], LABELS);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(installReview).toEqual([]);
+  });
+});
+
+describe('Group by reviewer', () => {
+  it('is offered as a grouping option', () => {
+    expect(GROUP_OPTIONS.map((g) => g.key)).toContain('reviewer');
   });
 });

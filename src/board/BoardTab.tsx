@@ -28,6 +28,7 @@ import {
   cleanName,
   findDuplicate,
   isOutOfScopeLabel,
+  isReviewLabel,
   labelById,
   linkedPosts,
   newProject,
@@ -94,23 +95,27 @@ const KEY_VISIBILITY = 'sowpost.board.colVisibility.v2'; // v2: Last update now 
 const KEY_FILTERS = 'sowpost.board.filters.v1';
 const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
 const KEY_SCOPE_OPEN = 'sowpost.board.scopeOpen.v1';
+const KEY_REVIEW_OPEN = 'sowpost.board.reviewOpen.v1';
 const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
 const KEY_ORDER = 'sowpost.board.colOrder.v1';
 
 // Filters / NO_FILTERS now live in lib/boardViews so the view presets can be
 // unit-tested without a DOM.
 
-/** Which of the board's three sections a status label puts a row in. */
-type Section = 'active' | 'scope' | 'done';
+/** Which of the board's four sections a status label puts a row in. */
+type Section = 'active' | 'review' | 'scope' | 'done';
 
 const SECTION_TITLE: Record<Section, string> = {
   active: 'the board',
+  review: 'Installation Review',
   scope: 'Out of SOW scope',
   done: 'Completed projects',
 };
 
 function sectionOf(label: BoardLabel | undefined): Section {
+  // Same precedence as splitSections: done, then review, then out-of-scope.
   if (label?.isDone) return 'done';
+  if (isReviewLabel(label)) return 'review';
   if (isOutOfScopeLabel(label)) return 'scope';
   return 'active';
 }
@@ -487,9 +492,9 @@ function BodyInner({
   );
 }
 /**
- * A collapsible section below the main table — "Completed projects" and
- * "Out of SOW scope". Same columns, same widths, same sorting state as the
- * main table; only the rows differ. Headers here sort but do not resize:
+ * A collapsible section below the main table — "Installation Review",
+ * "Out of SOW scope" and "Completed projects". Same columns, same widths, same
+ * sorting state as the main table; only the rows differ. Headers here sort but do not resize:
  * resizing lives on the main header alone, so there is one source of width.
  */
 function SectionCard({
@@ -506,7 +511,7 @@ function SectionCard({
   selectedIds,
 }: {
   /** Drives the accent colour only — see `.board-done` / `.board-scope`. */
-  variant: 'done' | 'scope';
+  variant: 'done' | 'scope' | 'review';
   title: string;
   emptyText: string;
   open: boolean;
@@ -620,6 +625,9 @@ export default function BoardTab({
   // "Out of SOW scope" — same deal, and also collapsed by default: the whole
   // point is that these rows stop crowding the pipeline.
   const [scopeOpen, setScopeOpen] = useState(() => localStorage.getItem(KEY_SCOPE_OPEN) === '1');
+  // Installation Review: unlike the other two this one is OPEN by default — it
+  // is live work waiting on someone, not a parking space (Aboud 2026-11-03).
+  const [reviewOpen, setReviewOpen] = useState(() => localStorage.getItem(KEY_REVIEW_OPEN) !== '0');
   const addRef = useRef<HTMLInputElement>(null);
   // Tier 1: group by, collapsed groups, and bulk selection.
   const [groupBy, setGroupBy] = useState<GroupKey>(
@@ -667,6 +675,9 @@ export default function BoardTab({
     localStorage.setItem(KEY_SCOPE_OPEN, scopeOpen ? '1' : '0');
   }, [scopeOpen]);
   useEffect(() => {
+    localStorage.setItem(KEY_REVIEW_OPEN, reviewOpen ? '1' : '0');
+  }, [reviewOpen]);
+  useEffect(() => {
     localStorage.setItem(KEY_GROUP_BY, groupBy);
   }, [groupBy]);
   useEffect(() => {
@@ -685,6 +696,7 @@ export default function BoardTab({
     // "open it" scrolls to nothing.
     const label = boardRef.current.labels.find((l) => l.id === project?.statusId);
     if (label?.isDone) setDoneOpen(true);
+    else if (isReviewLabel(label)) setReviewOpen(true);
     else if (isOutOfScopeLabel(label)) setScopeOpen(true);
     setHighlightId(focusId);
     const scroll = setTimeout(() => {
@@ -1103,7 +1115,7 @@ export default function BoardTab({
   // lands in the Completed projects section below (Aboud, 2026-10-02); one
   // whose status is marked out-of-scope lands in the section between the two
   // (Aboud, 2026-10-19). Both rules live in lib/boardViews.splitSections.
-  const { active, outOfScope, completed } = useMemo(
+  const { active, installReview, outOfScope, completed } = useMemo(
     () => splitSections(visible, board.labels),
     [visible, board.labels],
   );
@@ -1203,6 +1215,7 @@ export default function BoardTab({
     // written to.
     const base = [
       ...active,
+      ...(reviewOpen || searching ? installReview : []),
       ...(scopeOpen || searching ? outOfScope : []),
       ...(doneOpen || searching ? completed : []),
     ];
@@ -1212,7 +1225,7 @@ export default function BoardTab({
       if (collapsed[g.key]) for (const p of g.rows) hidden.add(p.id);
     }
     return hidden.size ? base.filter((p) => !hidden.has(p.id)) : base;
-  }, [active, outOfScope, completed, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
+  }, [active, installReview, outOfScope, completed, reviewOpen, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
 
   /**
    * Rows a bulk action will touch. Resolved from every LIVE project, not from
@@ -1348,6 +1361,27 @@ export default function BoardTab({
             authors={authors}
             me={me}
             onPick={(coordinator) => applyPatch(row.original, { coordinator })}
+          />
+        ),
+      },
+      {
+        // Who is reviewing the installation (Aboud 2026-11-03). Same picker as
+        // the coordinator; Salesforce has no reviewer column, so this is only
+        // ever set by hand and no import ever touches it.
+        id: 'reviewer',
+        header: 'Reviewer',
+        size: 170,
+        minSize: 110,
+        maxSize: 800,
+        accessorFn: (p) => p.reviewer || undefined,
+        sortUndefined: 'last',
+        cell: ({ row }) => (
+          <PersonCell
+            value={row.original.reviewer ?? ''}
+            authors={authors}
+            me={me}
+            label="Reviewer"
+            onPick={(reviewer) => applyPatch(row.original, { reviewer })}
           />
         ),
       },
@@ -1566,6 +1600,18 @@ export default function BoardTab({
   // always read the same way.
   const doneTable = useReactTable({
     data: completed,
+    columns,
+    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableColumnResizing: false,
+  });
+
+  // Installation Review — identical contract to doneTable.
+  const reviewTable = useReactTable({
+    data: installReview,
     columns,
     state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
@@ -1974,6 +2020,20 @@ export default function BoardTab({
       {/* Out of SOW scope sits BETWEEN active and Completed on purpose
           (Aboud 2026-10-19): these projects are not in the pipeline, but they
           are not finished either, and they still have to be findable. */}
+      <SectionCard
+        variant="review"
+        title="Installation Review"
+        emptyText="Nothing here — a project lands here when its status is marked “installation review” in Edit labels (the “Installation Review” status is, by default)."
+        open={reviewOpen || searching}
+        onToggle={() => setReviewOpen((v) => !v)}
+        table={reviewTable}
+        columnSizeVars={columnSizeVars}
+        width={table.getTotalSize()}
+        highlightId={highlightId}
+        agingOf={agingFor}
+        selectedIds={selected}
+      />
+
       <SectionCard
         variant="scope"
         title="Out of SOW scope"

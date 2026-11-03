@@ -30,6 +30,17 @@ export interface BoardLabel {
    * back to the by-name default in lib/board.isOutOfScopeLabel.
    */
   outOfScope?: boolean;
+  /**
+   * "Waiting on an installation review" meaning (status only) — the row leaves
+   * the active table for its own "Installation Review" section, which sits
+   * directly under it (Aboud 2026-11-03).
+   *
+   * OPTIONAL, same contract as `outOfScope`: boards written before this date
+   * have no such field, so `undefined` falls back to the by-name default in
+   * lib/board.isReviewLabel. That is what makes the existing
+   * "Installation Review" status work with no migration and no re-tick.
+   */
+  review?: boolean;
   /** Seeded label: rename/recolor OK, archive not allowed. */
   isSystem: boolean;
   archived: boolean;
@@ -47,6 +58,14 @@ export interface BoardProject {
    * does not retag old rows; acceptable for a 3-person roster.
    */
   coordinator: string;
+  /**
+   * Who is reviewing the installation (Aboud 2026-11-03). Same contract as
+   * `coordinator` — a roster display name, '' = unassigned — but OPTIONAL,
+   * because rows written before this date have no such field. Read with
+   * `?? ''`. Salesforce has no reviewer column, so this is only ever set by
+   * hand on the board; an import never touches it.
+   */
+  reviewer?: string;
   statusId: string | null;
   phaseId: string | null;
   designedDate: string | null; // 'YYYY-MM-DD' — parse with lib/dates only

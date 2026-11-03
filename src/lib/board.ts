@@ -83,6 +83,28 @@ export function outOfScopeStatusIds(labels: BoardLabel[]): Set<string> {
   return new Set(labels.filter(isOutOfScopeLabel).map((l) => l.id));
 }
 
+/**
+ * Status labels that mean "waiting on an installation review" (Aboud
+ * 2026-11-03). Same shape as isOutOfScopeLabel: an explicit tick wins, and the
+ * name default makes the status he had already created work immediately.
+ *
+ * `isDone` beats this for the same reason it beats out-of-scope — finished is
+ * the stronger statement — and this in turn beats out-of-scope, so a label
+ * flagged both lands in the more specific of the two.
+ */
+const REVIEW_DEFAULT_NAMES = new Set(['installation review']);
+
+export function isReviewLabel(label: BoardLabel | undefined): boolean {
+  if (!label || label.columnKey !== 'status' || label.isDone) return false;
+  if (typeof label.review === 'boolean') return label.review;
+  return REVIEW_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
+}
+
+/** Ids of every installation-review status label. */
+export function reviewStatusIds(labels: BoardLabel[]): Set<string> {
+  return new Set(labels.filter(isReviewLabel).map((l) => l.id));
+}
+
 export function emptyBoard(): BoardState {
   return { projects: [], labels: seedLabels(), activity: [], updates: [] };
 }
@@ -203,7 +225,7 @@ export function newProject(
 export type ProjectPatch = Partial<
   Pick<
     BoardProject,
-    | 'name' | 'coordinator' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'position'
+    | 'name' | 'coordinator' | 'reviewer' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'position'
     | 'sfNotes' | 'sfNotesAt' | 'archivedAt' | 'deletedAt'
   >
 >;
@@ -251,6 +273,7 @@ function displayValue(key: keyof ProjectPatch, value: unknown, labels: BoardLabe
 const FIELD_LABELS: Record<string, string> = {
   name: 'Project name',
   coordinator: 'SOW coordinator',
+  reviewer: 'Reviewer',
   statusId: 'Status',
   phaseId: 'Design/Schedule',
   designedDate: 'Designed date',

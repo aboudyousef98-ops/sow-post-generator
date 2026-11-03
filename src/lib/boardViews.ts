@@ -3,7 +3,7 @@
 // state, this file owns the rules so they can be tested without a DOM.
 
 import type { BoardLabel, BoardProject } from '../board/types';
-import { labelById, labelsFor, outOfScopeStatusIds, type LinkedPosts } from './board';
+import { labelById, labelsFor, outOfScopeStatusIds, reviewStatusIds, type LinkedPosts } from './board';
 
 // ---- filters ----------------------------------------------------------------
 // Lives here (not in BoardTab) so the presets below can be unit-tested.
@@ -97,6 +97,12 @@ export interface BoardSections {
    * section between active and Completed: on the board, but out of the way.
    */
   outOfScope: BoardProject[];
+  /**
+   * Waiting on an installation review — its own section directly under the
+   * active table, so work in review stays close to work in progress
+   * (Aboud 2026-11-03).
+   */
+  installReview: BoardProject[];
   /** Status counts as done. */
   completed: BoardProject[];
 }
@@ -112,29 +118,35 @@ export interface BoardSections {
 export function splitSections(projects: BoardProject[], labels: BoardLabel[]): BoardSections {
   const doneIds = new Set(labels.filter((l) => l.isDone).map((l) => l.id));
   const scopeIds = outOfScopeStatusIds(labels);
+  const reviewIds = reviewStatusIds(labels);
   const active: BoardProject[] = [];
   const outOfScope: BoardProject[] = [];
+  const installReview: BoardProject[] = [];
   const completed: BoardProject[] = [];
   for (const p of projects) {
-    // Done is checked first — see isOutOfScopeLabel for why it wins.
+    // Done is checked first — see isOutOfScopeLabel for why it wins. Review
+    // then beats out-of-scope: it is the more specific statement about a row.
     if (p.statusId && doneIds.has(p.statusId)) completed.push(p);
+    else if (p.statusId && reviewIds.has(p.statusId)) installReview.push(p);
     else if (p.statusId && scopeIds.has(p.statusId)) outOfScope.push(p);
     else active.push(p);
   }
   const recentFirst = (a: BoardProject, b: BoardProject) => b.updatedAt.localeCompare(a.updatedAt);
   completed.sort(recentFirst);
   outOfScope.sort(recentFirst);
-  return { active, outOfScope, completed };
+  installReview.sort(recentFirst);
+  return { active, installReview, outOfScope, completed };
 }
 
 // ---- grouping ---------------------------------------------------------------
 
-export type GroupKey = 'none' | 'status' | 'coordinator' | 'phase';
+export type GroupKey = 'none' | 'status' | 'coordinator' | 'reviewer' | 'phase';
 
 export const GROUP_OPTIONS: { key: GroupKey; label: string }[] = [
   { key: 'none', label: 'No grouping' },
   { key: 'status', label: 'Status' },
   { key: 'coordinator', label: 'SOW coordinator' },
+  { key: 'reviewer', label: 'Reviewer' },
   { key: 'phase', label: 'Design/Schedule' },
 ];
 
@@ -166,13 +178,15 @@ export function groupProjects(projects: BoardProject[], by: GroupKey, labels: Bo
     else buckets.set(k, [p]);
   };
 
+  // The two people columns group the same way: by display name, Unassigned last.
+  const isPerson = by === 'coordinator' || by === 'reviewer';
   for (const p of projects) {
-    if (by === 'coordinator') push(p.coordinator.trim() || UNSET, p);
+    if (isPerson) push((by === 'coordinator' ? p.coordinator : (p.reviewer ?? '')).trim() || UNSET, p);
     else push((by === 'status' ? p.statusId : p.phaseId) || UNSET, p);
   }
 
   const out: BoardGroup[] = [];
-  if (by === 'coordinator') {
+  if (isPerson) {
     for (const name of [...buckets.keys()].filter((k) => k !== UNSET).sort((a, b) => a.localeCompare(b))) {
       out.push({ key: name, title: name, rows: buckets.get(name)! });
     }
