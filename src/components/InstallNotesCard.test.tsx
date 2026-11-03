@@ -354,4 +354,26 @@ describe('InstallNotesCard — battery installation analysis', () => {
     render(<Harness />);
     expect(screen.queryByLabelText(/Concrete pad installation/i)).toBeNull();
   });
+
+  // 41 live drafts had text in the retired box when this shipped. Removing the
+  // box would have hidden it AND stopped printing it — silent content loss on
+  // real work. It is shown read-only instead, so whoever opens the draft can
+  // transfer it into the new questions.
+  it('shows a legacy pad note read-only when an old draft still carries one', () => {
+    const legacy: PostRecord = {
+      ...blankRecord('Aboud Yousef', defaultSettings()),
+      installNotes: { ...emptyInstallNotes(), concretePad: 'On soil ground - Concrete Pads are needed.' },
+    };
+    render(<Harness initial={legacy} />);
+
+    expect(screen.getByText(/On soil ground - Concrete Pads are needed\./)).toBeTruthy();
+    expect(screen.getByText(/no longer posted/i)).toBeTruthy();
+    // Read-only: it is not an editable box.
+    expect(screen.queryByLabelText(/Concrete pad installation/i)).toBeNull();
+  });
+
+  it('shows no legacy note when the old box was never used', () => {
+    render(<Harness />);
+    expect(screen.queryByText(/no longer posted/i)).toBeNull();
+  });
 });

@@ -410,6 +410,19 @@ export default function InstallNotesCard({
         </label>
       </div>
       <div className="note-grid">{box('batteryOther', 2)}</div>
+      {/* Legacy pad text, read-only (Aboud 2026-11-03). 41 open drafts had
+          text in the retired "Concrete pad installation" box when this
+          shipped. Dropping the box would have hidden it AND stopped printing
+          it — silent loss of real work — so it is shown here until someone
+          transfers it into the questions above. Nothing writes to it. */}
+      {(n.concretePad ?? '').trim() && (
+        <p className="roof-warning">
+          <strong>Retired field — no longer posted.</strong> This draft still carries an old “Concrete pad
+          installation” note. Move anything that still matters into the questions above, then ignore this.
+          <br />
+          <em>{n.concretePad}</em>
+        </p>
+      )}
 
       <div className="install-subhead">Conduit raceway</div>
       <div className="note-grid">{RUN_FIELDS.map((f) => box(f, 2))}</div>
