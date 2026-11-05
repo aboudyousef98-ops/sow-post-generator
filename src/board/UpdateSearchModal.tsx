@@ -198,11 +198,11 @@ export default function UpdateSearchModal({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
-        aria-labelledby="ask-the-board-title"
+        aria-labelledby="board-ask-title"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="pane-top">
-          <h3 id="ask-the-board-title">Ask the board</h3>
+          <h3 id="board-ask-title">Ask the board</h3>
           <p className="muted pane-lede">
             Everything the team has posted, and everything they have done.
           </p>
