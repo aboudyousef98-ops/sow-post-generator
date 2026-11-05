@@ -48,6 +48,28 @@ export function todayIso(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+/**
+ * The LOCAL calendar day a UTC timestamp falls on, as 'YYYY-MM-DD'.
+ *
+ * Activity and updates are stamped with `new Date().toISOString()`, i.e. UTC,
+ * so `at.slice(0, 10)` is the UTC day — and "what did I touch yesterday" means
+ * yesterday by the asker's own clock. In Texas an 8pm edit is stamped the NEXT
+ * day in UTC, so slicing would file it under the wrong date.
+ */
+export function localDateOf(isoTimestamp: string): string {
+  const d = new Date(isoTimestamp);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/** `days` before (negative) or after an ISO calendar date, staying local. */
+export function shiftIsoDays(iso: string, days: number): string {
+  const base = parseIsoLocal(iso);
+  if (!base) return iso;
+  base.setDate(base.getDate() + days);
+  return `${base.getFullYear()}-${String(base.getMonth() + 1).padStart(2, '0')}-${String(base.getDate()).padStart(2, '0')}`;
+}
+
 // ---- Board helpers (10-project-board.md §5.4) ------------------------------
 
 /**

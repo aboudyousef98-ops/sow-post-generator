@@ -2040,9 +2040,15 @@ export default function BoardTab({
           >
             Show archived
           </button>
-          {/* Natural-language search over every project's Updates (#3). */}
-          <button type="button" className="btn small secondary" onClick={() => setAskOpen(true)} title="Search everything the team has posted on every project">
-            💬 Ask the updates
+          {/* Natural-language search over the Updates threads (#3) AND the
+              activity log (Aboud 2026-11-05). */}
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setAskOpen(true)}
+            title="Search everything the team has posted — and everything they have done"
+          >
+            💬 Ask the board
           </button>
           <span className={`board-date-range ${filters.dateFrom || filters.dateTo ? 'on' : ''}`}>
             <span className="muted">Designed</span>
@@ -2430,9 +2436,16 @@ export default function BoardTab({
         <UpdateSearchModal
           projects={board.projects.filter((p) => !p.deletedAt)}
           updates={board.updates ?? []}
+          activity={board.activity}
+          me={me}
+          roster={authors}
           onOpenProject={(p) => {
             setAskOpen(false);
             setUpdatesFor(p);
+          }}
+          onOpenActivity={(p) => {
+            setAskOpen(false);
+            setActivityFor(p);
           }}
           onClose={() => setAskOpen(false)}
         />

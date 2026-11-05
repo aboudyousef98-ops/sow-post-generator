@@ -46,6 +46,14 @@
   to = "/.netlify/functions/updatesearch"
   status = 200
 
+# Added 2026-11-05. Without this the path falls through to the SPA fallback
+# below and answers 200 with index.html, which the client would read as a
+# malformed AI response rather than a missing route.
+[[redirects]]
+  from = "/api/:token/activityquery"
+  to = "/.netlify/functions/activityquery"
+  status = 200
+
 [[redirects]]
   from = "/api/:token/records"
   to = "/.netlify/functions/records"

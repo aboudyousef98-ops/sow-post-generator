@@ -6,7 +6,7 @@ import type { PolishKey, RewriteMode } from '../types';
 
 const TOKEN = import.meta.env.VITE_API_PATH_TOKEN ?? 'changeme';
 
-function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region' | 'notecheck' | 'updatesearch'): string {
+function apiPath(endpoint: 'health' | 'rewrite' | 'extract' | 'region' | 'notecheck' | 'updatesearch' | 'activityquery'): string {
   return `/api/${TOKEN}/${endpoint}`;
 }
 
@@ -15,7 +15,7 @@ export interface ApiError {
   message: string;
 }
 
-async function post<T>(endpoint: 'rewrite' | 'extract' | 'region' | 'notecheck' | 'updatesearch', body: unknown): Promise<T> {
+async function post<T>(endpoint: 'rewrite' | 'extract' | 'region' | 'notecheck' | 'updatesearch' | 'activityquery', body: unknown): Promise<T> {
   const res = await fetch(apiPath(endpoint), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -191,6 +191,7 @@ export async function putSharedUsers(users: TeamUser[]): Promise<TeamUser[]> {
 // ---- Project Board (Netlify Blobs behind /api/board) -----------------------
 
 import type { BoardState } from '../board/types';
+import type { ActivityFilter } from './activityQuery';
 
 function boardPath(): string {
   return `/api/${TOKEN}/board`;
@@ -288,5 +289,24 @@ export function updateSearch(
   return post<{ hits: { projectId: string; why: string }[]; model: string; ms: number }>('updatesearch', {
     query,
     updates,
+  });
+}
+
+/**
+ * Turn a question about who-did-what-when into a filter over the activity log
+ * (Aboud 2026-11-05). The opposite shape to updateSearch above: it sends NO
+ * corpus — only the question and enough context to resolve "yesterday" and a
+ * first name — and the caller applies the returned filter locally and exactly.
+ *
+ * Rejects when the key is missing or the model misbehaves; the caller falls
+ * back to lib/activityQuery.parseLocalFilter rather than showing an error.
+ */
+export function activityQuery(
+  query: string,
+  context: { me: string; today: string; roster: string[]; fields: string[]; actions: string[] },
+): Promise<{ filter: ActivityFilter; understood: boolean; model: string; ms: number }> {
+  return post<{ filter: ActivityFilter; understood: boolean; model: string; ms: number }>('activityquery', {
+    query,
+    ...context,
   });
 }
