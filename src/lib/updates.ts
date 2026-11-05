@@ -82,9 +82,12 @@ export function statusGate(label: BoardLabel): NoteGate {
       confirmLabel: 'Set status and post',
     };
   }
+  // Same rhythm as the pending-info copy above — one short imperative, then
+  // "Project" and the bolded name the modal appends. The title already names
+  // the label, so the prompt does not repeat it.
   return {
     title: `What is the update for “${label.name}”?`,
-    prompt: `“${label.name}” needs an update written with it, so the next person knows where this stands. Project`,
+    prompt: 'Say where this stands before moving it. Project',
     placeholder: 'e.g. engineering sent the revised set, waiting on the AHJ to confirm',
     confirmLabel: 'Set status and post',
   };

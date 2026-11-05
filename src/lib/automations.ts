@@ -32,6 +32,7 @@ import type {
 import { labelById, type ProjectPatch } from './board';
 import { newUpdate } from './updates';
 import { isOutOfScopeLabel, isReviewLabel } from './board';
+import { STALE_DAYS } from './boardViews';
 import { RATING_NEEDS_REASON, labelRequiresNote } from './updates';
 
 /**
@@ -326,7 +327,7 @@ export function builtInRules(labels: BoardLabel[]): BuiltInRule[] {
     },
     {
       id: 'aging',
-      text: 'When an install date passes, or nobody touches a project for 14 days → flag it with a dot, and collect it under the "Needs attention" view.',
+      text: `When an install date passes, or nobody touches a project for ${STALE_DAYS} days → flag it with a dot, and collect it under the “Needs attention” view.`,
     },
   ];
 }

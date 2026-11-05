@@ -1986,7 +1986,10 @@ export default function BoardTab({
             }
             onClick={() => setAutoSort(!autoSort)}
           >
-            Auto-sort by status {autoSort ? '✓' : '✕'}
+            {/* A ✕ for "off" read as a remove-this affordance. The on state is
+                already carried by the pill colour and aria-pressed; off needs
+                no glyph at all. */}
+            Auto-sort by status {autoSort ? '✓' : ''}
           </button>
           <label className="board-groupby">
             Group by
@@ -2040,16 +2043,6 @@ export default function BoardTab({
           >
             Show archived
           </button>
-          {/* Natural-language search over the Updates threads (#3) AND the
-              activity log (Aboud 2026-11-05). */}
-          <button
-            type="button"
-            className="btn small secondary"
-            onClick={() => setAskOpen(true)}
-            title="Search everything the team has posted — and everything they have done"
-          >
-            💬 Ask the board
-          </button>
           <span className={`board-date-range ${filters.dateFrom || filters.dateTo ? 'on' : ''}`}>
             <span className="muted">Designed</span>
             <input
@@ -2081,7 +2074,17 @@ export default function BoardTab({
             )}
           </span>
           <span style={{ flex: 1 }} />
-          {/* Next to the thing it governs, not buried in Admin. */}
+          {/* The TOOLS group: things that open something, as opposed to the
+              filters on the row above. "Ask the board" sat among the filter
+              toggles, where it read as one more thing that narrows the table. */}
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setAskOpen(true)}
+            title="Search everything the team has posted — and everything they have done"
+          >
+            💬 Ask the board
+          </button>
           <button
             type="button"
             className="btn small secondary"

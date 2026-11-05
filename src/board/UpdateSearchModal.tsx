@@ -23,8 +23,9 @@
 //
 // Results merge into ONE list of projects, each row saying why it is there.
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import RichText from '../components/RichText';
+import { useDialog } from './useDialog';
 import { activityQuery, updateSearch } from '../lib/api';
 import {
   applyActivityFilter,
@@ -41,6 +42,16 @@ import { searchUpdates, updatesCorpus, updatesFor } from '../lib/updates';
 import type { BoardActivity, BoardProject, ProjectUpdate } from './types';
 
 type Status = 'idle' | 'thinking' | 'done' | 'offline';
+
+/**
+ * The empty state. One example per lane, labelled with where the answer comes
+ * from — the two questions look alike but are answered by completely different
+ * machinery, and knowing that is what stops someone asking the wrong one.
+ */
+const EXAMPLES = [
+  { q: 'which projects have trenching?', from: 'read from the Updates people wrote' },
+  { q: 'what did I interact with yesterday?', from: 'read from the activity log' },
+] as const;
 
 export default function UpdateSearchModal({
   projects,
@@ -70,6 +81,8 @@ export default function UpdateSearchModal({
   const [filter, setFilter] = useState<ActivityFilter | null>(null);
   const [ran, setRan] = useState('');
   const today = todayIso();
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef, onClose);
 
   const nameById = useMemo(() => new Map(projects.map((p) => [p.id, p.name])), [projects]);
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
@@ -164,41 +177,79 @@ export default function UpdateSearchModal({
       return `${rows.length} project${rows.length === 1 ? '' : 's'} for “${ran}”.`;
     }
     if (status === 'idle' && query.trim()) {
-      return `${rows.length} match${rows.length === 1 ? '' : 'es'} so far — press Ask to search by meaning.`;
+      // Never report a ZERO before the search has run — "0 matches" reads as
+      // the answer, when it only means the instant local pass found nothing
+      // yet. And "by meaning" described the updates lane only; a date question
+      // is not answered that way.
+      return rows.length
+        ? `${rows.length} quick match${rows.length === 1 ? '' : 'es'} — press Ask for the full search.`
+        : 'Press Ask to search.';
     }
     return '';
   };
 
   return (
+    // `.modal.wide` is padding:0 / overflow:hidden: padded header, ONE
+    // scrolling body, padded footer. Laid out flat, the copy ran wall to wall
+    // and Close floated in an empty void.
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <h3>Ask the board</h3>
-        <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-          Everything the team has posted, and everything they have done — e.g.{' '}
-          <em>which projects have trenching?</em> or <em>what did I interact with yesterday?</em>
-        </p>
+      <div
+        className="modal wide"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="ask-the-board-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="pane-top">
+          <h3 id="ask-the-board-title">Ask the board</h3>
+          <p className="muted pane-lede">
+            Everything the team has posted, and everything they have done.
+          </p>
 
-        <div className="upd-search-bar">
-          <input
-            type="search"
-            aria-label="Ask the board"
-            value={query}
-            placeholder="what did I interact with yesterday?"
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') ask();
-            }}
-          />
-          <button type="button" className="btn primary" disabled={!query.trim() || status === 'thinking'} onClick={ask}>
-            {status === 'thinking' ? 'Asking…' : 'Ask'}
-          </button>
+          <div className="upd-search-bar">
+            <input
+              type="search"
+              // Not "Ask the board" — that is the DIALOG's name now, and two
+              // things answering to it makes the field unaddressable.
+              aria-label="Your question"
+              value={query}
+              placeholder="what did I interact with yesterday?"
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') ask();
+              }}
+            />
+            <button type="button" className="btn primary" disabled={!query.trim() || status === 'thinking'} onClick={ask}>
+              {status === 'thinking' ? 'Asking…' : 'Ask'}
+            </button>
+          </div>
+
+          <div className="upd-search-note muted" aria-live="polite">
+            {note()}
+          </div>
         </div>
 
-        <div className="upd-search-note muted" aria-live="polite">
-          {note()}
-        </div>
+        <div className="upd-thread pane-body">
+          {/* Before anything is typed the panel used to be a blank void with a
+              Close button in it. The two questions it can answer come from
+              different places, so the examples say which is which. */}
+          {!query.trim() && !ran && (
+            <div className="upd-search-empty">
+              <p className="muted">Two kinds of question, one box:</p>
+              <ul>
+                {EXAMPLES.map((ex) => (
+                  <li key={ex.q}>
+                    <button type="button" className="upd-search-example" onClick={() => setQuery(ex.q)}>
+                      {ex.q}
+                    </button>
+                    <span className="muted"> — {ex.from}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
 
-        <div className="upd-thread">
           {rows.length === 0 && ran && status !== 'thinking' && (
             <p className="muted">Nothing matched. Try different words, or ask more plainly.</p>
           )}
@@ -240,7 +291,7 @@ export default function UpdateSearchModal({
           ))}
         </div>
 
-        <div className="modal-actions">
+        <div className="modal-actions pane-foot">
           <button type="button" className="btn secondary" onClick={onClose}>
             Close
           </button>

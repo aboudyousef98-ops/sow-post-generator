@@ -78,7 +78,7 @@ function renderModal() {
 }
 
 const ask = async (q: string) => {
-  fireEvent.change(screen.getByLabelText('Ask the board'), { target: { value: q } });
+  fireEvent.change(screen.getByLabelText('Your question'), { target: { value: q } });
   await act(async () => {
     fireEvent.click(screen.getByRole('button', { name: 'Ask' }));
   });
@@ -172,7 +172,7 @@ describe('the activity lane', () => {
 describe('the updates lane still works as it did', () => {
   it('keyword matches appear with no model', async () => {
     renderModal();
-    fireEvent.change(screen.getByLabelText('Ask the board'), { target: { value: 'trench' } });
+    fireEvent.change(screen.getByLabelText('Your question'), { target: { value: 'trench' } });
     expect(screen.getByText(/trench and external long run/)).toBeTruthy();
   });
 
@@ -186,7 +186,7 @@ describe('the updates lane still works as it did', () => {
 
   it('an updates row opens the thread', async () => {
     renderModal();
-    fireEvent.change(screen.getByLabelText('Ask the board'), { target: { value: 'trench' } });
+    fireEvent.change(screen.getByLabelText('Your question'), { target: { value: 'trench' } });
     fireEvent.click(screen.getByRole('button', { name: 'Martha Thompson' }));
 
     expect(open).toHaveBeenCalledWith(expect.objectContaining({ id: 'p1' }));
@@ -215,5 +215,74 @@ describe('the two lanes fail independently', () => {
 
     expect(screen.getByText(/AI is unavailable/)).toBeTruthy();
     expect(screen.getByText(/trench and external long run/)).toBeTruthy();
+  });
+});
+
+// Found by tabbing through the panel with it open: focus walked straight out
+// into the board underneath and landed on the table's select-all checkbox, so
+// a keyboard user could drive controls they could not see.
+describe('it behaves like a dialog for the keyboard', () => {
+  it('announces itself as a modal dialog, named by its heading', () => {
+    renderModal();
+    const dialog = screen.getByRole('dialog', { name: 'Ask the board' });
+    expect(dialog.getAttribute('aria-modal')).toBe('true');
+  });
+
+  it('puts focus inside on open, not on the page behind', () => {
+    renderModal();
+    const dialog = screen.getByRole('dialog');
+    expect(dialog.contains(document.activeElement)).toBe(true);
+  });
+
+  it('Tab off the last control wraps to the first instead of escaping', () => {
+    renderModal();
+    const dialog = screen.getByRole('dialog');
+    const focusable = dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]');
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).toBe(focusable[0]);
+  });
+
+  it('Shift+Tab off the first control wraps to the last', () => {
+    renderModal();
+    const dialog = screen.getByRole('dialog');
+    const focusable = dialog.querySelectorAll<HTMLElement>('button, input, select, textarea, a[href]');
+    focusable[0].focus();
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true });
+
+    expect(document.activeElement).toBe(focusable[focusable.length - 1]);
+  });
+
+  it('pulls focus back in if it has already escaped', () => {
+    renderModal();
+    const dialog = screen.getByRole('dialog');
+    const outside = document.createElement('button');
+    document.body.appendChild(outside);
+    outside.focus();
+    fireEvent.keyDown(document, { key: 'Tab' });
+
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    outside.remove();
+  });
+
+  it('Escape closes it, like every other dialog the team uses', () => {
+    const onClose = vi.fn();
+    render(
+      <UpdateSearchModal
+        projects={projects}
+        updates={[upd({})]}
+        activity={activity}
+        me={ME}
+        roster={ROSTER}
+        onOpenProject={open}
+        onOpenActivity={openActivity}
+        onClose={onClose}
+      />,
+    );
+    fireEvent.keyDown(document, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
   });
 });

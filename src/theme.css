@@ -7314,10 +7314,19 @@ tr:hover .board-label-cell.empty {
 }
 
 /* A paused rule still has to be readable — dimmed, not hidden, so nobody
-   wonders where their automation went. */
+   wonders where their automation went. NOT line-through: struck text reads as
+   deleted, and these are the two states people most need to tell apart. */
 .board-auto-item.off .board-auto-text {
-  opacity: 0.55;
-  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+.board-auto-item.off .board-auto-text::after {
+  content: ' paused';
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dyn-warn-ink);
 }
 
 .board-auto-text {
@@ -7357,11 +7366,18 @@ tr:hover .board-label-cell.empty {
   border-radius: var(--radius-input);
   background: var(--dyn-surface);
   color: inherit;
+  /* Never inherit width:100%/margin-top from the global `select` rule — the
+     same trap .board-groupby select documents. Inheriting it turned the
+     WHEN/IF/THEN sentence into a column of six identical full-width
+     dropdowns and pushed Save below the fold. */
+  width: auto;
+  max-width: 100%;
+  margin-top: 0;
 }
 
 .board-auto-line input {
-  flex: 1;
-  min-width: 180px;
+  flex: 1 1 200px;
+  min-width: 0;
 }
 
 .board-auto-kw {
@@ -7387,16 +7403,16 @@ tr:hover .board-label-cell.empty {
    ONE scrolling body and a padded footer (the .upd-top convention). Without
    that the panel overflowed and "Save automation" sat below the fold. */
 
-.board-auto-top {
+.pane-top {
   flex: 0 0 auto;
   padding: 16px 18px 0;
 }
 
-.board-auto-top h3 {
+.pane-top h3 {
   margin: 0 0 8px;
 }
 
-.board-auto-body {
+.pane-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow: auto;
@@ -7404,8 +7420,50 @@ tr:hover .board-label-cell.empty {
 }
 
 /* Always reachable — Aboud's standing rule for lists. */
-.board-auto-foot {
+.pane-foot {
   flex: 0 0 auto;
   padding: 10px 18px 14px;
   border-top: 1px solid var(--dyn-line);
+}
+
+/* Intro copy in a wide modal: hold a readable measure instead of running the
+   full 780px wall to wall. */
+.pane-lede {
+  margin: 0;
+  max-width: 62ch;
+  line-height: 1.5;
+}
+
+/* "Ask the board" before anything is typed. The panel used to be a blank void
+   with a Close button in it. */
+.upd-search-empty ul {
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upd-search-empty li {
+  padding: 4px 0;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* A real question you can click, not a decorative sample. Navy, not
+   --dyn-teal-ink: that token is 3.09:1 on white, under the 4.5:1 floor for
+   text this size. The underline carries the affordance. */
+.upd-search-example {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: var(--dyn-navy);
+  cursor: pointer;
+  text-align: start;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-decoration-thickness: 1px;
+}
+
+.upd-search-example:hover {
+  text-decoration-thickness: 2px;
 }

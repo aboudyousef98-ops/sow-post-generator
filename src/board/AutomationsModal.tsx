@@ -21,7 +21,8 @@
 // and a gate with no visible author is the kind of thing people work around
 // rather than ask about.
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { useDialog } from './useDialog';
 import {
   ACTOR,
   builtInRules,
@@ -272,6 +273,8 @@ export default function AutomationsModal({
   onClose,
 }: Props) {
   const [draft, setDraft] = useState<AutomationRule | null>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  useDialog(panelRef, onClose);
   const rules = liveRules(automations);
   const built = builtInRules(labels);
 
@@ -288,16 +291,23 @@ export default function AutomationsModal({
     // below the fold on a 812px screen, which made the builder unusable
     // (caught running the real board, 2026-11-05).
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal wide board-auto-modal" onClick={(e) => e.stopPropagation()}>
-        <div className="board-auto-top">
-          <h3>Automations</h3>
+      <div
+        className="modal wide board-auto-modal"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="automations-title"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="pane-top">
+          <h3 id="automations-title">Automations</h3>
           <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
             Everything the board does on its own. These are shared — a rule here applies to the whole team.
             {!isAdmin && ' Only an admin can change them.'}
           </p>
         </div>
 
-        <div className="board-auto-body">
+        <div className="pane-body">
         <h4 className="board-auto-head">Built in</h4>
         <ul className="board-auto-list">
           {built.map((b) => (
@@ -337,7 +347,10 @@ export default function AutomationsModal({
         <ul className="board-auto-list">
           {rules.map((r) => (
             <li key={r.id} className={`board-auto-item${r.enabled ? '' : ' off'}`}>
-              <label className="board-label-flag" title={r.enabled ? 'On — click to pause' : 'Paused'}>
+              {/* No "on" text beside it: the word sat there unchanged while
+                  the box unchecked, so a paused rule read "on". The tick is
+                  the on state and the PAUSED marker is the off one. */}
+              <label className="board-label-flag" title={r.enabled ? 'On — click to pause' : 'Paused — click to turn back on'}>
                 <input
                   type="checkbox"
                   aria-label={`Enable ${describeRule(r, labels)}`}
@@ -345,7 +358,6 @@ export default function AutomationsModal({
                   disabled={!isAdmin}
                   onChange={(e) => onSave({ ...r, enabled: e.target.checked })}
                 />
-                on
               </label>
               <span className="board-auto-text">{describeRule(r, labels)}</span>
               <span className="muted board-auto-by">{r.createdBy}</span>
@@ -382,7 +394,7 @@ export default function AutomationsModal({
         )}
         </div>
 
-        <div className="modal-actions board-auto-foot">
+        <div className="modal-actions pane-foot">
           <button type="button" className="btn secondary" onClick={onClose}>
             Close
           </button>
