@@ -495,10 +495,29 @@ function BodyInner({
   );
 }
 /**
+ * Column widths as CSS variables for one table — cells read them with
+ * `calc(var(--col-x-size) * 1px)` so a resize drag never re-renders the rows.
+ *
+ * Per TABLE, not shared: the Installation Review section shows the Reviewer
+ * column and the other three do not, so they no longer have the same set of
+ * headers or the same total width. The widths themselves still agree, because
+ * every table reads the one `columnSizing` state.
+ */
+function sizeVarsFor(table: TanTable<BoardProject>): Record<string, number> {
+  const vars: Record<string, number> = {};
+  for (const header of table.getFlatHeaders()) {
+    vars[`--header-${header.id}-size`] = header.getSize();
+    vars[`--col-${header.column.id}-size`] = header.column.getSize();
+  }
+  return vars;
+}
+
+/**
  * A collapsible section below the main table — "Installation Review",
- * "Out of SOW scope" and "Completed projects". Same columns, same widths, same
- * sorting state as the main table; only the rows differ. Headers here sort but do not resize:
- * resizing lives on the main header alone, so there is one source of width.
+ * "Out of SOW scope" and "Completed projects". Same columns and sorting state
+ * as the main table; the rows differ, and Installation Review also carries the
+ * Reviewer column. Headers here sort but do not resize: resizing lives on the
+ * main header alone, so there is one source of width.
  */
 function SectionCard({
   variant,
@@ -507,8 +526,6 @@ function SectionCard({
   open,
   onToggle,
   table,
-  columnSizeVars,
-  width,
   highlightId,
   agingOf,
   selectedIds,
@@ -520,8 +537,6 @@ function SectionCard({
   open: boolean;
   onToggle: () => void;
   table: TanTable<BoardProject>;
-  columnSizeVars: Record<string, number>;
-  width: number;
   highlightId: string | null;
   agingOf?: (p: BoardProject) => AgingState;
   selectedIds?: Record<string, boolean>;
@@ -539,7 +554,7 @@ function SectionCard({
           <p className="muted board-empty">{emptyText}</p>
         ) : (
           <div className="board-scroll">
-            <table className="board-table" style={{ ...columnSizeVars, width }}>
+            <table className="board-table" style={{ ...sizeVarsFor(table), width: table.getTotalSize() }}>
               <thead>
                 {table.getHeaderGroups().map((hg) => (
                   <tr key={hg.id}>
@@ -1623,10 +1638,27 @@ export default function BoardTab({
     [columnOrder, columns],
   );
 
+  /**
+   * Reviewer belongs to the Installation Review section and nowhere else
+   * (Aboud 2026-11-05: "I wanted that column to only be in the Installation
+   * review board"). It is the ONE column whose visibility is not the viewer's
+   * choice, so it is forced per table rather than stored — and it is kept out
+   * of the "Columns ▾" menu below, so it cannot be switched on in the wrong
+   * place. Every other column still follows `columnVisibility`.
+   */
+  const visibilityNoReviewer = useMemo(
+    () => ({ ...columnVisibility, reviewer: false }),
+    [columnVisibility],
+  );
+  const visibilityWithReviewer = useMemo(
+    () => ({ ...columnVisibility, reviewer: true }),
+    [columnVisibility],
+  );
+
   const table = useReactTable({
     data: active,
     columns,
-    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
+    state: { sorting, columnSizing, columnVisibility: visibilityNoReviewer, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnSizingChange: setColumnSizing,
     onColumnVisibilityChange: setColumnVisibility,
@@ -1643,7 +1675,7 @@ export default function BoardTab({
   const doneTable = useReactTable({
     data: completed,
     columns,
-    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
+    state: { sorting, columnSizing, columnVisibility: visibilityNoReviewer, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
@@ -1651,11 +1683,14 @@ export default function BoardTab({
     enableColumnResizing: false,
   });
 
-  // Installation Review — identical contract to doneTable.
+  // Installation Review — identical contract to doneTable, except this is the
+  // one table that carries the Reviewer column. It is therefore one column
+  // WIDER than the others, which is why each table sizes itself (sizeVarsFor)
+  // instead of all four reading the main table's widths.
   const reviewTable = useReactTable({
     data: installReview,
     columns,
-    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
+    state: { sorting, columnSizing, columnVisibility: visibilityWithReviewer, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
@@ -1668,7 +1703,7 @@ export default function BoardTab({
   const scopeTable = useReactTable({
     data: outOfScope,
     columns,
-    state: { sorting, columnSizing, columnVisibility, columnOrder: resolvedOrder },
+    state: { sorting, columnSizing, columnVisibility: visibilityNoReviewer, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
@@ -1676,19 +1711,15 @@ export default function BoardTab({
     enableColumnResizing: false,
   });
 
-  // Column widths as CSS variables on the table element — cells read them with
-  // `calc(var(--col-x-size) * 1px)` so a drag never re-renders the rows.
+  // The main table's own width variables. The three sections compute theirs in
+  // SectionCard (sizeVarsFor) — they no longer share a header set.
   const sizingState = table.getState().columnSizing;
   const visibilityState = table.getState().columnVisibility;
-  const columnSizeVars = useMemo(() => {
-    const vars: Record<string, number> = {};
-    for (const header of table.getFlatHeaders()) {
-      vars[`--header-${header.id}-size`] = header.getSize();
-      vars[`--col-${header.column.id}-size`] = header.column.getSize();
-    }
-    return vars;
+  const columnSizeVars = useMemo(
+    () => sizeVarsFor(table),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sizingState, visibilityState, columns]);
+    [sizingState, visibilityState, columns],
+  );
 
   const isResizing = Boolean(table.getState().columnSizingInfo.isResizingColumn);
 
@@ -1891,7 +1922,11 @@ export default function BoardTab({
             <div className="board-menu">
               {table
                 .getAllLeafColumns()
-                .filter((c) => c.id !== 'name' && c.id !== 'select')
+                // `name` and `select` are pinned; `reviewer` is off the menu
+                // because it belongs to the Installation Review section alone
+                // (Aboud 2026-11-05) — offering a toggle that the section
+                // overrides either way would just be a lying checkbox.
+                .filter((c) => c.id !== 'name' && c.id !== 'select' && c.id !== 'reviewer')
                 .map((c) => (
                   <label key={c.id} className="board-menu-item">
                     <input type="checkbox" checked={c.getIsVisible()} onChange={c.getToggleVisibilityHandler()} />
@@ -2069,8 +2104,6 @@ export default function BoardTab({
         open={reviewOpen || searching}
         onToggle={() => setReviewOpen((v) => !v)}
         table={reviewTable}
-        columnSizeVars={columnSizeVars}
-        width={table.getTotalSize()}
         highlightId={highlightId}
         agingOf={agingFor}
         selectedIds={selected}
@@ -2087,8 +2120,6 @@ export default function BoardTab({
         open={scopeOpen || searching}
         onToggle={() => setScopeOpen((v) => !v)}
         table={scopeTable}
-        columnSizeVars={columnSizeVars}
-        width={table.getTotalSize()}
         highlightId={highlightId}
         agingOf={agingFor}
         selectedIds={selected}
@@ -2101,8 +2132,6 @@ export default function BoardTab({
         open={doneOpen || searching}
         onToggle={() => setDoneOpen((v) => !v)}
         table={doneTable}
-        columnSizeVars={columnSizeVars}
-        width={table.getTotalSize()}
         highlightId={highlightId}
         agingOf={agingFor}
         selectedIds={selected}

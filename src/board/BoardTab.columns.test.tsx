@@ -205,6 +205,101 @@ describe('column reordering', () => {
   });
 });
 
+// Aboud 2026-11-05: "regarding the reviewer assignee, I wanted that column to
+// only be in the 'Installation review' board." Reviewer is the one column
+// whose visibility is NOT the viewer's choice.
+describe('the Reviewer column belongs to Installation Review alone', () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(cleanup);
+
+  /** One row per section, so all four tables render at once. */
+  const SECTIONS: BoardState = {
+    labels: [
+      label('s1', 'Working on it', 'status'),
+      label('s-rev', 'Installation Review', 'status', { review: true }),
+      label('s-hold', 'Hold', 'status', { outOfScope: true }),
+      label('s-done', 'Done', 'status', { isDone: true }),
+    ],
+    projects: [
+      project('a', 'Active Customer', { statusId: 's1' }),
+      project('r', 'Review Customer', { statusId: 's-rev', reviewer: 'Omar Rajab' }),
+      project('h', 'Hold Customer', { statusId: 's-hold' }),
+      project('d', 'Done Customer', { statusId: 's-done' }),
+    ],
+    activity: [],
+    updates: [],
+  };
+
+  const renderSections = () =>
+    render(
+      <BoardTab
+        board={SECTIONS}
+        setBoard={vi.fn()}
+        me="Aboud Yousef"
+        isAdmin
+        authors={['Aboud Yousef', 'Omar Rajab', 'Anas Yaghmour']}
+        toast={vi.fn()}
+        records={[]}
+        onOpenCompose={vi.fn()}
+      />,
+    );
+
+  /** Header texts of one section card, found by its accent class. */
+  const headersOf = (selector: string) =>
+    [...document.querySelectorAll(`${selector} thead tr:first-child th`)].map((th) =>
+      th.textContent?.replace(/[↕↑↓▼\d]/g, '').trim(),
+    );
+
+  it('is absent from the main table', () => {
+    renderSections();
+    // Scoped to the main table on purpose: the shared headerOrder() helper
+    // reads every thead in the document, and the review section has one now.
+    expect(headersOf('.board-table-main')).not.toContain('Reviewer');
+    expect(headersOf('.board-table-main')).toContain('SOW coordinator');
+  });
+
+  it('is present in the Installation Review section', () => {
+    renderSections();
+    // Open by default — it is live work, not a parking space.
+    expect(headersOf('.board-review')).toContain('Reviewer');
+  });
+
+  it('is absent from Out of SOW scope and Completed', () => {
+    renderSections();
+    fireEvent.click(screen.getByRole('button', { name: /Out of SOW scope/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Completed projects/ }));
+
+    expect(headersOf('.board-scope')).not.toContain('Reviewer');
+    expect(headersOf('.board-done:not(.board-scope):not(.board-review)')).not.toContain('Reviewer');
+  });
+
+  it('is not offered in the Columns menu, so it cannot be switched on elsewhere', () => {
+    renderSections();
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+
+    const menu = document.querySelector('.board-menu') as HTMLElement;
+    expect(within(menu).queryByText('Reviewer')).toBeNull();
+    // The menu still works for the columns that ARE the viewer's choice.
+    expect(within(menu).getByText('Rating')).toBeTruthy();
+  });
+
+  it('the review section still shows and edits the reviewer value', () => {
+    renderSections();
+    const row = screen.getByText('Review Customer').closest('tr')!;
+    expect(within(row).getByText('Omar Rajab')).toBeTruthy();
+  });
+
+  it('each table sizes itself, so the wider review table is not clipped', () => {
+    renderSections();
+    const main = document.querySelector('.board-table-main') as HTMLElement;
+    const review = document.querySelector('.board-review table') as HTMLElement;
+    const width = (el: HTMLElement) => parseInt(el.style.width || '0', 10);
+    // One extra column means a wider table — if both read the main table's
+    // total, the Reviewer column would hang off the end of its own section.
+    expect(width(review)).toBeGreaterThan(width(main));
+  });
+});
+
 describe('the body follows the header order', () => {
   beforeEach(() => localStorage.clear());
   afterEach(cleanup);
