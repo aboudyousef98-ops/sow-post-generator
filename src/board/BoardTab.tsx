@@ -66,9 +66,11 @@ import { hasSfNotes, type SfNotes } from '../lib/sfNotes';
 import { matchesSearch } from '../lib/boardSearch';
 import {
   isPendingInfoLabel,
+  labelRequiresNote,
   needsRatingReason,
   newUpdate,
   putUpdate,
+  statusGate,
   updateCounts,
 } from '../lib/updates';
 import type { PostRecord } from '../types';
@@ -80,6 +82,7 @@ import type {
   BoardState,
   LabelColumnKey,
   ProjectUpdate,
+  UpdateKind,
 } from './types';
 import ActivityModal from './ActivityModal';
 import UpdatesModal from './UpdatesModal';
@@ -606,13 +609,22 @@ export default function BoardTab({
   const [activityFor, setActivityFor] = useState<BoardProject | null>(null);
   const [updatesFor, setUpdatesFor] = useState<BoardProject | null>(null);
   const [askOpen, setAskOpen] = useState(false);
-  /** A patch held hostage until the user explains it (#3 rating, #6 pending). */
+  /**
+   * A patch held hostage until the user explains it (#3 rating, #6 pending,
+   * and since 2026-11-05 any status label flagged "needs a note").
+   *
+   * `projects` is a LIST because the bulk action bar needs the same gate: one
+   * explanation, posted to every row it moves. One row is just the list of
+   * one, so there is a single resolve path rather than two that can drift.
+   */
   const [gate, setGate] = useState<{
-    project: BoardProject;
+    projects: BoardProject[];
     patch: ProjectPatch;
     gate: NoteGate;
-    kind: 'rating' | 'pending-info';
+    kind: UpdateKind;
     rating?: 1 | 2 | 3 | 4 | 5;
+    /** Bulk only — the toast description passed through to bulkApply. */
+    describe?: string;
   } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BoardProject | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -775,7 +787,7 @@ export default function BoardTab({
     if ('rating' in patch && needsRatingReason(patch.rating as number | null)) {
       const stars = patch.rating as 1 | 2 | 3 | 4 | 5;
       setGate({
-        project,
+        projects: [project],
         patch,
         kind: 'rating',
         rating: stars,
@@ -790,18 +802,17 @@ export default function BoardTab({
     }
 
     if ('statusId' in patch) {
+      // Which statuses gate is DATA now, not a name in this file: any status
+      // ticked "needs a note" in Edit labels lands here, which is how
+      // "Pending Update" joined "Pending Additional Information" without a
+      // second branch (Aboud 2026-11-05).
       const label = labelById(boardRef.current.labels, (patch.statusId as string) ?? null);
-      if (isPendingInfoLabel(label?.name)) {
+      if (label && labelRequiresNote(label)) {
         setGate({
-          project,
+          projects: [project],
           patch,
-          kind: 'pending-info',
-          gate: {
-            title: 'What information is missing?',
-            prompt: 'Say what you are waiting for before putting this on hold. Project',
-            placeholder: 'e.g. need the signed utility interconnection letter from the customer',
-            confirmLabel: 'Set status and post',
-          },
+          kind: isPendingInfoLabel(label.name) ? 'pending-info' : 'status',
+          gate: statusGate(label),
         });
         return;
       }
@@ -810,14 +821,27 @@ export default function BoardTab({
     applyPatch(project, patch);
   };
 
-  /** The gate was answered — write the update and the patch in one go. */
+  /**
+   * The gate was answered — write the update(s) and the patch in one go.
+   * One row takes the single-write path; a bulk gate posts the same
+   * explanation to every row it moves, in bulkApply's single write.
+   */
   const resolveGate = (text: string) => {
     if (!gate) return;
-    const u = newUpdate(gate.project.id, text, me, gate.kind, gate.rating ? { rating: gate.rating } : {});
-    // The field change keeps its own activity entry; this adds the post.
-    applyPatch(gate.project, gate.patch, undefined, u, activityEntry(gate.project.id, me, 'update-post'));
+    const extra = gate.rating ? { rating: gate.rating } : {};
+    if (gate.projects.length === 1) {
+      const only = gate.projects[0];
+      const u = newUpdate(only.id, text, me, gate.kind, extra);
+      // The field change keeps its own activity entry; this adds the post.
+      applyPatch(only, gate.patch, undefined, u, activityEntry(only.id, me, 'update-post'));
+      setGate(null);
+      toast('Update posted.');
+      return;
+    }
+    const updates = gate.projects.map((p) => newUpdate(p.id, text, me, gate.kind, extra));
+    bulkApply(gate.projects, gate.patch, gate.describe ?? 'updated', updates);
     setGate(null);
-    toast('Update posted.');
+    clearSelection();
   };
 
   /**
@@ -846,7 +870,17 @@ export default function BoardTab({
    * lose every change but the last — boardRef only catches up on re-render.
    * Undo restores each row's own previous value, not a single shared one.
    */
-  const bulkApply = (rows: BoardProject[], patch: ProjectPatch, describe: string) => {
+  const bulkApply = (
+    rows: BoardProject[],
+    patch: ProjectPatch,
+    describe: string,
+    /**
+     * Explanations a gate collected for this bulk change — one per row, same
+     * text. They ride in the SAME write as the patch, so 20 rows cost one
+     * push instead of 21.
+     */
+    withUpdates?: ProjectUpdate[],
+  ) => {
     if (rows.length === 0) return;
     const cur = boardRef.current;
     const now = new Date().toISOString();
@@ -854,15 +888,22 @@ export default function BoardTab({
     const entries = rows
       .map((r) => activityForPatch(r, patch, me, cur.labels))
       .filter((e): e is BoardActivity => Boolean(e));
+    const posts = (withUpdates ?? []).map((u) => activityEntry(u.projectId, me, 'update-post', undefined, now));
+    let updates = cur.updates ?? [];
+    for (const u of withUpdates ?? []) updates = putUpdate(updates, u);
     setBoard({
       ...cur,
       projects: cur.projects.map((p) => (ids.has(p.id) ? patchProject(p, patch, me, now) : p)),
-      activity: [...entries, ...cur.activity],
+      activity: [...entries, ...posts, ...cur.activity],
+      updates,
     });
     const field = Object.keys(patch)[0] as keyof BoardProject;
     const previous = rows.map((r) => ({ id: r.id, value: r[field] }));
     toast(`${rows.length} project${rows.length === 1 ? '' : 's'} → ${describe}.`, {
       label: 'Undo',
+      // Undo puts the FIELD back and leaves any gate explanation posted. That
+      // is deliberate: the note is a record of what someone knew at the time,
+      // and the Updates thread is append-only everywhere else too.
       fn: () => {
         const now2 = new Date().toISOString();
         const back = boardRef.current;
@@ -1400,9 +1441,10 @@ export default function BoardTab({
             valueId={row.original.statusId}
             onPick={(statusId) => {
               const prev = row.original.statusId;
-              // "Pending Additional Information" is intercepted here and does
-              // not land until the user says what is missing (#6).
-              if (isPendingInfoLabel(labelById(boardRef.current.labels, statusId)?.name)) {
+              // A status flagged "needs a note" is intercepted here and does
+              // not land until the user explains it (#6, and Pending Update
+              // since 2026-11-05). Which statuses those are is label data.
+              if (labelRequiresNote(labelById(boardRef.current.labels, statusId))) {
                 guardedPatch(row.original, { statusId });
                 return;
               }
@@ -2084,6 +2126,24 @@ export default function BoardTab({
             onChange={(ids) => {
               const label = labelById(board.labels, ids[0] ?? null);
               if (!label) return;
+              // This used to call bulkApply directly, so moving 20 rows to
+              // "Pending Additional Information" slipped the gate entirely and
+              // posted nothing. One explanation now covers the whole batch.
+              if (labelRequiresNote(label)) {
+                const g = statusGate(label);
+                setGate({
+                  projects: picked,
+                  patch: { statusId: label.id },
+                  kind: isPendingInfoLabel(label.name) ? 'pending-info' : 'status',
+                  describe: label.name,
+                  gate: {
+                    ...g,
+                    prompt: `${picked.length} project${picked.length === 1 ? '' : 's'} moving to “${label.name}”. The same update is posted to every one of them.`,
+                    confirmLabel: `Set ${picked.length} and post`,
+                  },
+                });
+                return;
+              }
               bulkApply(picked, { statusId: label.id }, label.name);
               clearSelection();
             }}
@@ -2164,7 +2224,9 @@ export default function BoardTab({
       {gate && (
         <RequireNoteModal
           gate={gate.gate}
-          projectName={gate.project.name}
+          // Bulk gates name the batch in their own prompt, so there is no one
+          // project to bold — the modal renders an empty strong and reads fine.
+          projectName={gate.projects.length === 1 ? gate.projects[0].name : ''}
           onConfirm={resolveGate}
           onCancel={() => setGate(null)}
         />

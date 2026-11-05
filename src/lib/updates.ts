@@ -12,7 +12,7 @@
 //   #6 moving a project to "Pending additional information" must say WHAT
 //      information is missing. His words: "This is a must".
 
-import type { ProjectUpdate, UpdateKind } from '../board/types';
+import type { BoardLabel, NoteGate, ProjectUpdate, UpdateKind } from '../board/types';
 
 /** Ratings that oblige the rater to explain themselves (#3). */
 export const RATING_NEEDS_REASON = 4;
@@ -24,9 +24,70 @@ export function needsRatingReason(rating: number | null | undefined): boolean {
   return typeof rating === 'number' && rating >= RATING_NEEDS_REASON;
 }
 
-/** Case/space-insensitive, so a label rename that only changes case still works. */
+/**
+ * Case/space-insensitive, so a label rename that only changes case still works.
+ *
+ * Kept for the gate COPY (see statusGate) — the gate itself is now decided by
+ * labelRequiresNote, which any status label can opt into.
+ */
 export function isPendingInfoLabel(name: string | undefined): boolean {
   return (name ?? '').trim().toLowerCase() === PENDING_INFO_LABEL.toLowerCase();
+}
+
+/**
+ * Status labels that demand an explanation unless someone says otherwise —
+ * Aboud 2026-11-05. Both already exist on the live board as team-created
+ * labels, so there is nothing to seed and nothing to migrate: the names are
+ * matched case-insensitively and the result is only a DEFAULT.
+ */
+const REQUIRES_NOTE_DEFAULT_NAMES = new Set([
+  PENDING_INFO_LABEL.toLowerCase(),
+  'pending update',
+]);
+
+/**
+ * True when moving a row INTO this status obliges the person doing it to say
+ * why. Same shape as isOutOfScopeLabel / isReviewLabel in lib/board.ts: an
+ * explicit tick in Edit labels wins, and the name default makes the two
+ * statuses Aboud already had work immediately.
+ *
+ * `isDone` switches it off for the same reason it beats the section flags —
+ * finished is the stronger statement, and nobody should have to justify
+ * closing out work.
+ *
+ * Deliberately NOT mutually exclusive with the section flags: "parked" and
+ * "owes an explanation" are compatible claims about a row.
+ */
+export function labelRequiresNote(label: BoardLabel | undefined): boolean {
+  if (!label || label.columnKey !== 'status' || label.isDone) return false;
+  if (typeof label.requiresNote === 'boolean') return label.requiresNote;
+  return REQUIRES_NOTE_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
+}
+
+/**
+ * The modal copy for a gated status. Derived from the label NAME so one gate
+ * serves every status a team cares to flag, instead of a hardcoded sentence
+ * per rule.
+ *
+ * "Pending Additional Information" keeps its original 2026-10-17 wording: the
+ * team has been reading that exact sentence for weeks, and a generic rephrase
+ * would be a downgrade for the one status that matters most.
+ */
+export function statusGate(label: BoardLabel): NoteGate {
+  if (isPendingInfoLabel(label.name)) {
+    return {
+      title: 'What information is missing?',
+      prompt: 'Say what you are waiting for before putting this on hold. Project',
+      placeholder: 'e.g. need the signed utility interconnection letter from the customer',
+      confirmLabel: 'Set status and post',
+    };
+  }
+  return {
+    title: `What is the update for “${label.name}”?`,
+    prompt: `“${label.name}” needs an update written with it, so the next person knows where this stands. Project`,
+    placeholder: 'e.g. engineering sent the revised set, waiting on the AHJ to confirm',
+    confirmLabel: 'Set status and post',
+  };
 }
 
 export function newUpdate(

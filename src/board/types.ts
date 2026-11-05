@@ -41,6 +41,21 @@ export interface BoardLabel {
    * "Installation Review" status work with no migration and no re-tick.
    */
   review?: boolean;
+  /**
+   * "Moving a row to this status obliges an explanation" (status only) —
+   * Aboud 2026-11-05: "the 'Pending Update' label, I want to force the user to
+   * write an update when it is pending updates".
+   *
+   * Same OPTIONAL contract as `outOfScope` and `review`: an explicit tick wins
+   * and `undefined` falls back to the by-name default in
+   * lib/updates.labelRequiresNote, which is what makes both "Pending
+   * Additional Information" (gated since 2026-10-17) and "Pending Update" work
+   * with no migration and no re-tick.
+   *
+   * Unlike the three section flags this one is NOT mutually exclusive with
+   * them: a label can demand a note and still be out of scope.
+   */
+  requiresNote?: boolean;
   /** Seeded label: rename/recolor OK, archive not allowed. */
   isSystem: boolean;
   archived: boolean;
@@ -110,11 +125,28 @@ export interface BoardActivity {
 }
 
 /**
- * Why an update was written. `note` is someone typing; the other two are
- * written by a gate that REQUIRES an explanation before an edit is allowed,
- * and are tagged so they can be found later without reading every thread.
+ * Why an update was written. `note` is someone typing; the rest are written by
+ * a gate that REQUIRES an explanation before an edit is allowed, and are
+ * tagged so they can be found later without reading every thread.
+ *
+ * `pending-info` was the only status gate until 2026-11-05, when any status
+ * label could be told to require a note (BoardLabel.requiresNote) — `status`
+ * covers those. The old value stays valid: updates already on the live board
+ * carry it, and readers must tolerate an unknown kind from a newer client.
  */
-export type UpdateKind = 'note' | 'rating' | 'pending-info';
+export type UpdateKind = 'note' | 'rating' | 'pending-info' | 'status';
+
+/**
+ * The copy for one "you cannot do this without explaining it" modal. Lives
+ * here rather than in RequireNoteModal so lib/ can build a gate without a
+ * component importing backwards into it.
+ */
+export interface NoteGate {
+  title: string;
+  prompt: string;
+  placeholder: string;
+  confirmLabel: string;
+}
 
 /**
  * One post on a project's Updates thread (Aboud 2026-10-17 #2: "I want to have

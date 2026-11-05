@@ -109,6 +109,45 @@ describe('MobileApp shell', () => {
     expect(lastBoard!.activity.length).toBe(1);
   });
 
+  // The gate reads the same label flag the desktop board reads, so a status
+  // the team marks "needs a note" cannot be slipped from a phone either
+  // (Aboud 2026-11-05 — "Pending Update" is gated by name).
+  it('board: a gated status is blocked on mobile until an update is written', () => {
+    const board = emptyBoard();
+    board.labels = [
+      ...board.labels,
+      {
+        id: 's-pu',
+        columnKey: 'status',
+        name: 'Pending Update',
+        color: '#FDAB3D',
+        sortOrder: 160,
+        isDefault: false,
+        isDone: false,
+        isSystem: false,
+        archived: false,
+        updatedAt: '2026-11-01T00:00:00.000Z',
+      },
+    ];
+    const p = { ...newProject('Patrick Lingwall', 'Aboud Yousef', board.labels, '2026-10-01T00:00:00.000Z'), id: 'p1' };
+    render(<Harness board={{ ...board, projects: [p] }} />);
+
+    const row = screen.getByText('Patrick Lingwall').closest('tr')!;
+    fireEvent.click(within(row).getAllByRole('cell')[2]);
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Status' })).getByRole('button', { name: 'Pending Update' }));
+
+    // Nothing written yet — the patch is held by the gate.
+    expect(lastBoard).toBeUndefined();
+    const reason = screen.getByLabelText('Reason');
+    fireEvent.change(reason, { target: { value: 'waiting on the AHJ to confirm' } });
+    fireEvent.click(screen.getByRole('button', { name: /Set status and post/ }));
+
+    expect(lastBoard!.projects.find((x) => x.id === 'p1')!.statusId).toBe('s-pu');
+    expect(lastBoard!.updates).toHaveLength(1);
+    expect(lastBoard!.updates[0].kind).toBe('status');
+    expect(lastBoard!.updates[0].text).toBe('waiting on the AHJ to confirm');
+  });
+
   it('board: add project creates a row owned by me with a create activity', () => {
     render(<Harness />);
     const input = screen.getByPlaceholderText('Add project');

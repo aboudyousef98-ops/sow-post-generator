@@ -26,13 +26,15 @@ import { isoToUs, relativeTime } from '../lib/dates';
 import {
   deleteUpdate,
   isPendingInfoLabel,
+  labelRequiresNote,
   needsRatingReason,
   newUpdate,
   putUpdate,
+  statusGate,
   updateCounts,
   updatesFor,
 } from '../lib/updates';
-import type { ProjectUpdate } from '../board/types';
+import type { NoteGate, ProjectUpdate, UpdateKind } from '../board/types';
 import RichText from '../components/RichText';
 import BottomSheet from './BottomSheet';
 
@@ -89,8 +91,10 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
   const [gate, setGate] = useState<{
     project: BoardProject;
     patch: ProjectPatch;
-    kind: 'rating' | 'pending-info';
+    kind: UpdateKind;
     rating?: 1 | 2 | 3 | 4 | 5;
+    /** Copy for the sheet — built by lib so it matches the desktop word for word. */
+    copy: NoteGate;
   } | null>(null);
   const [gateText, setGateText] = useState('');
   const [updDraft, setUpdDraft] = useState('');
@@ -133,12 +137,34 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
    */
   const guardedPatch = (project: BoardProject, patch: ProjectPatch) => {
     if ('rating' in patch && needsRatingReason(patch.rating as number | null)) {
-      setGate({ project, patch, kind: 'rating', rating: patch.rating as 1 | 2 | 3 | 4 | 5 });
+      const stars = patch.rating as 1 | 2 | 3 | 4 | 5;
+      setGate({
+        project,
+        patch,
+        kind: 'rating',
+        rating: stars,
+        copy: {
+          title: `Why is this ${stars} stars?`,
+          prompt: '',
+          placeholder: 'e.g. this project has trench and external long run',
+          confirmLabel: `Rate ${stars}★ and post`,
+        },
+      });
       return;
     }
-    if ('statusId' in patch && isPendingInfoLabel(labelById(board.labels, (patch.statusId as string) ?? null)?.name)) {
-      setGate({ project, patch, kind: 'pending-info' });
-      return;
+    if ('statusId' in patch) {
+      // Reads the same label flag the desktop board reads, so a status the
+      // team gates is gated on a phone too — "Pending Update" included.
+      const label = labelById(board.labels, (patch.statusId as string) ?? null);
+      if (label && labelRequiresNote(label)) {
+        setGate({
+          project,
+          patch,
+          kind: isPendingInfoLabel(label.name) ? 'pending-info' : 'status',
+          copy: statusGate(label),
+        });
+        return;
+      }
     }
     applyPatch(project, patch);
   };
@@ -576,7 +602,11 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
                   <span className="m-upd-when">{relativeTime(u.at)}</span>
                   {u.kind !== 'note' && (
                     <span className={`upd-badge upd-badge-${u.kind}`}>
-                      {u.kind === 'rating' ? `Rating${u.rating ? ` · ${u.rating}★` : ''}` : 'Missing info'}
+                      {u.kind === 'rating'
+                        ? `Rating${u.rating ? ` · ${u.rating}★` : ''}`
+                        : u.kind === 'pending-info'
+                          ? 'Missing info'
+                          : 'Status reason'}
                     </span>
                   )}
                 </div>
@@ -602,7 +632,7 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
           dismissing the sheet abandons the change entirely. */}
       {gate && (
         <BottomSheet
-          title={gate.kind === 'rating' ? `Why is this ${gate.rating} stars?` : 'What information is missing?'}
+          title={gate.copy.title}
           sub={gate.project.name}
           onClose={() => {
             setGate(null);
@@ -614,11 +644,7 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
               value={gateText}
               aria-label="Reason"
               rows={4}
-              placeholder={
-                gate.kind === 'rating'
-                  ? 'e.g. this project has trench and external long run'
-                  : 'e.g. need the signed utility interconnection letter'
-              }
+              placeholder={gate.copy.placeholder}
               onChange={(e) => setGateText(e.target.value)}
             />
             <p className="m-sheet-hint">Posted to this project's Updates, so it can be searched later.</p>
@@ -639,7 +665,7 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
                 toast('Update posted.');
               }}
             >
-              {gate.kind === 'rating' ? `Rate ${gate.rating}★ and post` : 'Set status and post'}
+              {gate.copy.confirmLabel}
             </button>
           </div>
         </BottomSheet>

@@ -8,7 +8,7 @@ import { useState } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { emptyBoard, newProject, seedLabels } from '../lib/board';
 import type { PostRecord } from '../types';
-import type { BoardProject, BoardState } from './types';
+import type { BoardLabel, BoardProject, BoardState } from './types';
 import BoardTab from './BoardTab';
 
 // floating-ui's autoUpdate needs ResizeObserver, which jsdom lacks.
@@ -899,6 +899,136 @@ describe('Pending Additional Information must say what is missing', () => {
     render(<Harness initial={withPending()} />);
     fireEvent.click(screen.getAllByRole('button', { name: 'New project' })[0]);
     fireEvent.click(screen.getByRole('option', { name: 'Working on it' }));
+
+    expect(screen.queryByLabelText('Reason')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Working on it' }).length).toBeGreaterThan(0);
+  });
+});
+
+// Aboud 2026-11-05: "the 'Pending Update' label, I want to force the user to
+// write an update when it is pending updates". Which statuses gate is label
+// DATA now, so this covers the generalised path, not a second hardcoded name.
+describe('any status can be told to require a note', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const status = (id: string, name: string, over: Partial<BoardLabel> = {}): BoardLabel => ({
+    id,
+    columnKey: 'status',
+    name,
+    color: '#FDAB3D',
+    sortOrder: 50,
+    isDefault: false,
+    isDone: false,
+    isSystem: false,
+    archived: false,
+    updatedAt: '2026-11-01T00:00:00.000Z',
+    ...over,
+  });
+
+  /** Two rows, so the bulk path has something to batch. */
+  const withBoard = (labels: BoardLabel[]) => {
+    const b = emptyBoard();
+    b.labels = [...b.labels, ...labels];
+    b.projects = [boardProject('Martha Thompson', 'pm'), boardProject('Karan Staggers', 'pk')];
+    return b;
+  };
+
+  const pickStatus = (name: string, rowIndex = 0) => {
+    fireEvent.click(screen.getAllByRole('button', { name: 'New project' })[rowIndex]);
+    fireEvent.click(screen.getByRole('option', { name }));
+  };
+
+  const openThread = () => fireEvent.click(screen.getAllByTitle(/open the thread|Post the first update/)[0]);
+
+  it('"Pending Update" is gated by name, with no flag stored on the label', () => {
+    render(<Harness initial={withBoard([status('s-pu', 'Pending Update')])} />);
+    pickStatus('Pending Update');
+
+    // Copy names the label, so one gate serves every status. Queried as the
+    // heading: the label's own name is on screen in the picker too.
+    expect(screen.getByRole('heading', { name: /Pending Update/ })).toBeTruthy();
+    expect(screen.getByLabelText('Reason')).toBeTruthy();
+    // The patch is held — the row still shows the default status.
+    expect(screen.getAllByRole('button', { name: 'New project' }).length).toBeGreaterThan(0);
+  });
+
+  it('cancelling abandons the status change', () => {
+    render(<Harness initial={withBoard([status('s-pu', 'Pending Update')])} />);
+    pickStatus('Pending Update');
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryAllByRole('button', { name: 'Pending Update' })).toHaveLength(0);
+    expect(screen.getAllByRole('button', { name: 'New project' }).length).toBeGreaterThan(0);
+  });
+
+  it('confirming sets the status and posts the note, tagged as a status reason', () => {
+    render(<Harness initial={withBoard([status('s-pu', 'Pending Update')])} />);
+    pickStatus('Pending Update');
+    fireEvent.change(screen.getByLabelText('Reason'), {
+      target: { value: 'engineering sent the revised set, waiting on the AHJ' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Set status and post/ }));
+
+    expect(screen.getAllByRole('button', { name: 'Pending Update' }).length).toBeGreaterThan(0);
+    openThread();
+    expect(screen.getByText(/waiting on the AHJ/)).toBeTruthy();
+    // Not "Missing info" — that badge belongs to Pending Additional Information.
+    expect(screen.getByText(/Status reason/)).toBeTruthy();
+  });
+
+  it('an explicit untick beats the name default', () => {
+    render(<Harness initial={withBoard([status('s-pu', 'Pending Update', { requiresNote: false })])} />);
+    pickStatus('Pending Update');
+
+    expect(screen.queryByLabelText('Reason')).toBeNull();
+    expect(screen.getAllByRole('button', { name: 'Pending Update' }).length).toBeGreaterThan(0);
+  });
+
+  it('an ordinary status ticked "needs a note" is gated too', () => {
+    render(<Harness initial={withBoard([status('s-ot', 'OVERTIME', { requiresNote: true })])} />);
+    pickStatus('OVERTIME');
+
+    expect(screen.getByLabelText('Reason')).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'New project' }).length).toBeGreaterThan(0);
+  });
+
+  // The hole this closes: "Set status" in the bulk bar called bulkApply
+  // directly, so moving 20 rows to a gated status posted nothing at all.
+  it('the bulk Set status gate posts the same note to every row it moves', () => {
+    render(<Harness initial={withBoard([status('s-pu', 'Pending Update')])} />);
+
+    fireEvent.click(screen.getByLabelText('Select Martha Thompson'));
+    fireEvent.click(screen.getByLabelText('Select Karan Staggers'));
+    fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
+    // The bulk picker's choices are buttons, not listbox options.
+    fireEvent.click(screen.getByRole('button', { name: 'Pending Update' }));
+
+    // One gate for the batch, and it says how many rows it covers.
+    expect(screen.getByText(/2 projects moving to/)).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Reason'), { target: { value: 'both waiting on the same AHJ' } });
+    fireEvent.click(screen.getByRole('button', { name: /Set 2 and post/ }));
+
+    // Both rows moved…
+    expect(screen.getAllByRole('button', { name: 'Pending Update' }).length).toBeGreaterThanOrEqual(2);
+    // …and both carry the explanation, so neither is a silent move.
+    expect(screen.getAllByTitle('1 update — open the thread')).toHaveLength(2);
+  });
+
+  it('an ungated bulk status change still needs no note', () => {
+    render(<Harness initial={withBoard([status('s-pu', 'Pending Update')])} />);
+
+    fireEvent.click(screen.getByLabelText('Select Martha Thompson'));
+    fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Working on it' })[0]);
 
     expect(screen.queryByLabelText('Reason')).toBeNull();
     expect(screen.getAllByRole('button', { name: 'Working on it' }).length).toBeGreaterThan(0);

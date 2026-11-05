@@ -5,6 +5,7 @@
 
 import { useMemo, useState } from 'react';
 import { LABEL_PALETTE, isOutOfScopeLabel, isReviewLabel, labelsFor } from '../lib/board';
+import { labelRequiresNote } from '../lib/updates';
 import type { BoardLabel, BoardProject, LabelColumnKey } from './types';
 import Popover from './Popover';
 
@@ -255,6 +256,20 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                           }
                         />
                         out of scope
+                      </label>
+                      {/* NOT mutually exclusive with the three above: a row can
+                          be parked and still owe an explanation. Ticked by
+                          default for the two "Pending …" statuses by name. */}
+                      <label
+                        className="board-label-flag"
+                        title="Moving a project to this status is blocked until the person doing it writes an update saying why"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={labelRequiresNote(l)}
+                          onChange={(e) => onUpdate([{ ...l, requiresNote: e.target.checked }])}
+                        />
+                        needs a note
                       </label>
                     </>
                   )}

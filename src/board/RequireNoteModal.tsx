@@ -12,13 +12,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import FormatToolbar, { continueList, formatHotkey } from '../components/FormatToolbar';
+import type { NoteGate } from './types';
 
-export interface NoteGate {
-  title: string;
-  prompt: string;
-  placeholder: string;
-  confirmLabel: string;
-}
+// NoteGate moved to ./types on 2026-11-05 so lib/updates.statusGate can build
+// one without a lib file importing a component. Re-exported here because that
+// is where every caller already looks for it.
+export type { NoteGate };
 
 export default function RequireNoteModal({
   gate,

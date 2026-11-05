@@ -16,6 +16,8 @@ import type { BoardProject, ProjectUpdate, UpdateKind } from './types';
 const KIND_BADGE: Partial<Record<UpdateKind, string>> = {
   rating: 'Rating reason',
   'pending-info': 'Missing info',
+  // Any other status the team flagged "needs a note" (Aboud 2026-11-05).
+  status: 'Status reason',
 };
 
 const initials = (n: string) =>

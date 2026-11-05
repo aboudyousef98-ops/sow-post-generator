@@ -12,8 +12,23 @@ import {
   updatesCorpus,
   updatesFor,
 } from './updates';
+import { labelRequiresNote, statusGate } from './updates';
 import { mergeBoard, emptyBoard } from './board';
-import type { ProjectUpdate } from '../board/types';
+import type { BoardLabel, ProjectUpdate } from '../board/types';
+
+const label = (over: Partial<BoardLabel> = {}): BoardLabel => ({
+  id: 'status-pending-update',
+  columnKey: 'status',
+  name: 'Pending Update',
+  color: '#FDAB3D',
+  sortOrder: 160,
+  isDefault: false,
+  isDone: false,
+  isSystem: false,
+  archived: false,
+  updatedAt: '2026-11-05T00:00:00.000Z',
+  ...over,
+});
 
 const mk = (over: Partial<ProjectUpdate> = {}): ProjectUpdate => ({
   id: 'u1',
@@ -40,6 +55,56 @@ describe('gates', () => {
     expect(isPendingInfoLabel('  pending additional information ')).toBe(true);
     expect(isPendingInfoLabel('Hold')).toBe(false);
     expect(isPendingInfoLabel(undefined)).toBe(false);
+  });
+});
+
+// Aboud 2026-11-05: "Pending Update" must demand an update the same way
+// "Pending Additional Information" already demands one.
+describe('labels that require a note', () => {
+  it('both pending statuses are gated by name, with no flag stored', () => {
+    expect(labelRequiresNote(label({ name: 'Pending Update' }))).toBe(true);
+    expect(labelRequiresNote(label({ name: 'Pending Additional Information' }))).toBe(true);
+    // Case and stray spaces must not matter — a rename that only changes case
+    // cannot be allowed to switch the gate off silently.
+    expect(labelRequiresNote(label({ name: '  pending update  ' }))).toBe(true);
+  });
+
+  it('an ordinary status is not gated', () => {
+    expect(labelRequiresNote(label({ name: 'Working on it' }))).toBe(false);
+    expect(labelRequiresNote(undefined)).toBe(false);
+  });
+
+  it('an explicit tick beats the name, both ways', () => {
+    expect(labelRequiresNote(label({ name: 'Pending Update', requiresNote: false }))).toBe(false);
+    expect(labelRequiresNote(label({ name: 'OVERTIME', requiresNote: true }))).toBe(true);
+  });
+
+  it('only status labels gate — a phase label never does', () => {
+    expect(labelRequiresNote(label({ columnKey: 'phase', name: 'Pending Update' }))).toBe(false);
+    expect(labelRequiresNote(label({ columnKey: 'phase', requiresNote: true }))).toBe(false);
+  });
+
+  it('is independent of the three section flags, unlike them', () => {
+    // A row can be parked AND owe an explanation. The section flags are
+    // mutually exclusive with each other; this one is not.
+    expect(labelRequiresNote(label({ requiresNote: true, outOfScope: true }))).toBe(true);
+    expect(labelRequiresNote(label({ requiresNote: true, review: true }))).toBe(true);
+  });
+
+  it('a done label is never gated — the work is over', () => {
+    expect(labelRequiresNote(label({ name: 'Pending Update', isDone: true }))).toBe(false);
+  });
+
+  it('names the label in the modal copy, so one gate serves every status', () => {
+    const g = statusGate(label({ name: 'Pending Update' }));
+    expect(g.title).toContain('Pending Update');
+    expect(g.confirmLabel.length).toBeGreaterThan(0);
+    expect(g.placeholder.length).toBeGreaterThan(0);
+    // The long-standing pending-info wording is kept for the status that has
+    // had it since 2026-10-17 — the team already reads that sentence.
+    expect(statusGate(label({ name: 'Pending Additional Information' })).title).toBe(
+      'What information is missing?',
+    );
   });
 });
 
