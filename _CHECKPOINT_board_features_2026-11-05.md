@@ -137,3 +137,62 @@ sign in to `netlify dev`. It touches only the **gitignored** local blob store,
 leaves `updatedAt` alone so it can never win a merge against production, and
 wrote a backup beside it. Delete `scripts/reset-local-password.mjs` when done
 with it, as its own header says.
+
+---
+
+# DEPLOYED — 2026-11-05
+
+**Live:** `6aeca8d9c77a5315fe1000f7` (replaced `6aea09b4` of 2026-11-03).
+Deployed with `netlify deploy --build --prod` — sow is NOT git-connected
+(re-verified via getSite: `repo_url` is null), so the CLI is the only path,
+and `--build` is what injects the real `VITE_API_PATH_TOKEN` instead of
+baking `changeme`.
+
+**First attempt failed** on `getaddrinfo ENOTFOUND api.netlify.com` — a
+transient DNS drop, which also stopped the CLI cancelling its own deploy.
+Confirmed production was untouched (still `6aea09b4`, state `ready`) before
+retrying. Second attempt clean: 18 assets, 12 functions.
+
+## Data backup + diff (CLAUDE.md rule)
+
+- Pre:  `_versions/v35-live-backup-2026-11-05-predeploy/`  — 409 projects, 2847 activity
+- Post: `_versions/v36-live-backup-2026-11-05-postdeploy/` — 409 projects, 2848 activity
+
+| Store | Result |
+|---|---|
+| ahjs, extrawork, users | **byte-identical** |
+| board | +1 activity: Anas Yaghmour moved "George Tenberge" Working on it → Done, 16:00:24 |
+| records | 3 drafts edited — Omar Rajab 15:41, Anas Yaghmour 15:58, Mohammad Refai 16:05. Count unchanged (371), none added or removed |
+
+**Every difference named and attributable to a teammate working during the
+deploy window. No deploy damage.** `labels` byte-identical, confirming the
+seed re-rank only lands when a client running the new code syncs.
+
+## Verified live, on production
+
+- New build serving: Auto-sort pill, ⚡ Automations, 💬 Ask the board,
+  Installation Review section, rows ranked Working-on-it first.
+- **`POST /api/<token>/activityquery` → 200.** Both lanes fired in parallel
+  (`updatesearch` 200 + `activityquery` 200), as designed.
+- "what did I interact with yesterday?" → **"24 projects you touched on
+  2026-11-04. 6 more from updates."** The model resolved "yesterday" to the
+  date and "I" to the signed-in user; the client applied the filter exactly.
+  Per-project summaries correct, including "changed SOW coordinator, created
+  it, deleted it".
+- Redesigned Ask panel: padded, sized to content, empty state with both
+  lanes labelled, focus lands in the input.
+
+## Still open
+
+1. **The team's board will re-rank on their next load** — the seed re-rank
+   puts "Working on it" first and "New project" last, and auto-sort is ON by
+   default. Expected and approved, but it is a visible change they have not
+   been told about.
+2. **Drag is band-constrained** — a row only reorders within its own status
+   while auto-sort is on. Confirm that reads right to the team.
+3. **Keyboard dragging is unreachable** (dnd-kit `attributes` withheld to
+   stop every row announcing as a button). Needs a visible grip to fix.
+4. Branch `feat/board-automations` is what shipped — **main does not reflect
+   production**. Merge it.
+5. Settings still device-local (the sixth-blob job), and
+   `_PLAN_supabase_migration.md` Phase 1 (ETag) is the real credit fix.
