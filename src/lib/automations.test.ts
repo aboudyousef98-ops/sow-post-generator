@@ -296,9 +296,35 @@ describe('the behaviours the board already had', () => {
     expect(note.text).toContain('and “Pending Additional Information”');
   });
 
-  it('says "nothing yet" rather than trailing off when no label qualifies', () => {
+  // Caught by running the real board: splicing a placeholder into the normal
+  // sentence produced "When a project moves to nothing yet → move it to the
+  // Installation Review section", which is not English and does not say what
+  // to do about it.
+  it('an unused flag gets its own sentence, naming the flag to tick', () => {
     const bare = LABELS.filter((l) => !l.isDone);
-    expect(builtInRules(bare).find((r) => r.id === 'done')!.text).toContain('nothing yet');
+    const text = builtInRules(bare).find((r) => r.id === 'done')!.text;
+    expect(text).not.toContain('moves to nothing');
+    expect(text).toContain('No status is marked “done” yet');
+    expect(text).toContain('Edit labels');
+  });
+
+  it('every built-in reads as a whole sentence even on a board with no flags set', () => {
+    // Strip every flag the panel describes, which is what a fresh board and
+    // this laptop's local store both look like.
+    const bare: BoardLabel[] = LABELS.map((l) => ({
+      ...l,
+      isDone: false,
+      isDefault: false,
+      review: false,
+      outOfScope: false,
+      requiresNote: false,
+      name: 'Plain',
+    }));
+    for (const r of builtInRules(bare)) {
+      expect(r.text).not.toContain('nothing yet');
+      expect(r.text).not.toContain('undefined');
+      expect(r.text.trim().endsWith('.')).toBe(true);
+    }
   });
 
   it('points at the control that edits it, where there is one', () => {

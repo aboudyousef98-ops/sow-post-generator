@@ -7382,3 +7382,30 @@ tr:hover .board-label-cell.empty {
   font-size: 13px;
   line-height: 1.45;
 }
+
+/* `.modal.wide` is padding:0 / overflow:hidden: it expects a padded header,
+   ONE scrolling body and a padded footer (the .upd-top convention). Without
+   that the panel overflowed and "Save automation" sat below the fold. */
+
+.board-auto-top {
+  flex: 0 0 auto;
+  padding: 16px 18px 0;
+}
+
+.board-auto-top h3 {
+  margin: 0 0 8px;
+}
+
+.board-auto-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 18px 10px;
+}
+
+/* Always reachable — Aboud's standing rule for lists. */
+.board-auto-foot {
+  flex: 0 0 auto;
+  padding: 10px 18px 14px;
+  border-top: 1px solid var(--dyn-line);
+}

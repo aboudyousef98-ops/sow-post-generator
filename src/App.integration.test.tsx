@@ -105,7 +105,11 @@ describe('Compose acceptance flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /^History/ }));
     expect(screen.getByText('Norca Garcia')).toBeTruthy();
     second.unmount();
-  });
+    // 15s, not the 5s default: this drives the WHOLE app twice over — paste,
+    // classify, preview, persist, post, remount, History — and has always run
+    // at ~4.5s, which left almost no headroom. It started timing out once the
+    // suite grew past 60 files, so the budget was the problem, not the flow.
+  }, 15_000);
 
   it('pulls the shared team history on load and shows it in History', async () => {
     const serverRecord = {

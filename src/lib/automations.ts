@@ -243,12 +243,26 @@ export interface BuiltInRule {
   knobLabel?: string;
 }
 
-const list = (labels: BoardLabel[], pick: (l: BoardLabel) => boolean): string => {
+/** The qualifying status names, read out loud — or null when there are none. */
+const list = (labels: BoardLabel[], pick: (l: BoardLabel) => boolean): string | null => {
   const names = labels.filter((l) => l.columnKey === 'status' && !l.archived && pick(l)).map((l) => `“${l.name}”`);
-  if (!names.length) return 'nothing yet';
+  if (!names.length) return null;
   if (names.length === 1) return names[0];
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 };
+
+/**
+ * One built-in's sentence, with a DIFFERENT sentence when no status qualifies.
+ *
+ * Splicing a placeholder into the normal sentence produced "When a project
+ * moves to nothing yet → move it to the Installation Review section", which is
+ * not English and does not tell anyone what to do about it (caught running the
+ * real board, 2026-11-05). The empty case says what is missing instead.
+ */
+const movesTo = (names: string | null, effect: string, flag: string): string =>
+  names
+    ? `When a project moves to ${names} → ${effect}.`
+    : `No status is marked “${flag}” yet — tick one in Edit labels and ${effect}.`;
 
 /**
  * The seven things the board has always done, in the same voice as the custom
@@ -265,31 +279,48 @@ export function builtInRules(labels: BoardLabel[]): BuiltInRule[] {
     },
     {
       id: 'requires-note',
-      text: `When a project moves to ${list(labels, labelRequiresNote)} → ask for an update first, and refuse the change without one.`,
+      text: movesTo(
+        list(labels, labelRequiresNote),
+        'ask for an update first, and refuse the change without one',
+        'needs a note',
+      ),
       knob: 'status-labels',
       knobLabel: 'which statuses',
     },
     {
       id: 'done',
-      text: `When a project moves to ${list(labels, (l) => l.isDone)} → move it to the Completed section.`,
+      text: movesTo(list(labels, (l) => l.isDone), 'move it to the Completed section', 'done'),
       knob: 'status-labels',
       knobLabel: 'which statuses',
     },
     {
       id: 'review',
-      text: `When a project moves to ${list(labels, isReviewLabel)} → move it to the Installation Review section, where the Reviewer column lives.`,
+      text: movesTo(
+        list(labels, isReviewLabel),
+        'move it to the Installation Review section, where the Reviewer column lives',
+        'installation review',
+      ),
       knob: 'status-labels',
       knobLabel: 'which statuses',
     },
     {
       id: 'scope',
-      text: `When a project moves to ${list(labels, isOutOfScopeLabel)} → move it to the Out of SOW scope section.`,
+      text: movesTo(
+        list(labels, isOutOfScopeLabel),
+        'move it to the Out of SOW scope section',
+        'out of scope',
+      ),
       knob: 'status-labels',
       knobLabel: 'which statuses',
     },
     {
       id: 'default-status',
-      text: `When a project is added to the board → give it ${list(labels, (l) => l.isDefault)}, and make whoever added it the SOW coordinator.`,
+      text: (() => {
+        const names = list(labels, (l) => l.isDefault);
+        return names
+          ? `When a project is added to the board → give it ${names}, and make whoever added it the SOW coordinator.`
+          : 'When a project is added to the board → make whoever added it the SOW coordinator. No status is marked “default” yet, so it starts blank.';
+      })(),
       knob: 'status-labels',
       knobLabel: 'which status',
     },

@@ -282,14 +282,22 @@ export default function AutomationsModal({
   };
 
   return (
+    // `.modal.wide` is padding:0 / overflow:hidden on purpose — it expects a
+    // padded header, ONE scrolling body, and a padded footer (the .upd-top
+    // convention). Laying the content out flat left "Save automation" clipped
+    // below the fold on a 812px screen, which made the builder unusable
+    // (caught running the real board, 2026-11-05).
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal wide" onClick={(e) => e.stopPropagation()}>
-        <h3>Automations</h3>
-        <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
-          Everything the board does on its own. These are shared — a rule here applies to the whole team.
-          {!isAdmin && ' Only an admin can change them.'}
-        </p>
+      <div className="modal wide board-auto-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="board-auto-top">
+          <h3>Automations</h3>
+          <p className="muted" style={{ margin: 0, lineHeight: 1.5 }}>
+            Everything the board does on its own. These are shared — a rule here applies to the whole team.
+            {!isAdmin && ' Only an admin can change them.'}
+          </p>
+        </div>
 
+        <div className="board-auto-body">
         <h4 className="board-auto-head">Built in</h4>
         <ul className="board-auto-list">
           {built.map((b) => (
@@ -372,8 +380,9 @@ export default function AutomationsModal({
             </button>
           )
         )}
+        </div>
 
-        <div className="modal-actions">
+        <div className="modal-actions board-auto-foot">
           <button type="button" className="btn secondary" onClick={onClose}>
             Close
           </button>
