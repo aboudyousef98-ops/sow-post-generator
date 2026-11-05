@@ -25,11 +25,14 @@ function Harness({
   initial,
   records = [],
   authors = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai'],
+  isAdmin = true,
 }: {
   initial?: BoardState;
   records?: PostRecord[];
   /** Override for the import tests, which need the real five-person roster. */
   authors?: string[];
+  /** Override for the admin-only controls (the shared auto-sort switch). */
+  isAdmin?: boolean;
 }) {
   const [board, setBoard] = useState<BoardState>(initial ?? emptyBoard());
   return (
@@ -37,7 +40,7 @@ function Harness({
       board={board}
       setBoard={setBoard}
       me="Aboud Yousef"
-      isAdmin
+      isAdmin={isAdmin}
       authors={authors}
       toast={(text, action) => toasts.push({ text, action })}
       records={records}
@@ -211,12 +214,26 @@ describe('BoardTab', () => {
     });
   });
 
-  it('hold a row and drag it above another — order flips and sticks (monday-style)', () => {
+  /**
+   * Two rows in manual order, with auto-sort OFF.
+   *
+   * Auto-sort by status became the shared default on 2026-11-05, and it
+   * disables dragging — the status rank decides where a row sits, so a drop
+   * across a band would spring back. Manual order is what these tests are
+   * about, so they opt out the way a team would.
+   */
+  const draggableBoard = () => {
     const board = emptyBoard();
+    board.prefs = { autoSortByStatus: false, updatedAt: '2026-11-05T00:00:00.000Z', updatedBy: 'Aboud Yousef' };
     board.projects = [
       { ...boardProject('Alpha Job', 'pa'), position: 3000 },
       { ...boardProject('Beta Job', 'pb'), position: 2000 },
     ];
+    return board;
+  };
+
+  it('hold a row and drag it above another — order flips and sticks (monday-style)', () => {
+    const board = draggableBoard();
     render(<Harness initial={board} />);
 
     const rows = () => Array.from(document.querySelectorAll<HTMLElement>('tbody tr[data-project-id]'));
@@ -947,7 +964,15 @@ describe('any status can be told to require a note', () => {
     fireEvent.click(screen.getByRole('option', { name }));
   };
 
-  const openThread = () => fireEvent.click(screen.getAllByTitle(/open the thread|Post the first update/)[0]);
+  /**
+   * Open ONE named row's thread. Not `getAllByTitle(...)[0]`: auto-sort
+   * re-ranks the table the moment the status lands, so an index would open
+   * whichever row moved into that slot.
+   */
+  const openThreadOf = (name: string) => {
+    const row = screen.getByText(name).closest('tr')!;
+    fireEvent.click(within(row).getByTitle(/open the thread|Post the first update/));
+  };
 
   it('"Pending Update" is gated by name, with no flag stored on the label', () => {
     render(<Harness initial={withBoard([status('s-pu', 'Pending Update')])} />);
@@ -979,7 +1004,7 @@ describe('any status can be told to require a note', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set status and post/ }));
 
     expect(screen.getAllByRole('button', { name: 'Pending Update' }).length).toBeGreaterThan(0);
-    openThread();
+    openThreadOf('Martha Thompson');
     expect(screen.getByText(/waiting on the AHJ/)).toBeTruthy();
     // Not "Missing info" — that badge belongs to Pending Additional Information.
     expect(screen.getByText(/Status reason/)).toBeTruthy();
@@ -1199,5 +1224,88 @@ describe('BoardTab — Salesforce notes import (Aboud 2026-10-21)', () => {
     // …and Eric's notes reverted, so the same file still has 1 notes update to offer.
     await loadExport();
     expect(screen.getByText(/updated Salesforce notes/)).toBeTruthy();
+  });
+});
+
+// Aboud 2026-11-05: "yess auto-sort, but when it is on it is on for everybodyy
+// not only the user using it." So the switch is board data, admin-only, and on
+// by default — and it takes dragging with it.
+describe('the board is always ordered by status', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** Working on it ranked ABOVE New project, which is the point of the ask. */
+  const ranked = (): BoardState => {
+    const b = emptyBoard();
+    b.labels = b.labels.map((l) =>
+      l.id === 'status-working' ? { ...l, sortOrder: 5 } : l.id === 'status-new' ? { ...l, sortOrder: 50 } : l,
+    );
+    b.projects = [
+      { ...boardProject('Newer Row', 'p-new'), statusId: 'status-new', position: 3000 },
+      { ...boardProject('Working Row', 'p-work'), statusId: 'status-working', position: 1000 },
+    ];
+    return b;
+  };
+
+  const rowIds = () =>
+    [...document.querySelectorAll<HTMLElement>('.board-table-main tbody tr[data-project-id]')].map((r) =>
+      r.getAttribute('data-project-id'),
+    );
+
+  it('orders by status with no click, beating the manual position order', () => {
+    render(<Harness initial={ranked()} />);
+    // Working Row has the LOWER position, so manual order would put it second.
+    expect(rowIds()).toEqual(['p-work', 'p-new']);
+  });
+
+  it('is on by default for a board that has never heard of the setting', () => {
+    render(<Harness initial={ranked()} />);
+    expect(screen.getByRole('button', { name: /Auto-sort by status/ }).getAttribute('aria-pressed')).toBe('true');
+  });
+
+  it('turning it off restores the manual order, and says so to the whole team', () => {
+    render(<Harness initial={ranked()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Auto-sort by status/ }));
+
+    expect(rowIds()).toEqual(['p-new', 'p-work']);
+    expect(toasts.at(-1)!.text).toMatch(/off for everyone/);
+  });
+
+  it('a non-admin sees the state but cannot change it for everyone', () => {
+    render(<Harness initial={ranked()} isAdmin={false} />);
+    const pill = screen.getByRole('button', { name: /Auto-sort by status/ });
+    expect(pill.getAttribute('aria-pressed')).toBe('true');
+    expect(pill.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('a column sort the user sets still wins', () => {
+    render(<Harness initial={ranked()} />);
+    // Sort by name ascending: "Newer Row" < "Working Row".
+    fireEvent.click(screen.getAllByRole('button', { name: /Project name/ })[0]);
+    expect(rowIds()).toEqual(['p-new', 'p-work']);
+  });
+
+  it('dragging is inert while auto-sort is on', () => {
+    render(<Harness initial={ranked()} />);
+    const rows = () => [...document.querySelectorAll<HTMLElement>('.board-table-main tbody tr[data-project-id]')];
+    rows().forEach((r, i) => {
+      r.getBoundingClientRect = () =>
+        ({ top: i * 40, bottom: i * 40 + 40, height: 40, left: 0, right: 600, width: 600, x: 0, y: i * 40, toJSON: () => ({}) }) as DOMRect;
+    });
+
+    fireEvent(rows()[1], new MouseEvent('pointerdown', { bubbles: true, clientY: 60, button: 0 }));
+    fireEvent(window, new MouseEvent('pointermove', { bubbles: true, clientY: 10 }));
+    fireEvent(window, new MouseEvent('pointerup', { bubbles: true, clientY: 10 }));
+
+    // Unmoved: the status rank decides, so a drop would only spring back.
+    expect(rowIds()).toEqual(['p-work', 'p-new']);
   });
 });

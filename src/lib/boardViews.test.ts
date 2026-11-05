@@ -11,6 +11,7 @@ import {
   installDateOf,
   isPresetActive,
   selectedRows,
+  sortByStatus,
   splitSections,
   viewPresets,
 } from './boardViews';
@@ -183,8 +184,10 @@ describe('groupProjects', () => {
       p({ id: 'new', statusId: 'status-new' }),
     ];
     const groups = groupProjects(rows, 'status', LABELS);
-    expect(groups.map((g) => g.title)).toEqual(['New project', 'Done', 'Not set']);
-    expect(groups[0].color).toBe('#579BFC');
+    // Grouping inherits the pipeline rank for free, which is the reason the
+    // always-ordered board reuses label order instead of its own list.
+    expect(groups.map((g) => g.title)).toEqual(['Done', 'New project', 'Not set']);
+    expect(groups[1].color).toBe('#579BFC');
     expect(groups[2].rows.map((r) => r.id)).toEqual(['none']);
   });
 
@@ -351,5 +354,64 @@ describe('splitSections — Installation Review', () => {
 describe('Group by reviewer', () => {
   it('is offered as a grouping option', () => {
     expect(GROUP_OPTIONS.map((g) => g.key)).toContain('reviewer');
+  });
+});
+
+// Aboud 2026-11-05: "my coworkers wanted a always ordered board" — Working on
+// it first, New project last. The rank is the team's own label order, so this
+// is about reading sortOrder correctly, not about a list baked into the code.
+describe('sortByStatus', () => {
+  const statuses = [
+    { ...LABELS.find((l) => l.id === 'status-working')!, sortOrder: 10 },
+    { ...LABELS.find((l) => l.id === 'status-done')!, sortOrder: 20 },
+    { ...LABELS.find((l) => l.id === 'status-new')!, sortOrder: 30 },
+  ];
+
+  it('follows the label order, whatever that order happens to be', () => {
+    const rows = [
+      p({ id: 'new', statusId: 'status-new' }),
+      p({ id: 'done', statusId: 'status-done' }),
+      p({ id: 'working', statusId: 'status-working' }),
+    ];
+    expect(sortByStatus(rows, statuses).map((r) => r.id)).toEqual(['working', 'done', 'new']);
+  });
+
+  it('re-ranks when the team reorders the labels — nothing is hardcoded', () => {
+    const flipped = statuses.map((l) => ({ ...l, sortOrder: 40 - l.sortOrder }));
+    const rows = [p({ id: 'working', statusId: 'status-working' }), p({ id: 'new', statusId: 'status-new' })];
+    expect(sortByStatus(rows, flipped).map((r) => r.id)).toEqual(['new', 'working']);
+  });
+
+  it('manual drag order still decides inside one status', () => {
+    const rows = [
+      p({ id: 'low', statusId: 'status-working', position: 1 }),
+      p({ id: 'high', statusId: 'status-working', position: 9 }),
+      p({ id: 'mid', statusId: 'status-working', position: 5 }),
+    ];
+    expect(sortByStatus(rows, statuses).map((r) => r.id)).toEqual(['high', 'mid', 'low']);
+  });
+
+  it('a row with no status, or an unknown one, sorts last rather than first', () => {
+    const rows = [
+      p({ id: 'none', statusId: null, position: 9 }),
+      p({ id: 'ghost', statusId: 'status-archived-long-ago', position: 9 }),
+      p({ id: 'new', statusId: 'status-new', position: 1 }),
+    ];
+    const ids = sortByStatus(rows, statuses).map((r) => r.id);
+    expect(ids[0]).toBe('new');
+    expect(ids.slice(1).sort()).toEqual(['ghost', 'none']);
+  });
+
+  it('never mutates the array it was given', () => {
+    const rows = [p({ id: 'new', statusId: 'status-new' }), p({ id: 'working', statusId: 'status-working' })];
+    const before = rows.map((r) => r.id);
+    sortByStatus(rows, statuses);
+    expect(rows.map((r) => r.id)).toEqual(before);
+  });
+
+  it('phase labels never rank a row — only status does', () => {
+    const rows = [p({ id: 'a', statusId: 'phase-design' })];
+    // phase-design is in LABELS but is not a status, so it cannot be a rank.
+    expect(sortByStatus(rows, LABELS).map((r) => r.id)).toEqual(['a']);
   });
 });

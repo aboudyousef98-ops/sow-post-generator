@@ -138,6 +138,34 @@ export function splitSections(projects: BoardProject[], labels: BoardLabel[]): B
   return { active, installReview, outOfScope, completed };
 }
 
+// ---- always-ordered board ---------------------------------------------------
+
+/**
+ * Order rows by status, newest-manual-order first inside each status.
+ *
+ * Aboud 2026-11-05: "I know I can sort them by clicking on the sort feature on
+ * the status column, but my coworkers wanted a always ordered board." So the
+ * board arrives ordered rather than waiting for a click.
+ *
+ * The rank is the team's OWN label order (`sortOrder`, editable with the ↑/↓
+ * in Edit labels) — not a list hardcoded here. Putting "Working on it" at the
+ * top and "New project" at the bottom is therefore a thing Aboud does once in
+ * the UI, and Group-by-Status inherits the same order for free.
+ *
+ * `position` descending is the tie-break, so the manual drag order still
+ * decides WITHIN a status band — the same value the ungrouped board uses.
+ * A row with no status, or one carrying an archived/unknown label, sorts last:
+ * it cannot be ranked, and silently ranking it first would be a lie.
+ */
+export function sortByStatus(projects: BoardProject[], labels: BoardLabel[]): BoardProject[] {
+  const rank = new Map(labels.filter((l) => l.columnKey === 'status').map((l) => [l.id, l.sortOrder]));
+  const rankOf = (p: BoardProject) =>
+    p.statusId && rank.has(p.statusId) ? (rank.get(p.statusId) as number) : Number.POSITIVE_INFINITY;
+  // Copy first: this is handed straight to the table, and sorting the caller's
+  // array in place would mutate a memo's input.
+  return [...projects].sort((a, b) => rankOf(a) - rankOf(b) || b.position - a.position);
+}
+
 // ---- grouping ---------------------------------------------------------------
 
 export type GroupKey = 'none' | 'status' | 'coordinator' | 'reviewer' | 'phase';

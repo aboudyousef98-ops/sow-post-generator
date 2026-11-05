@@ -3,7 +3,14 @@
 // localStorage cache both merge with the same rules, so any two copies of the
 // board converge no matter the push order.
 
-import type { BoardActivity, BoardLabel, BoardProject, BoardState, LabelColumnKey } from '../board/types';
+import type {
+  BoardActivity,
+  BoardLabel,
+  BoardPrefs,
+  BoardProject,
+  BoardState,
+  LabelColumnKey,
+} from '../board/types';
 import { renameLegacyNames } from './renames';
 import { sfNotesEqual, sfNotesSummary } from './sfNotes';
 
@@ -44,10 +51,23 @@ export function seedLabels(): BoardLabel[] {
     id, columnKey, name, color, sortOrder, isDefault, isDone,
     isSystem: true, archived: false, updatedAt: SEED_STAMP,
   });
+  // Status sortOrder is now a PIPELINE RANK, not just a list order: it is what
+  // the always-ordered board sorts by (Aboud 2026-11-05 — "Working on it" at
+  // the top, "New project" at the bottom, everything else between).
+  //
+  // 5 and 999 bracket the team's own labels, which live at 30–180. Both of
+  // these two still carry SEED_STAMP on the live board (verified against the
+  // 2026-11-03 backup), so this re-seed reaches them: mergeById only lets a
+  // stored copy win when it is strictly NEWER, and 1970 == 1970. "Done" was
+  // edited on 2026-10-05 and therefore keeps its own 30, which is fine — done
+  // rows live in the Completed section, so their rank never orders the board.
+  //
+  // Anyone can override this forever with the ↑/↓ in Edit labels: that bumps
+  // updatedAt, and a deliberate choice always beats a re-seed.
   return [
-    mk('status-new', 'status', 'New project', '#579BFC', 10, true, false),
-    mk('status-working', 'status', 'Working on it', '#FDAB3D', 20, false, false),
+    mk('status-working', 'status', 'Working on it', '#FDAB3D', 5, false, false),
     mk('status-done', 'status', 'Done', '#00C875', 90, false, true),
+    mk('status-new', 'status', 'New project', '#579BFC', 999, true, false),
     mk('phase-design', 'phase', 'Design', '#A25DDC', 10, false, false),
     mk('phase-schedule', 'phase', 'Schedule', '#0086C0', 20, false, false),
   ];
@@ -107,6 +127,20 @@ export function reviewStatusIds(labels: BoardLabel[]): Set<string> {
 
 export function emptyBoard(): BoardState {
   return { projects: [], labels: seedLabels(), activity: [], updates: [] };
+}
+
+/**
+ * Is the board always ordered by status? Absent prefs mean YES — it is the
+ * default as of 2026-11-05, and a board written before that date must not need
+ * a migration to behave. Read through this, never off `prefs` directly.
+ */
+export function autoSortOn(board: Pick<BoardState, 'prefs'>): boolean {
+  return board.prefs?.autoSortByStatus ?? true;
+}
+
+/** The pref object to store for a toggle, stamped so the merge can resolve it. */
+export function nextPrefs(on: boolean, actor: string, now: string = new Date().toISOString()): BoardPrefs {
+  return { autoSortByStatus: on, updatedAt: now, updatedBy: actor };
 }
 
 export function labelsFor(labels: BoardLabel[], columnKey: LabelColumnKey): BoardLabel[] {
@@ -172,7 +206,19 @@ export function mergeBoard(rawCurrent: BoardState, rawIncoming: Partial<BoardSta
     // Newer `updatedAt` per id wins, exactly like projects — that is what lets
     // an edit or a delete tombstone propagate between people.
     updates: mergeById(current.updates ?? [], incoming.updates ?? []),
+    // `prefs` is ONE object, not an id-keyed list, so mergeById cannot carry
+    // it: newer updatedAt wins outright. Either side may be undefined (every
+    // board written before 2026-11-05 has no prefs), and a side that HAS one
+    // beats a side that does not — otherwise the person who switched auto-sort
+    // on would have it switched back by the next sync from a stale cache.
+    prefs: newerPrefs(current.prefs, incoming.prefs),
   };
+}
+
+function newerPrefs(a: BoardPrefs | undefined, b: BoardPrefs | undefined): BoardPrefs | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  return b.updatedAt > a.updatedAt ? b : a;
 }
 
 // ---- projects ---------------------------------------------------------------

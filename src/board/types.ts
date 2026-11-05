@@ -173,11 +173,39 @@ export interface ProjectUpdate {
   updatedAt: string;
 }
 
+/**
+ * Team-wide view rules — shared, not per-browser.
+ *
+ * Aboud 2026-11-05, on the always-ordered board: "yess auto-sort, but when it
+ * is on it is on for everybody not only the user using it." Column widths,
+ * visibility and grouping stay in localStorage because they are one person's
+ * preference; this is a decision about how the board reads for the whole team,
+ * so it lives in the blob with the data.
+ *
+ * Merged newer-`updatedAt`-wins as a single object, NOT by id — see mergeBoard.
+ */
+export interface BoardPrefs {
+  /**
+   * Order the active table by status (the team's own label order), with manual
+   * drag position as the tie-break inside each status. Absent means ON: it is
+   * the new default, and a board written before 2026-11-05 must not need a
+   * migration to get it.
+   */
+  autoSortByStatus: boolean;
+  updatedAt: string;
+  updatedBy: string;
+}
+
 /** What the shared store holds (Blobs key "board") and the client caches. */
 export interface BoardState {
   projects: BoardProject[];
   labels: BoardLabel[];
   activity: BoardActivity[];
+  /**
+   * Added 2026-11-05. Absent in every board written before that date, so every
+   * reader must tolerate `undefined` — read it through lib/board.autoSortOn.
+   */
+  prefs?: BoardPrefs;
   /**
    * Added 2026-10-17. Absent in every board written before that date, so every
    * reader must tolerate `undefined` — mergeBoard normalises it to [].

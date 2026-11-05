@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { BoardProject, BoardState } from '../board/types';
 import {
   activityForPatch,
+  autoSortOn,
   cleanName,
   defaultLabel,
   emptyBoard,
@@ -13,6 +14,7 @@ import {
   mergeBoard,
   nameKey,
   newProject,
+  nextPrefs,
   patchProject,
   positionForMove,
   seedLabels,
@@ -41,10 +43,24 @@ describe('labelTextColor', () => {
 describe('seed labels', () => {
   it('seeds 3 status + 2 phase, New project is the default', () => {
     const labels = seedLabels();
-    expect(labelsFor(labels, 'status').map((l) => l.name)).toEqual(['New project', 'Working on it', 'Done']);
+    // Status order is the PIPELINE RANK the always-ordered board sorts by, so
+    // work in progress leads and untouched work trails (Aboud 2026-11-05).
+    expect(labelsFor(labels, 'status').map((l) => l.name)).toEqual(['Working on it', 'Done', 'New project']);
     expect(labelsFor(labels, 'phase').map((l) => l.name)).toEqual(['Design', 'Schedule']);
+    // Last in the order, still the label a new row gets — the two are
+    // independent, which is the whole point of "new project at last".
     expect(defaultLabel(labels, 'status')?.name).toBe('New project');
     expect(labels.find((l) => l.name === 'Done')?.isDone).toBe(true);
+  });
+
+  it('the seed ranks bracket the team\'s own labels rather than colliding with them', () => {
+    const status = seedLabels().filter((l) => l.columnKey === 'status');
+    const working = status.find((l) => l.name === 'Working on it')!.sortOrder;
+    const brandNew = status.find((l) => l.name === 'New project')!.sortOrder;
+    // The live board's team-created statuses sit at 30–180 (Hold, Pending …,
+    // Installed, Installation Review), so these two must sit outside that.
+    expect(working).toBeLessThan(30);
+    expect(brandNew).toBeGreaterThan(180);
   });
 
   it('a user rename survives merging with a fresh seed (fixed ids, epoch stamp)', () => {
@@ -266,5 +282,48 @@ describe('activity cap', () => {
     }));
     const merged = mergeBoard({ ...emptyBoard(), activity }, {});
     expect(merged.activity).toHaveLength(5000);
+  });
+});
+
+// Aboud 2026-11-05: auto-sort "is on for everybody not only the user using
+// it", so it is shared board data rather than a localStorage preference —
+// which means the merge has to resolve it, and it is not an id-keyed list.
+describe('shared view prefs', () => {
+  const base = (): BoardState => ({ ...emptyBoard(), projects: [proj()] });
+
+  it('absent prefs mean auto-sort is ON — no board needs a migration', () => {
+    expect(autoSortOn(emptyBoard())).toBe(true);
+    expect(autoSortOn({ prefs: undefined })).toBe(true);
+  });
+
+  it('an explicit value is read back, both ways', () => {
+    expect(autoSortOn({ prefs: nextPrefs(false, 'Aboud Yousef', T0) })).toBe(false);
+    expect(autoSortOn({ prefs: nextPrefs(true, 'Aboud Yousef', T0) })).toBe(true);
+  });
+
+  it('newer updatedAt wins', () => {
+    const mine = { ...base(), prefs: nextPrefs(false, 'Aboud Yousef', T0) };
+    const theirs = { ...base(), prefs: nextPrefs(true, 'Omar Rajab', T1) };
+    expect(mergeBoard(mine, theirs).prefs).toEqual(theirs.prefs);
+    expect(mergeBoard(theirs, mine).prefs).toEqual(theirs.prefs);
+  });
+
+  it('a side that HAS prefs beats a side that does not', () => {
+    // Otherwise the person who turned it off would have it turned back on by
+    // the next sync from a teammate whose cache predates the feature.
+    const off = { ...base(), prefs: nextPrefs(false, 'Aboud Yousef', T0) };
+    expect(mergeBoard(base(), off).prefs).toEqual(off.prefs);
+    expect(mergeBoard(off, base()).prefs).toEqual(off.prefs);
+  });
+
+  it('two boards with no prefs stay without — nothing is invented', () => {
+    expect(mergeBoard(base(), base()).prefs).toBeUndefined();
+  });
+
+  it('merging prefs does not disturb the rest of the board', () => {
+    const withPrefs = { ...base(), prefs: nextPrefs(false, 'Aboud Yousef', T1) };
+    const merged = mergeBoard(base(), withPrefs);
+    expect(merged.projects).toHaveLength(1);
+    expect(merged.labels.length).toBe(seedLabels().length);
   });
 });

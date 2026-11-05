@@ -6,7 +6,7 @@
 // the function answered 400 — for 37 hours, with no user-visible error.
 
 import { describe, expect, test } from 'vitest';
-import { PutSchema, mergeBoard } from './boardMerge';
+import { PutSchema, mergeBoard, mergePrefs } from './boardMerge';
 
 const project = (id: string, updatedAt: string) => ({ id, name: id, updatedAt });
 const update = (id: string, updatedAt: string, extra: Record<string, unknown> = {}) => ({
@@ -123,5 +123,65 @@ describe('PutSchema admits a full capped activity list', () => {
     const activity = Array.from({ length: 5000 }, (_, i) => ({ id: `a${i}`, at: '2026-10-22T00:00:00Z' }));
     const parsed = PutSchema.safeParse({ projects: [], labels: [], activity, updates: [] });
     expect(parsed.success).toBe(true);
+  });
+});
+
+// Same shape of hazard as the 2026-10-17 outage above, one key later: the
+// shared auto-sort switch (Aboud 2026-11-05) adds `prefs` to BoardState, and
+// api.putSharedBoard sends JSON.stringify(board) — the WHOLE object. A strict
+// schema that did not declare it would 400 every board save again.
+describe('PutSchema admits the shared prefs object', () => {
+  const prefs = { autoSortByStatus: true, updatedAt: '2026-11-05T10:00:00.000Z', updatedBy: 'Aboud Yousef' };
+
+  test('a body carrying prefs is accepted', () => {
+    const parsed = PutSchema.safeParse({ projects: [], labels: [], activity: [], updates: [], prefs });
+    expect(parsed.success).toBe(true);
+  });
+
+  test('a body without prefs is still accepted — absent is a real state', () => {
+    const parsed = PutSchema.safeParse({ projects: [], labels: [], activity: [], updates: [] });
+    expect(parsed.success).toBe(true);
+    // No default: "no prefs" must survive the round trip, because the client
+    // reads absent as auto-sort ON.
+    expect(parsed.success && parsed.data.prefs).toBeUndefined();
+  });
+
+  test('prefs without an updatedAt is rejected — the merge could not resolve it', () => {
+    const parsed = PutSchema.safeParse({
+      projects: [],
+      labels: [],
+      activity: [],
+      updates: [],
+      prefs: { autoSortByStatus: true },
+    });
+    expect(parsed.success).toBe(false);
+  });
+});
+
+describe('mergePrefs mirrors the client', () => {
+  const older = { autoSortByStatus: false, updatedAt: '2026-11-05T10:00:00.000Z' };
+  const newer = { autoSortByStatus: true, updatedAt: '2026-11-05T11:00:00.000Z' };
+
+  test('newer updatedAt wins, whichever side it arrives on', () => {
+    expect(mergePrefs(older, newer)).toEqual(newer);
+    expect(mergePrefs(newer, older)).toEqual(newer);
+  });
+
+  test('a side that has prefs beats a side that does not', () => {
+    expect(mergePrefs(undefined, older)).toEqual(older);
+    expect(mergePrefs(older, undefined)).toEqual(older);
+  });
+
+  test('neither side having prefs invents nothing', () => {
+    expect(mergePrefs(undefined, undefined)).toBeUndefined();
+  });
+
+  test('a board merge carries prefs through without touching the collections', () => {
+    const merged = mergeBoard(
+      { projects: [project('p1', '2026-11-01T00:00:00.000Z')], labels: [], activity: [], updates: [] },
+      { projects: [], labels: [], activity: [], updates: [], prefs: newer },
+    );
+    expect(merged.prefs).toEqual(newer);
+    expect(merged.projects).toHaveLength(1);
   });
 });

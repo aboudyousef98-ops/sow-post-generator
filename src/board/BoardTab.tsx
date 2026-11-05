@@ -25,6 +25,7 @@ import {
 import {
   activityEntry,
   activityForPatch,
+  autoSortOn,
   cleanName,
   findDuplicate,
   isOutOfScopeLabel,
@@ -32,6 +33,7 @@ import {
   labelById,
   linkedPosts,
   newProject,
+  nextPrefs,
   patchProject,
   positionForMove,
   type LinkedPosts,
@@ -55,6 +57,7 @@ import {
   installDateOf,
   isPresetActive,
   selectedRows,
+  sortByStatus,
   splitSections,
   viewPresets,
   type AgingState,
@@ -1171,10 +1174,41 @@ export default function BoardTab({
   // lands in the Completed projects section below (Aboud, 2026-10-02); one
   // whose status is marked out-of-scope lands in the section between the two
   // (Aboud, 2026-10-19). Both rules live in lib/boardViews.splitSections.
-  const { active, installReview, outOfScope, completed } = useMemo(
-    () => splitSections(visible, board.labels),
-    [visible, board.labels],
+  const {
+    active: activeUnsorted,
+    installReview,
+    outOfScope,
+    completed,
+  } = useMemo(() => splitSections(visible, board.labels), [visible, board.labels]);
+
+  /**
+   * Always-ordered board (Aboud 2026-11-05) — shared, so it is read off the
+   * board rather than localStorage: "when it is on it is on for everybody".
+   */
+  const autoSort = autoSortOn(board);
+
+  /**
+   * The active table, pre-ordered by status when auto-sort is on.
+   *
+   * Only when the user has NO column sort of their own: clicking a header must
+   * still win, and TanStack leaves data order alone while `sorting` is empty.
+   * So this orders the data instead of writing to `sorting`, which keeps the
+   * two mechanisms from fighting over the same state.
+   */
+  const active = useMemo(
+    () => (autoSort && sorting.length === 0 ? sortByStatus(activeUnsorted, board.labels) : activeUnsorted),
+    [autoSort, sorting.length, activeUnsorted, board.labels],
   );
+
+  const setAutoSort = (on: boolean) => {
+    const cur = boardRef.current;
+    setBoard({ ...cur, prefs: nextPrefs(on, me) });
+    toast(
+      on
+        ? 'Auto-sort on — the board is ordered by status for everyone.'
+        : 'Auto-sort off for everyone — rows can be dragged again.',
+    );
+  };
 
   // ---- drag-to-reorder (hold a row, move it, drop — spec: monday-style) -----
 
@@ -1728,7 +1762,11 @@ export default function BoardTab({
   // Grouping rearranges the rows, so a manual drag would land somewhere the
   // user did not point at — reordering is only offered in ungrouped order,
   // the same reason a drag clears a column sort.
-  const canReorder = groupBy === 'none';
+  //
+  // Auto-sort is the same problem with a different cause: the status rank
+  // decides where a row sits, so a drop across a band boundary would spring
+  // back and read as a bug. Turning auto-sort off hands dragging back.
+  const canReorder = groupBy === 'none' && !autoSort;
   const mainBodyProps = {
     table,
     highlightId,
@@ -1815,6 +1853,26 @@ export default function BoardTab({
             </button>
           ))}
           <span style={{ flex: 1 }} />
+          {/* Shared, not per-browser (Aboud 2026-11-05). Admin-only to change,
+              because flipping it changes the board for the whole team — but
+              everyone sees the state and who set it, so an ordered board is
+              never a mystery. */}
+          <button
+            type="button"
+            className={`btn small secondary ${autoSort ? 'board-filter-on' : ''}`}
+            disabled={!isAdmin}
+            aria-pressed={autoSort}
+            title={
+              isAdmin
+                ? autoSort
+                  ? 'On for the whole team — the board is ordered by status, newest first inside each one. Drag-to-reorder is off while this is on; the order itself is the ↑/↓ in Edit labels.'
+                  : 'Off for the whole team — rows keep the manual drag order.'
+                : `Set by ${board.prefs?.updatedBy ?? 'the team'} — ask an admin to change it.`
+            }
+            onClick={() => setAutoSort(!autoSort)}
+          >
+            Auto-sort by status {autoSort ? '✓' : '✕'}
+          </button>
           <label className="board-groupby">
             Group by
             <select value={groupBy} onChange={(e) => setGroupBy(e.target.value as GroupKey)} aria-label="Group by">

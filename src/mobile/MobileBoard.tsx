@@ -10,6 +10,7 @@ import type { PostRecord } from '../types';
 import {
   activityEntry,
   activityForPatch,
+  autoSortOn,
   cleanName,
   findDuplicate,
   labelById,
@@ -21,7 +22,7 @@ import {
   patchProject,
   type ProjectPatch,
 } from '../lib/board';
-import { splitSections } from '../lib/boardViews';
+import { sortByStatus, splitSections } from '../lib/boardViews';
 import { isoToUs, relativeTime } from '../lib/dates';
 import {
   deleteUpdate,
@@ -182,9 +183,20 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
     [board.projects, needle, mine, me, coordFilter, statusFilter, phaseFilter],
   );
   // Same three sections as the desktop board, same rules (lib/boardViews).
-  const { active, outOfScope, completed } = useMemo(
-    () => splitSections(visible, board.labels),
-    [visible, board.labels],
+  const {
+    active: activeUnsorted,
+    outOfScope,
+    completed,
+  } = useMemo(() => splitSections(visible, board.labels), [visible, board.labels]);
+
+  /**
+   * Auto-sort is TEAM state, so a phone reads the same ordered board as a
+   * laptop (Aboud 2026-11-05). There is no column sort here to defer to, and
+   * no drag to reorder, so it simply applies when it is on.
+   */
+  const active = useMemo(
+    () => (autoSortOn(board) ? sortByStatus(activeUnsorted, board.labels) : activeUnsorted),
+    [board, activeUnsorted],
   );
 
   const startResize = (key: string, e: React.PointerEvent) => {
