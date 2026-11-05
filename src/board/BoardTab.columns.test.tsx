@@ -4,6 +4,7 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import BoardTab from './BoardTab';
+import { moveColumn } from '../lib/boardColumns';
 import type { BoardLabel, BoardProject, BoardState } from './types';
 
 const label = (id: string, name: string, columnKey: 'status' | 'phase', over: Partial<BoardLabel> = {}): BoardLabel => ({
@@ -151,45 +152,40 @@ describe('column reordering', () => {
   beforeEach(() => localStorage.clear());
   afterEach(cleanup);
 
-  it('moves a dragged column into the target slot', () => {
-    renderBoard();
-    const before = headerOrder();
-    expect(before.indexOf('Rating')).toBeGreaterThan(before.indexOf('SOW coordinator'));
+  // Column drag moved from the HTML5 drag API to dnd-kit on 2026-11-05, for
+  // the DragOverlay. dnd-kit listens to neither dragStart/drop nor synthetic
+  // pointer events — it needs a real pointer sequence AND element
+  // measurements, and jsdom has no layout. Two tests that drove the old API
+  // were deleted rather than left firing events nothing listens to, which
+  // would have passed while proving nothing.
+  //
+  // The behaviour they covered is still covered, in two honest places:
+  //   - moveColumn() — the whole of the reorder logic — is unit-tested
+  //     directly in boardColumns.test.ts, including the pinned-column guard;
+  //   - what the TABLE does with a saved order is asserted below.
+  // The gesture itself is verified in a real browser.
 
-    const ths = [...document.querySelectorAll('thead tr:first-child th')];
-    const rating = ths.find((t) => t.textContent?.includes('Rating'))!;
-    const coord = ths.find((t) => t.textContent?.includes('SOW coordinator'))!;
-    fireEvent.dragStart(rating);
-    fireEvent.dragOver(coord);
-    fireEvent.drop(coord);
-
-    const after = headerOrder();
-    expect(after.indexOf('Rating')).toBeLessThan(after.indexOf('SOW coordinator'));
-  });
-
-  it('remembers the order across a remount', () => {
-    const { unmount } = renderBoard();
-    const ths = [...document.querySelectorAll('thead tr:first-child th')];
-    const rating = ths.find((t) => t.textContent?.includes('Rating'))!;
-    const coord = ths.find((t) => t.textContent?.includes('SOW coordinator'))!;
-    fireEvent.dragStart(rating);
-    fireEvent.drop(coord);
-    unmount();
-
+  it('renders a saved column order, so a reorder survives a remount', () => {
+    const reordered = moveColumn(
+      ['select', 'name', 'coordinator', 'status', 'designedDate', 'installDate', 'phase', 'rating'],
+      'rating',
+      'coordinator',
+    );
+    localStorage.setItem('sowpost.board.colOrder.v1', JSON.stringify(reordered));
     renderBoard();
 
     const after = headerOrder();
     expect(after.indexOf('Rating')).toBeLessThan(after.indexOf('SOW coordinator'));
   });
 
-  it('never moves the sticky Project name column', () => {
+  it('never moves the sticky Project name column, whatever is saved', () => {
+    // moveColumn refuses it, and the table must not render it elsewhere even
+    // if a stored order from some other build claims otherwise.
+    localStorage.setItem(
+      'sowpost.board.colOrder.v1',
+      JSON.stringify(['select', 'rating', 'name', 'coordinator', 'status']),
+    );
     renderBoard();
-    const ths = [...document.querySelectorAll('thead tr:first-child th')];
-    const name = ths.find((t) => t.textContent?.includes('Project name'))!;
-    const rating = ths.find((t) => t.textContent?.includes('Rating'))!;
-
-    fireEvent.dragStart(name);
-    fireEvent.drop(rating);
 
     expect(headerOrder()[1]).toBe('Project name');
   });

@@ -6,6 +6,7 @@ import {
   GROUP_OPTIONS,
   NO_FILTERS,
   agingState,
+  bandMove,
   daysSince,
   groupProjects,
   installDateOf,
@@ -481,5 +482,64 @@ describe('statusBand', () => {
   it('rows with no status form their own band', () => {
     const withNull = [...rows, p({ id: 'x', statusId: null })];
     expect(statusBand(withNull, null).map((r) => r.id)).toEqual(['x']);
+  });
+});
+
+// Auto-sort stays ON and a drag reorders only inside its own status band
+// (Aboud 2026-11-05). A drop onto another band is refused, not approximated.
+describe('bandMove — where a dragged row actually lands', () => {
+  const rows = [
+    p({ id: 'w1', statusId: 'working', position: 300 }),
+    p({ id: 'w2', statusId: 'working', position: 200 }),
+    p({ id: 'w3', statusId: 'working', position: 100 }),
+    p({ id: 'n1', statusId: 'new', position: 90 }),
+    p({ id: 'n2', statusId: 'new', position: 80 }),
+  ];
+
+  it('moving within a band returns a position between the new neighbours', () => {
+    // w3 to the top of its band → above w1 (300), so > 300.
+    const pos = bandMove(rows, 'w3', 'w1');
+    expect(pos).not.toBeNull();
+    expect(pos as number).toBeGreaterThan(300);
+  });
+
+  it('the new position keeps it ordered where it was dropped', () => {
+    const pos = bandMove(rows, 'w1', 'w3') as number;
+    // w1 to the bottom of the band → below w3 (100).
+    expect(pos).toBeLessThan(100);
+  });
+
+  it('a midpoint move lands strictly between its two neighbours', () => {
+    const pos = bandMove(rows, 'w1', 'w3') as number;
+    const moved = rows.map((r) => (r.id === 'w1' ? { ...r, position: pos } : r));
+    const band = moved.filter((r) => r.statusId === 'working').sort((a, b) => b.position - a.position);
+    expect(band.map((r) => r.id)).toEqual(['w2', 'w3', 'w1']);
+  });
+
+  it('REFUSES a drop onto another status — the row springs back', () => {
+    expect(bandMove(rows, 'w1', 'n1')).toBeNull();
+    expect(bandMove(rows, 'n2', 'w2')).toBeNull();
+  });
+
+  it('dropping a row on itself changes nothing', () => {
+    expect(bandMove(rows, 'w2', 'w2')).toBeNull();
+  });
+
+  it('an unknown id changes nothing', () => {
+    expect(bandMove(rows, 'ghost', 'w1')).toBeNull();
+    expect(bandMove(rows, 'w1', 'ghost')).toBeNull();
+  });
+
+  it('a one-row band has nowhere to move', () => {
+    const single = [p({ id: 'only', statusId: 'solo', position: 10 })];
+    expect(bandMove(single, 'only', 'only')).toBeNull();
+  });
+
+  it('rows with no status form a band that reorders like any other', () => {
+    const loose = [
+      p({ id: 'a', statusId: null, position: 20 }),
+      p({ id: 'b', statusId: null, position: 10 }),
+    ];
+    expect(bandMove(loose, 'b', 'a')).not.toBeNull();
   });
 });

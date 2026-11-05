@@ -214,44 +214,17 @@ describe('BoardTab', () => {
     });
   });
 
-  /**
-   * Two rows in manual order, with auto-sort OFF.
-   *
-   * Auto-sort by status became the shared default on 2026-11-05, and it
-   * disables dragging — the status rank decides where a row sits, so a drop
-   * across a band would spring back. Manual order is what these tests are
-   * about, so they opt out the way a team would.
-   */
-  const draggableBoard = () => {
-    const board = emptyBoard();
-    board.prefs = { autoSortByStatus: false, updatedAt: '2026-11-05T00:00:00.000Z', updatedBy: 'Aboud Yousef' };
-    board.projects = [
-      { ...boardProject('Alpha Job', 'pa'), position: 3000 },
-      { ...boardProject('Beta Job', 'pb'), position: 2000 },
-    ];
-    return board;
-  };
-
-  it('hold a row and drag it above another — order flips and sticks (monday-style)', () => {
-    const board = draggableBoard();
-    render(<Harness initial={board} />);
-
-    const rows = () => Array.from(document.querySelectorAll<HTMLElement>('tbody tr[data-project-id]'));
-    expect(rows().map((r) => r.getAttribute('data-project-id'))).toEqual(['pa', 'pb']);
-
-    // jsdom has no layout — give each row a real rect (40px tall, stacked).
-    rows().forEach((r, i) => {
-      r.getBoundingClientRect = () =>
-        ({ top: i * 40, bottom: i * 40 + 40, height: 40, left: 0, right: 600, width: 600, x: 0, y: i * 40, toJSON: () => ({}) }) as DOMRect;
-    });
-
-    // Hold Beta anywhere on the row (y≈60) and drag it above Alpha's midpoint.
-    fireEvent(rows()[1], new MouseEvent('pointerdown', { bubbles: true, clientY: 60, button: 0 }));
-    fireEvent(window, new MouseEvent('pointermove', { bubbles: true, clientY: 10 }));
-    fireEvent(window, new MouseEvent('pointerup', { bubbles: true, clientY: 10 }));
-
-    expect(rows().map((r) => r.getAttribute('data-project-id'))).toEqual(['pb', 'pa']);
-  });
+  // Row drag moved to dnd-kit on 2026-11-05 so the row genuinely lifts off the
+  // page. dnd-kit cannot be driven from jsdom — it needs a real pointer
+  // sequence AND element measurements, and jsdom has no layout — so the test
+  // that used to simulate the gesture here was DELETED rather than left
+  // firing pointerdown/move/up that nothing listens to. That would have
+  // passed while proving nothing.
+  //
+  // Where the behaviour lives now: bandMove() in boardViews.test.ts owns the
+  // whole question of where a dragged row lands — the midpoint, the band
+  // constraint, and the refusal to cross a status. The gesture itself is
+  // verified in a real browser.
 
   it('a short press without movement is still a click, not a drag', () => {
     render(<Harness />);

@@ -3,7 +3,7 @@
 // state, this file owns the rules so they can be tested without a DOM.
 
 import type { BoardLabel, BoardProject } from '../board/types';
-import { labelById, labelsFor, outOfScopeStatusIds, reviewStatusIds, type LinkedPosts } from './board';
+import { labelById, labelsFor, outOfScopeStatusIds, positionForMove, reviewStatusIds, type LinkedPosts } from './board';
 
 // ---- filters ----------------------------------------------------------------
 // Lives here (not in BoardTab) so the presets below can be unit-tested.
@@ -351,4 +351,35 @@ export function idsBetween(rows: BoardProject[], anchorId: string | null, target
  */
 export function statusBand(rows: BoardProject[], statusId: string | null): BoardProject[] {
   return rows.filter((p) => p.statusId === statusId);
+}
+
+/**
+ * The new `position` for a row dragged onto another row, or null when the move
+ * is not allowed.
+ *
+ * Auto-sort ranks by status first, so a row can only be reordered WITHIN its
+ * own status. A drop onto a different band is refused outright rather than
+ * approximated — dnd-kit then springs the row back, which is the honest
+ * outcome: the status decides where it lives, and dragging does not change
+ * the status.
+ *
+ * The midpoint is computed against the BAND, not the whole table. Measuring
+ * against the full list would put the row between neighbours from other
+ * status groups, whose positions say nothing about this one.
+ */
+export function bandMove(rows: BoardProject[], activeId: string, overId: string): number | null {
+  const from = rows.find((p) => p.id === activeId);
+  const to = rows.find((p) => p.id === overId);
+  if (!from || !to || from.id === to.id) return null;
+  if (from.statusId !== to.statusId) return null;
+  const band = statusBand(rows, from.statusId);
+  const oldIndex = band.indexOf(from);
+  const newIndex = band.indexOf(to);
+  // positionForMove takes an INSERT-BEFORE index ("the drop line sits here"),
+  // which is what the old hand-rolled pointer drag produced. dnd-kit's
+  // sortable instead reports the row you are hovering, i.e. arrayMove
+  // semantics: the dragged row ends up AT that index. Dragging downwards
+  // therefore needs one more, or the row lands a slot short of where it was
+  // dropped.
+  return positionForMove(band, oldIndex, newIndex > oldIndex ? newIndex + 1 : newIndex);
 }

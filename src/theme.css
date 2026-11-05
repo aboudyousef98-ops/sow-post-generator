@@ -7482,3 +7482,69 @@ tr:hover .board-label-cell.empty {
   font-size: 13px;
   line-height: 1.6;
 }
+
+/* ---- dnd-kit drag (Aboud 2026-11-05) --------------------------------------
+   "when I hold the row from the board, it is really hold on my screen."
+   The lift is the DragOverlay — a real copy of the row, above the page,
+   following the cursor. The original stays in place and dims, so you can see
+   where it came from. */
+
+.board-drag-ghost {
+  cursor: grabbing;
+  background: var(--dyn-surface);
+  border-radius: var(--radius-input);
+  /* Offset and a soft blur: a real lift, not a coloured halo. */
+  box-shadow: 0 12px 28px rgba(4, 61, 79, 0.22);
+  /* Slightly larger than the row it replaces — the cheapest honest cue that
+     the thing is off the page rather than still in it. */
+  transform: scale(1.012);
+  opacity: 0.97;
+}
+
+.board-drag-ghost td {
+  padding: 0 10px;
+  height: 36px;
+  border: none;
+  background: transparent;
+}
+
+/* A dragged column header travels as a chip, not a whole column. */
+.board-col-ghost {
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--dyn-navy);
+  border: 1px solid var(--dyn-border-strong);
+}
+
+/* The row left behind. Dimmed rather than hidden, so the gap still reads as
+   "this is where it was". */
+.board-row-dragging > td {
+  opacity: 0.35;
+}
+
+/* Whole-row grab affordance, but only where a drag can actually start — the
+   inline editors keep their own cursors. */
+.board-table-main tbody tr {
+  cursor: grab;
+}
+
+.board-table-main tbody tr input,
+.board-table-main tbody tr textarea,
+.board-table-main tbody tr select {
+  cursor: auto;
+}
+
+.board-reordering {
+  /* Nothing selects text while a drag is in flight. */
+  user-select: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .board-drag-ghost {
+    transform: none;
+    box-shadow: 0 4px 10px rgba(4, 61, 79, 0.18);
+  }
+}
