@@ -15,30 +15,62 @@
 // vitest's hardcoded KEYS list — so the key is dropped and every test is left
 // looking at Node's undefined one instead of jsdom's working one.
 //
-// Why we build a throwaway JSDOM instead of copying from `window`: inside a
-// test, `window`, `document.defaultView` and `globalThis` are all the SAME
-// vitest global, so there is no jsdom window left to copy from (verified) — and
-// jsdom's `Storage` is an illegal constructor, so it cannot be newed directly.
-// Borrowing the Storage off a fresh JSDOM is the only way to get the real
-// thing, and the real thing is what we want: length, key(), the storage event
-// and the quota all behave as they do in a browser, where a hand-rolled Map
-// shim would quietly diverge from what production code is tested against.
+// WHY A SHIM AND NOT A REAL jsdom Storage (changed 2026-11-05, same day):
 //
-// Per test FILE, so the stores start empty and no file can leak into another.
-// Remove this once vitest adds localStorage to KEYS, or Node stops defining a
-// global that resolves to undefined.
+// The first fix borrowed a Storage off a throwaway `new JSDOM()`, for fidelity.
+// That is a SECOND jsdom instance per test file, on top of the one vitest
+// already builds — and once the suite passed ~67 files, environment setup
+// became the dominant cost and the whole run started tipping over into
+// wall-clock timeouts, non-deterministically (44 / 28 / 42 failures on three
+// identical runs, every file green in isolation).
+//
+// So: a real Storage implementation, in process, costing nothing. It is a
+// faithful one — length, key(), clear(), null for a missing key, and String()
+// coercion of both keys and values, which is where naive Map shims diverge
+// from the spec and let a test pass that production would fail.
+//
+// Not implemented: cross-tab `storage` events and the quota limit. Nothing in
+// this app uses either; if that changes, this is the file to revisit.
 
-export {}; // a module, so the top-level await below is legal
+export {};
+
+class MemoryStorage implements Storage {
+  #map = new Map<string, string>();
+
+  get length(): number {
+    return this.#map.size;
+  }
+
+  key(index: number): string | null {
+    // Insertion order, which is what Storage guarantees in practice.
+    return [...this.#map.keys()][index] ?? null;
+  }
+
+  getItem(key: string): string | null {
+    // `null`, never `undefined` — code that checks `=== null` must behave the
+    // same here as in a browser.
+    return this.#map.has(String(key)) ? (this.#map.get(String(key)) as string) : null;
+  }
+
+  setItem(key: string, value: string): void {
+    // Storage stringifies BOTH. A test that stores a number and reads it back
+    // as a number would pass here and fail in a browser without this.
+    this.#map.set(String(key), String(value));
+  }
+
+  removeItem(key: string): void {
+    this.#map.delete(String(key));
+  }
+
+  clear(): void {
+    this.#map.clear();
+  }
+}
 
 if (typeof document !== 'undefined' && typeof globalThis.localStorage === 'undefined') {
-  const { JSDOM } = await import('jsdom');
-  // A url is required: on the default "about:blank" opaque origin jsdom
-  // refuses storage access, which is the very failure being fixed.
-  const donor = new JSDOM('', { url: 'http://localhost:3000/' }).window;
-
   for (const key of ['localStorage', 'sessionStorage'] as const) {
     Object.defineProperty(globalThis, key, {
-      value: donor[key],
+      value: new MemoryStorage(),
       configurable: true,
       writable: true,
     });
