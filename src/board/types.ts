@@ -174,6 +174,61 @@ export interface ProjectUpdate {
 }
 
 /**
+ * What a user-written automation fires on. CHANGE triggers only — this site
+ * has no server that can run a job, so a time-based trigger could only fire
+ * when somebody happened to have the board open. See lib/automations.ts.
+ */
+export type TriggerKind = 'status-to' | 'rating-at-least' | 'project-created';
+
+/** What a user-written automation does. */
+export type ActionKind =
+  | 'require-note'
+  | 'set-status'
+  | 'set-phase'
+  | 'set-coordinator'
+  | 'set-reviewer'
+  | 'post-update';
+
+/**
+ * One team-written rule (Aboud 2026-11-05: "why I can't create my own
+ * automations inside the website for the board?").
+ *
+ * Shared data in the same blob as everything else, merged by id/updatedAt like
+ * labels and updates — including the `deletedAt` tombstone, because a hard
+ * delete would be resurrected by the next sync from a stale cache.
+ */
+export interface AutomationRule {
+  id: string; // uuid — merge key
+  enabled: boolean;
+  trigger: {
+    kind: TriggerKind;
+    /** For 'status-to'. */
+    statusId?: string;
+    /** For 'rating-at-least'. */
+    rating?: number;
+  };
+  /** Optional extra test, ANDed with the trigger. */
+  condition?: {
+    coordinator?: string;
+    phaseId?: string;
+  };
+  action: {
+    kind: ActionKind;
+    statusId?: string;
+    phaseId?: string;
+    /** A roster name, or ACTOR for "whoever made the change". */
+    person?: string;
+    /** For 'post-update'. */
+    text?: string;
+  };
+  createdAt: string;
+  createdBy: string;
+  updatedAt: string;
+  updatedBy: string;
+  deletedAt?: string;
+}
+
+/**
  * Team-wide view rules — shared, not per-browser.
  *
  * Aboud 2026-11-05, on the always-ordered board: "yess auto-sort, but when it
@@ -206,6 +261,12 @@ export interface BoardState {
    * reader must tolerate `undefined` — read it through lib/board.autoSortOn.
    */
   prefs?: BoardPrefs;
+  /**
+   * Team-written automations, added 2026-11-05. Same contract as `updates`:
+   * absent on older boards, merged by id with newer updatedAt winning, and
+   * read through lib/automations.liveRules which drops the tombstones.
+   */
+  automations?: AutomationRule[];
   /**
    * Added 2026-10-17. Absent in every board written before that date, so every
    * reader must tolerate `undefined` — mergeBoard normalises it to [].

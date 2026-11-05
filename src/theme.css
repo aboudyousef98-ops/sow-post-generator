@@ -7274,3 +7274,111 @@ tr:hover .board-label-cell.empty {
   white-space: nowrap;
   border: 0;
 }
+
+/* ---- Automations panel (Aboud 2026-11-05) ---------------------------------
+   Dense: one line per rule, no box per row, footer always reachable — his
+   standing preference for lists. Built-ins and team rules share the same row
+   shape on purpose, so the two halves read as one list of "what this board
+   does". */
+
+.board-auto-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 14px 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dyn-muted);
+}
+
+.board-auto-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.board-auto-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--dyn-line);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.board-auto-item:last-child {
+  border-bottom: none;
+}
+
+/* A paused rule still has to be readable — dimmed, not hidden, so nobody
+   wonders where their automation went. */
+.board-auto-item.off .board-auto-text {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.board-auto-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.board-auto-by,
+.board-auto-knob {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.board-auto-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 11px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+}
+
+.board-auto-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+}
+
+.board-auto-line select,
+.board-auto-line input {
+  font: inherit;
+  font-size: 13px;
+  padding: 5px 8px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+  background: var(--dyn-surface);
+  color: inherit;
+}
+
+.board-auto-line input {
+  flex: 1;
+  min-width: 180px;
+}
+
+.board-auto-kw {
+  min-width: 74px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dyn-muted);
+}
+
+/* The sentence the saved rule will read as. Reading it back before saving is
+   what catches a rule that says something other than what was meant. */
+.board-auto-preview {
+  margin: 2px 0 0;
+  padding: 7px 9px;
+  border: 1px solid var(--dyn-teal-line);
+  border-radius: var(--radius-input);
+  background: var(--dyn-teal-soft);
+  font-size: 13px;
+  line-height: 1.45;
+}

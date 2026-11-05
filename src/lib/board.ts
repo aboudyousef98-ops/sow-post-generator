@@ -212,6 +212,10 @@ export function mergeBoard(rawCurrent: BoardState, rawIncoming: Partial<BoardSta
     // beats a side that does not — otherwise the person who switched auto-sort
     // on would have it switched back by the next sync from a stale cache.
     prefs: newerPrefs(current.prefs, incoming.prefs),
+    // Same id/updatedAt contract as labels and updates, tombstones included —
+    // a hard delete would be resurrected by the next sync from a cache that
+    // still has the rule.
+    automations: mergeById(current.automations ?? [], incoming.automations ?? []),
   };
 }
 

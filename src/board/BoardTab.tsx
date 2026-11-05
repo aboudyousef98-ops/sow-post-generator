@@ -79,6 +79,7 @@ import {
 import type { PostRecord } from '../types';
 import type { Toast } from '../components/Toast';
 import type {
+  AutomationRule,
   BoardActivity,
   BoardLabel,
   BoardProject,
@@ -87,7 +88,15 @@ import type {
   ProjectUpdate,
   UpdateKind,
 } from './types';
+import {
+  autoUpdates,
+  describeRule,
+  followUpPatch,
+  gatingRules,
+  matchingRules,
+} from '../lib/automations';
 import ActivityModal from './ActivityModal';
+import AutomationsModal from './AutomationsModal';
 import UpdatesModal from './UpdatesModal';
 import UpdateSearchModal from './UpdateSearchModal';
 import RequireNoteModal, { type NoteGate } from './RequireNoteModal';
@@ -643,6 +652,12 @@ export default function BoardTab({
     rating?: 1 | 2 | 3 | 4 | 5;
     /** Bulk only — the toast description passed through to bulkApply. */
     describe?: string;
+    /**
+     * Automations this change matched, captured when the gate opened so the
+     * follow-ups land WITH the held patch — re-matching on confirm could give
+     * a different answer if a teammate edited a rule in between.
+     */
+    rules?: AutomationRule[];
   } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BoardProject | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
@@ -650,6 +665,7 @@ export default function BoardTab({
   const [duplicate, setDuplicate] = useState<BoardProject | null>(null);
   const [columnsMenu, setColumnsMenu] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [autoOpen, setAutoOpen] = useState(false);
   // Completed section: out of sight by default, one click away.
   const [doneOpen, setDoneOpen] = useState(() => localStorage.getItem(KEY_DONE_OPEN) === '1');
   // "Out of SOW scope" — same deal, and also collapsed by default: the whole
@@ -801,7 +817,51 @@ export default function BoardTab({
    * early here means the row does NOT change until the note is written —
    * cancelling leaves everything exactly as it was, which is the point.
    */
-  const guardedPatch = (project: BoardProject, patch: ProjectPatch) => {
+  /**
+   * applyPatch plus whatever the team's automations want done alongside —
+   * the merged field changes in the SAME write, and any "post an update"
+   * action on the same thread (lib/automations).
+   *
+   * Single pass: the follow-up is never fed back through matchingRules. See
+   * followUpPatch for why that is the loop guard rather than a limitation.
+   */
+  const applyWithAutomations = (project: BoardProject, patch: ProjectPatch) => {
+    const matched = matchingRules(boardRef.current.automations, project, patch);
+    if (matched.length === 0) {
+      applyPatch(project, patch);
+      return;
+    }
+    const merged = { ...patch, ...followUpPatch(matched, me) };
+    const posts = autoUpdates(matched, project.id, me);
+    // applyPatch takes ONE update; more than one is rare enough that writing
+    // them straight is clearer than widening its signature.
+    const cur = boardRef.current;
+    const next = patchProject(project, merged, me);
+    const entry = activityForPatch(project, merged, me, cur.labels);
+    let updates = cur.updates ?? [];
+    for (const u of posts) updates = putUpdate(updates, u);
+    setBoard({
+      ...cur,
+      projects: cur.projects.map((p) => (p.id === project.id ? next : p)),
+      activity: [
+        ...(entry ? [entry] : []),
+        ...posts.map((u) => activityEntry(u.projectId, me, 'update-post')),
+        ...cur.activity,
+      ],
+      updates,
+    });
+  };
+
+  /**
+   * Returns true when the change LANDED, false when a gate is now holding it.
+   * Callers that follow up with a toast need to know which happened.
+   */
+  const guardedPatch = (project: BoardProject, patch: ProjectPatch): boolean => {
+    // A team-written "require an update first" rule gates exactly like the
+    // built-in ones, so all three are collected before anything is written.
+    const matched = matchingRules(boardRef.current.automations, project, patch);
+    const customGates = gatingRules(matched);
+
     if ('rating' in patch && needsRatingReason(patch.rating as number | null)) {
       const stars = patch.rating as 1 | 2 | 3 | 4 | 5;
       setGate({
@@ -809,6 +869,7 @@ export default function BoardTab({
         patch,
         kind: 'rating',
         rating: stars,
+        rules: matched,
         gate: {
           title: `Why is this ${stars} stars?`,
           prompt: `A ${stars}-star rating needs a reason, so it can be found later. Rating`,
@@ -816,7 +877,7 @@ export default function BoardTab({
           confirmLabel: `Rate ${stars}★ and post`,
         },
       });
-      return;
+      return false;
     }
 
     if ('statusId' in patch) {
@@ -830,13 +891,31 @@ export default function BoardTab({
           projects: [project],
           patch,
           kind: isPendingInfoLabel(label.name) ? 'pending-info' : 'status',
+          rules: matched,
           gate: statusGate(label),
         });
-        return;
+        return false;
       }
     }
 
-    applyPatch(project, patch);
+    if (customGates.length) {
+      setGate({
+        projects: [project],
+        patch,
+        kind: 'status',
+        rules: matched,
+        gate: {
+          title: 'This change needs an update',
+          prompt: `${describeRule(customGates[0], boardRef.current.labels)} Project`,
+          placeholder: 'e.g. engineering sent the revised set, waiting on the AHJ',
+          confirmLabel: 'Save and post',
+        },
+      });
+      return false;
+    }
+
+    applyWithAutomations(project, patch);
+    return true;
   };
 
   /**
@@ -847,17 +926,19 @@ export default function BoardTab({
   const resolveGate = (text: string) => {
     if (!gate) return;
     const extra = gate.rating ? { rating: gate.rating } : {};
+    // Automation field changes land with the held patch, in one write.
+    const patch = { ...gate.patch, ...followUpPatch(gate.rules ?? [], me) };
     if (gate.projects.length === 1) {
       const only = gate.projects[0];
       const u = newUpdate(only.id, text, me, gate.kind, extra);
       // The field change keeps its own activity entry; this adds the post.
-      applyPatch(only, gate.patch, undefined, u, activityEntry(only.id, me, 'update-post'));
+      applyPatch(only, patch, undefined, u, activityEntry(only.id, me, 'update-post'));
       setGate(null);
       toast('Update posted.');
       return;
     }
     const updates = gate.projects.map((p) => newUpdate(p.id, text, me, gate.kind, extra));
-    bulkApply(gate.projects, gate.patch, gate.describe ?? 'updated', updates);
+    bulkApply(gate.projects, patch, gate.describe ?? 'updated', updates);
     setGate(null);
     clearSelection();
   };
@@ -965,6 +1046,28 @@ export default function BoardTab({
     const byId = new Map(cur.labels.map((l) => [l.id, l]));
     for (const l of stamped) byId.set(l.id, l);
     setBoard({ ...cur, labels: [...byId.values()] });
+  };
+
+  /**
+   * Upsert one automation. Stamped here, not in the modal, so the modal never
+   * has to know about the merge contract — same split as updateLabels.
+   */
+  const putRule = (rule: AutomationRule) => {
+    const cur = boardRef.current;
+    const next = { ...rule, updatedAt: new Date().toISOString(), updatedBy: me };
+    const list = cur.automations ?? [];
+    setBoard({
+      ...cur,
+      automations: list.some((r) => r.id === next.id)
+        ? list.map((r) => (r.id === next.id ? next : r))
+        : [...list, next],
+    });
+  };
+
+  /** Tombstone, never a splice — a hard delete would come back on the next sync. */
+  const deleteRule = (rule: AutomationRule) => {
+    putRule({ ...rule, deletedAt: new Date().toISOString() });
+    toast('Automation deleted for the team.');
   };
 
   const archiveLabel = (labelId: string, moveToId: string | null) => {
@@ -1112,11 +1215,25 @@ export default function BoardTab({
         return;
       }
     }
-    const project = newProject(name, me, cur.labels);
+    const base = newProject(name, me, cur.labels);
+    // "When a project is added to the board → …" rules fire here. `null` for
+    // `before` is what marks this as a creation rather than an edit, and the
+    // follow-ups are folded into the row before it is ever written, so a new
+    // project is born already correct instead of flickering.
+    const matched = matchingRules(cur.automations, null, base);
+    const project = { ...base, ...followUpPatch(matched, me) };
+    const posts = autoUpdates(matched, project.id, me);
+    let updates = cur.updates ?? [];
+    for (const u of posts) updates = putUpdate(updates, u);
     setBoard({
       ...cur,
       projects: [...cur.projects, project],
-      activity: [activityEntry(project.id, me, 'create', { name: { old: '—', new: project.name } }), ...cur.activity],
+      activity: [
+        activityEntry(project.id, me, 'create', { name: { old: '—', new: project.name } }),
+        ...posts.map((u) => activityEntry(u.projectId, me, 'update-post')),
+        ...cur.activity,
+      ],
+      updates,
     });
     setAddName('');
     setDuplicate(null);
@@ -1490,14 +1607,12 @@ export default function BoardTab({
             valueId={row.original.statusId}
             onPick={(statusId) => {
               const prev = row.original.statusId;
-              // A status flagged "needs a note" is intercepted here and does
-              // not land until the user explains it (#6, and Pending Update
-              // since 2026-11-05). Which statuses those are is label data.
-              if (labelRequiresNote(labelById(boardRef.current.labels, statusId))) {
-                guardedPatch(row.original, { statusId });
-                return;
-              }
-              applyPatch(row.original, { statusId });
+              // Everything goes through the guard: it is what applies the
+              // "needs a note" gate (#6, and Pending Update since 2026-11-05)
+              // AND the team's own automations. It returns false when a gate
+              // is holding the change, in which case there is nothing to
+              // announce yet — the modal is the announcement.
+              if (!guardedPatch(row.original, { statusId })) return;
               // Crossing INTO a done or out-of-scope label hides the row from
               // the main board — announce where it went, with a way back.
               const from = sectionOf(labelById(boardRef.current.labels, prev));
@@ -1960,6 +2075,15 @@ export default function BoardTab({
             )}
           </span>
           <span style={{ flex: 1 }} />
+          {/* Next to the thing it governs, not buried in Admin. */}
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setAutoOpen(true)}
+            title="Everything the board does on its own — and write your own rules"
+          >
+            ⚡ Automations
+          </button>
           <button
             type="button"
             className="btn small secondary"
@@ -2272,6 +2396,23 @@ export default function BoardTab({
           roster={authors}
           onImport={runImport}
           onClose={() => setImportOpen(false)}
+        />
+      )}
+
+      {autoOpen && (
+        <AutomationsModal
+          labels={board.labels}
+          automations={board.automations}
+          roster={authors}
+          isAdmin={isAdmin}
+          me={me}
+          onSave={putRule}
+          onDelete={deleteRule}
+          onEditLabels={(columnKey) => {
+            setAutoOpen(false);
+            setEditLabels(columnKey);
+          }}
+          onClose={() => setAutoOpen(false)}
         />
       )}
 

@@ -44,6 +44,10 @@ export const PutSchema = z
     // prefs" is a real state that must survive a round trip (lib/board reads
     // absent as auto-sort ON).
     prefs: Prefs.optional(),
+    // Team-written automations, added 2026-11-05. Optional for the same
+    // strict-schema reason as `prefs` and `updates`, and defaulted to [] so an
+    // older client that omits the key keeps saving.
+    automations: z.array(Stamped).max(500).optional().default([]),
   })
   .strict();
 
@@ -57,6 +61,7 @@ export interface BoardBlob {
   activity: ActivityRow[];
   updates: Stamped[];
   prefs?: Prefs;
+  automations?: Stamped[];
 }
 
 export function mergeStamped(current: Stamped[], incoming: Stamped[]): Stamped[] {
@@ -88,6 +93,9 @@ export function mergeBoard(current: BoardBlob | null, incoming: BoardBlob): Boar
     // newerPrefs in src/lib/board.ts — if the two disagree, a client and the
     // server converge on different boards.
     prefs: mergePrefs(cur.prefs, incoming.prefs),
+    // Same contract as labels and updates — a rule's deletedAt tombstone
+    // carries a newer updatedAt and therefore wins.
+    automations: mergeStamped(cur.automations ?? [], incoming.automations ?? []),
   };
 }
 
