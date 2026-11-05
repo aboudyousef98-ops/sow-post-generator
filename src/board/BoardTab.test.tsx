@@ -1309,3 +1309,159 @@ describe('the board is always ordered by status', () => {
     expect(rowIds()).toEqual(['p-work', 'p-new']);
   });
 });
+
+// Aboud 2026-11-05: "ctrl + select to select multi row, shift and select to
+// select the first row and last row and then everything will be selected" —
+// and "when I do bulk selection there is no bulk delete for the selected rows".
+describe('keyboard-modified selection, and bulk removal', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** Five rows, all one status so auto-sort leaves them in position order. */
+  const fiveRows = (): BoardState => {
+    const b = emptyBoard();
+    b.projects = ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo'].map((n, i) => ({
+      ...boardProject(n, `p${i}`),
+      statusId: 'status-working',
+      position: 1000 - i * 10,
+    }));
+    return b;
+  };
+
+  const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
+  const clickRow = (name: string, mods: { ctrlKey?: boolean; shiftKey?: boolean } = {}) =>
+    fireEvent.click(rowOf(name), { bubbles: true, ...mods });
+  const selectedNames = () =>
+    [...document.querySelectorAll('.board-table-main tbody tr[data-project-id]')]
+      .filter((tr) => (tr.querySelector('input[type="checkbox"]') as HTMLInputElement)?.checked)
+      // Strip the row-menu glyph that shares the name cell.
+      .map((tr) => tr.querySelector('td:nth-child(2)')?.textContent?.replace('⋯', '').trim());
+
+  it('Ctrl-click selects a row without opening its cell editor', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Charlie', { ctrlKey: true });
+
+    expect(selectedNames()).toEqual(['Charlie']);
+    // The status picker must NOT have opened — that is what capture-phase buys.
+    expect(screen.queryByRole('option', { name: 'Done' })).toBeNull();
+  });
+
+  it('Cmd-click works too, for the Mac half of the team', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Bravo', { metaKey: true } as { ctrlKey?: boolean });
+    expect(selectedNames()).toEqual(['Bravo']);
+  });
+
+  it('Ctrl-click again deselects', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Charlie', { ctrlKey: true });
+    clickRow('Charlie', { ctrlKey: true });
+    expect(selectedNames()).toEqual([]);
+  });
+
+  it('Ctrl-click accumulates a scattered selection', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Alpha', { ctrlKey: true });
+    clickRow('Delta', { ctrlKey: true });
+    expect(selectedNames()).toEqual(['Alpha', 'Delta']);
+  });
+
+  it('Shift-click takes everything between the anchor and the target', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Bravo', { ctrlKey: true });
+    clickRow('Delta', { shiftKey: true });
+    expect(selectedNames()).toEqual(['Bravo', 'Charlie', 'Delta']);
+  });
+
+  it('Shift-click upwards selects upwards', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Delta', { ctrlKey: true });
+    clickRow('Bravo', { shiftKey: true });
+    expect(selectedNames()).toEqual(['Bravo', 'Charlie', 'Delta']);
+  });
+
+  it('the anchor stays put, so a second Shift-click re-extends from it', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Bravo', { ctrlKey: true });
+    clickRow('Delta', { shiftKey: true });
+    clickRow('Echo', { shiftKey: true });
+    // Extended from Bravo again, not from Delta.
+    expect(selectedNames()).toEqual(['Bravo', 'Charlie', 'Delta', 'Echo']);
+  });
+
+  it('a plain click still edits the row rather than selecting it', () => {
+    render(<Harness initial={fiveRows()} />);
+    fireEvent.click(within(rowOf('Charlie')).getByRole('button', { name: 'Working on it' }));
+
+    expect(selectedNames()).toEqual([]);
+    expect(screen.getByRole('option', { name: 'Done' })).toBeTruthy();
+  });
+
+  it('bulk Archive removes them from the board, with Undo', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Alpha', { ctrlKey: true });
+    clickRow('Charlie', { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+
+    expect(screen.queryByText('Alpha')).toBeNull();
+    expect(screen.queryByText('Charlie')).toBeNull();
+    expect(screen.getByText('Delta')).toBeTruthy();
+    expect(toasts.at(-1)!.text).toBe('Archived — 3 projects.');
+
+    act(() => toasts.at(-1)!.action!.fn());
+    expect(screen.getByText('Alpha')).toBeTruthy();
+  });
+
+  it('bulk Delete asks first, and names the rows', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Alpha', { ctrlKey: true });
+    clickRow('Bravo', { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+
+    expect(screen.getByRole('heading', { name: /Delete 2 projects permanently\?/ })).toBeTruthy();
+    const list = document.querySelector('.board-bulk-names') as HTMLElement;
+    expect(within(list).getByText('Alpha')).toBeTruthy();
+    expect(within(list).getByText('Bravo')).toBeTruthy();
+    // Still on the board — the confirm is holding it.
+    expect(screen.getAllByText('Alpha').length).toBeGreaterThan(0);
+  });
+
+  it('cancelling the confirm deletes nothing', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Alpha', { ctrlKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.getByText('Alpha')).toBeTruthy();
+    expect(toasts.filter((t) => /Deleted/.test(t.text))).toHaveLength(0);
+  });
+
+  it('confirming deletes them for the team, with no undo offered', () => {
+    render(<Harness initial={fiveRows()} />);
+    clickRow('Alpha', { ctrlKey: true });
+    clickRow('Bravo', { shiftKey: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete permanently' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete 2 permanently' }));
+
+    expect(screen.queryByText('Alpha')).toBeNull();
+    expect(screen.queryByText('Bravo')).toBeNull();
+    expect(toasts.at(-1)!.text).toBe('Deleted permanently — 2 projects.');
+    expect(toasts.at(-1)!.action).toBeUndefined();
+  });
+
+  it('a non-admin gets Archive but not Delete permanently', () => {
+    render(<Harness initial={fiveRows()} isAdmin={false} />);
+    clickRow('Alpha', { ctrlKey: true });
+
+    expect(screen.getByRole('button', { name: 'Archive' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Delete permanently' })).toBeNull();
+  });
+});

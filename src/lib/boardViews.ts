@@ -319,3 +319,36 @@ function same(a: string[], b: string[]): boolean {
 export function selectedRows(rows: BoardProject[], selected: Record<string, boolean>): BoardProject[] {
   return rows.filter((p) => selected[p.id]);
 }
+
+/**
+ * The ids from `anchorId` to `targetId` inclusive, in DISPLAYED order — what
+ * Shift-click selects (Aboud 2026-11-05).
+ *
+ * Order-agnostic: clicking above the anchor selects upwards just as clicking
+ * below selects downwards, which is what every file list does.
+ *
+ * Returns just the target when there is no anchor yet (the first click of a
+ * session) or when the anchor has since scrolled out of the filtered set —
+ * a Shift-click that silently selects nothing would read as broken.
+ */
+export function idsBetween(rows: BoardProject[], anchorId: string | null, targetId: string): string[] {
+  const to = rows.findIndex((p) => p.id === targetId);
+  if (to < 0) return [];
+  const from = anchorId ? rows.findIndex((p) => p.id === anchorId) : -1;
+  if (from < 0) return [targetId];
+  const [lo, hi] = from <= to ? [from, to] : [to, from];
+  return rows.slice(lo, hi + 1).map((p) => p.id);
+}
+
+/**
+ * Rows sharing one status, in displayed order — the band a drag is allowed to
+ * move within while auto-sort is on (Aboud 2026-11-05: keep auto-sort, drag
+ * inside the band).
+ *
+ * Auto-sort groups by status rank first, so a band is always contiguous; this
+ * returns the slice rather than a filter so the caller can reason about
+ * neighbours without re-deriving the order.
+ */
+export function statusBand(rows: BoardProject[], statusId: string | null): BoardProject[] {
+  return rows.filter((p) => p.statusId === statusId);
+}

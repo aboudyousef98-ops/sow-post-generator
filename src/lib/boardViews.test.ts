@@ -9,9 +9,11 @@ import {
   daysSince,
   groupProjects,
   installDateOf,
+  idsBetween,
   isPresetActive,
   selectedRows,
   sortByStatus,
+  statusBand,
   splitSections,
   viewPresets,
 } from './boardViews';
@@ -413,5 +415,71 @@ describe('sortByStatus', () => {
     const rows = [p({ id: 'a', statusId: 'phase-design' })];
     // phase-design is in LABELS but is not a status, so it cannot be a rank.
     expect(sortByStatus(rows, LABELS).map((r) => r.id)).toEqual(['a']);
+  });
+});
+
+// Aboud 2026-11-05: "ctrl + select to select multi row, shift and select to
+// select the first row and last row and then everything will be selected".
+describe('idsBetween — what Shift-click selects', () => {
+  const rows = [p({ id: 'a' }), p({ id: 'b' }), p({ id: 'c' }), p({ id: 'd' }), p({ id: 'e' })];
+
+  it('takes everything from the anchor to the target, inclusive', () => {
+    expect(idsBetween(rows, 'b', 'd')).toEqual(['b', 'c', 'd']);
+  });
+
+  it('works upwards as well as downwards', () => {
+    // Clicking ABOVE the anchor must select upwards, like every file list.
+    expect(idsBetween(rows, 'd', 'b')).toEqual(['b', 'c', 'd']);
+  });
+
+  it('anchor === target selects just that row', () => {
+    expect(idsBetween(rows, 'c', 'c')).toEqual(['c']);
+  });
+
+  it('spans the whole list', () => {
+    expect(idsBetween(rows, 'a', 'e')).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('with no anchor yet, selects only the clicked row', () => {
+    expect(idsBetween(rows, null, 'c')).toEqual(['c']);
+  });
+
+  it('an anchor a filter has since hidden falls back to the clicked row', () => {
+    // Silently selecting nothing would read as a broken Shift-click.
+    expect(idsBetween(rows, 'gone', 'c')).toEqual(['c']);
+  });
+
+  it('a target that is not on screen selects nothing', () => {
+    expect(idsBetween(rows, 'a', 'gone')).toEqual([]);
+  });
+
+  it('follows DISPLAYED order, not id order', () => {
+    const reordered = [p({ id: 'e' }), p({ id: 'a' }), p({ id: 'c' })];
+    expect(idsBetween(reordered, 'e', 'c')).toEqual(['e', 'a', 'c']);
+  });
+});
+
+// Auto-sort stays ON and a drag may only reorder rows inside their own status
+// (Aboud 2026-11-05). The band is what a drop is measured against.
+describe('statusBand', () => {
+  const rows = [
+    p({ id: 'w1', statusId: 'working' }),
+    p({ id: 'w2', statusId: 'working' }),
+    p({ id: 'n1', statusId: 'new' }),
+    p({ id: 'n2', statusId: 'new' }),
+  ];
+
+  it('returns only the rows of that status, in displayed order', () => {
+    expect(statusBand(rows, 'working').map((r) => r.id)).toEqual(['w1', 'w2']);
+    expect(statusBand(rows, 'new').map((r) => r.id)).toEqual(['n1', 'n2']);
+  });
+
+  it('a status with no rows is an empty band, not an error', () => {
+    expect(statusBand(rows, 'done')).toEqual([]);
+  });
+
+  it('rows with no status form their own band', () => {
+    const withNull = [...rows, p({ id: 'x', statusId: null })];
+    expect(statusBand(withNull, null).map((r) => r.id)).toEqual(['x']);
   });
 });

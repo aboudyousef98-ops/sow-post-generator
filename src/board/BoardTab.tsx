@@ -56,6 +56,7 @@ import {
   groupProjects,
   installDateOf,
   isPresetActive,
+  idsBetween,
   selectedRows,
   sortByStatus,
   splitSections,
@@ -681,6 +682,9 @@ export default function BoardTab({
   );
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  /** Where a Shift-click range starts — the last row Ctrl-clicked or ticked. */
+  const [anchorId, setAnchorId] = useState<string | null>(null);
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
   // Column order is a viewer preference like widths and visibility. Reconciled
   // against the columns that exist now on every load, so a release that adds a
   // column does not hide it from anyone who has already dragged things about.
@@ -1012,6 +1016,50 @@ export default function BoardTab({
           projects: back.projects.map((p) =>
             byId.has(p.id) ? patchProject(p, { [field]: byId.get(p.id) } as ProjectPatch, me, now2) : p,
           ),
+        });
+      },
+    });
+  };
+
+  /**
+   * Archive or permanently delete many rows in ONE write.
+   *
+   * Not bulkApply: that builds its entries with activityForPatch, which
+   * deliberately SKIPS archivedAt and deletedAt because they are "logged as
+   * their own actions". A bulk archive routed through it would move the rows
+   * and record nothing.
+   */
+  const bulkLifecycle = (rows: BoardProject[], action: 'archive' | 'delete') => {
+    if (rows.length === 0) return;
+    const cur = boardRef.current;
+    const now = new Date().toISOString();
+    const ids = new Set(rows.map((r) => r.id));
+    const patch: ProjectPatch = action === 'archive' ? { archivedAt: now } : { deletedAt: now };
+    setBoard({
+      ...cur,
+      projects: cur.projects.map((p) => (ids.has(p.id) ? patchProject(p, patch, me, now) : p)),
+      activity: [...rows.map((r) => activityEntry(r.id, me, action, undefined, now)), ...cur.activity],
+    });
+    clearSelection();
+    const n = rows.length;
+    const noun = `${n} project${n === 1 ? '' : 's'}`;
+    if (action === 'delete') {
+      // No Undo, matching the single-row delete: the confirm modal IS the
+      // safety, and offering an undo would undersell how final this reads.
+      toast(`Deleted permanently — ${noun}.`);
+      return;
+    }
+    toast(`Archived — ${noun}.`, {
+      label: 'Undo',
+      fn: () => {
+        const back = boardRef.current;
+        const now2 = new Date().toISOString();
+        setBoard({
+          ...back,
+          projects: back.projects.map((p) =>
+            ids.has(p.id) ? patchProject(p, { archivedAt: undefined }, me, now2) : p,
+          ),
+          activity: [...rows.map((r) => activityEntry(r.id, me, 'restore', undefined, now2)), ...back.activity],
         });
       },
     });
@@ -1390,11 +1438,40 @@ export default function BoardTab({
     window.addEventListener('pointerup', onUp);
   };
 
+  /**
+   * Ctrl/Cmd-click toggles a row into the selection; Shift-click takes
+   * everything from the last-clicked row to this one (Aboud 2026-11-05).
+   *
+   * CAPTURE phase on purpose: the cells below are buttons — a status chip, a
+   * name editor, a rating — and without intercepting first, Ctrl-clicking a
+   * status cell would open its picker instead of selecting the row.
+   */
   const onRowClickCapture = (e: ReactMouseEvent<HTMLTableSectionElement>) => {
     if (suppressClickRef.current) {
       e.preventDefault();
       e.stopPropagation();
+      return;
     }
+    const multi = e.ctrlKey || e.metaKey;
+    if (!multi && !e.shiftKey) return;
+    const tr = (e.target as HTMLElement).closest('tr[data-project-id]');
+    const id = tr?.getAttribute('data-project-id');
+    if (!id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    // Shift-click otherwise drags a text selection across the rows it just
+    // highlighted, which looks like a bug.
+    window.getSelection?.()?.removeAllRanges();
+
+    if (e.shiftKey) {
+      const span = idsBetween(shownRef.current, anchorRef.current, id);
+      setSelected((s) => ({ ...s, ...Object.fromEntries(span.map((x) => [x, true])) }));
+      // The anchor deliberately STAYS put: shift-clicking again extends from
+      // the same origin rather than walking the anchor down the list.
+      return;
+    }
+    setSelected((s) => ({ ...s, [id]: !s[id] }));
+    setAnchorId(id);
   };
 
   const labelSortValue = (labels: BoardLabel[], id: string | null) => labelById(labels, id)?.sortOrder;
@@ -1466,6 +1543,10 @@ export default function BoardTab({
    */
   const shownRef = useRef(shown);
   shownRef.current = shown;
+  // Read through a ref for the same reason as `shown` above: the click-capture
+  // handler is created once per render but reads state at event time.
+  const anchorRef = useRef(anchorId);
+  anchorRef.current = anchorId;
   const toggleAllShown = (on: boolean) => {
     setSelected(on ? Object.fromEntries(shownRef.current.map((p) => [p.id, true])) : {});
   };
@@ -2392,9 +2473,65 @@ export default function BoardTab({
             }}
           />
           <span style={{ flex: 1 }} />
+          {/* The bulk bar could change three fields but remove nothing, so
+              clearing finished work meant deleting it one row at a time
+              (Aboud 2026-11-05). Archive is reversible and open to everyone;
+              permanent delete is admin-only behind a confirm. */}
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => bulkLifecycle(picked, 'archive')}
+            title="Hide these from the board — reversible, and Show archived brings them back"
+          >
+            Archive
+          </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn small danger"
+              onClick={() => setConfirmBulkDelete(true)}
+              title="Remove these for the whole team — cannot be undone"
+            >
+              Delete permanently
+            </button>
+          )}
           <button type="button" className="btn small secondary" onClick={clearSelection}>
             Clear selection
           </button>
+        </div>
+      )}
+
+      {confirmBulkDelete && (
+        <div className="modal-overlay" onClick={() => setConfirmBulkDelete(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Delete {picked.length} project{picked.length === 1 ? '' : 's'} permanently?</h3>
+            <p>
+              Removed for the whole team, and this cannot be undone. Archiving is usually enough.
+            </p>
+            {/* Name them. A bare count is not enough to check against what you
+                meant to select, and this is the most destructive action here. */}
+            <ul className="board-bulk-names">
+              {picked.slice(0, 12).map((p) => (
+                <li key={p.id}>{p.name}</li>
+              ))}
+              {picked.length > 12 && <li className="muted">…and {picked.length - 12} more</li>}
+            </ul>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setConfirmBulkDelete(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn danger"
+                onClick={() => {
+                  bulkLifecycle(picked, 'delete');
+                  setConfirmBulkDelete(false);
+                }}
+              >
+                Delete {picked.length} permanently
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

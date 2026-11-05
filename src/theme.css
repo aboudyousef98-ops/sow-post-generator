@@ -7467,3 +7467,18 @@ tr:hover .board-label-cell.empty {
 .upd-search-example:hover {
   text-decoration-thickness: 2px;
 }
+
+/* The names behind a bulk permanent delete. A count alone is not enough to
+   check a destructive action against what you meant to select. */
+.board-bulk-names {
+  margin: 0;
+  padding: 8px 10px;
+  max-height: 180px;
+  overflow: auto;
+  list-style: none;
+  border: 1px solid var(--dyn-line);
+  border-radius: var(--radius-input);
+  background: var(--dyn-subtle);
+  font-size: 13px;
+  line-height: 1.6;
+}
