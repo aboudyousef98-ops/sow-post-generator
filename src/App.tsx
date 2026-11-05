@@ -12,7 +12,7 @@ import SettingsTab from './components/SettingsTab';
 import SowNotesTab from './components/SowNotesTab';
 import UsersTab from './components/UsersTab';
 import { Toasts, type Toast } from './components/Toast';
-import { extraWorkRoster, saveCachedUsers } from './lib/auth';
+import { extraWorkRoster, reconcileSession, saveCachedUsers } from './lib/auth';
 import {
   fetchSharedAhjs,
   fetchSharedBoard,
@@ -141,9 +141,11 @@ interface AppProps {
   /** Absent only in tests, which render the inner app without the login gate. */
   session?: Session;
   onLogout?: () => void;
+  /** The roster pull found the session has drifted from the shared user list. */
+  onSessionChange?: (s: Session) => void;
 }
 
-export default function App({ session, onLogout }: AppProps = {}) {
+export default function App({ session, onLogout, onSessionChange }: AppProps = {}) {
   const [settings, setSettingsState] = useState<Settings>(() => loadSettings());
   const [records, setRecordsState] = useState<PostRecord[]>(() => loadRecords());
   const [ahjs, setAhjsState] = useState<Ahj[]>(() => loadAhjs());
@@ -190,6 +192,15 @@ export default function App({ session, onLogout }: AppProps = {}) {
           if (users.length === 0) return; // never cache an empty roster over a good one
           saveCachedUsers(users);
           setUsersStamp((n) => n + 1);
+          // The users blob is authoritative for who someone IS. Nothing used
+          // to carry a rename back to a browser that stayed signed in, and
+          // nobody signs out — so Yarob kept his pre-rename name for weeks,
+          // saw himself twice in every picker, and had everything he wrote
+          // stamped with a name that no longer matched his own rows
+          // (2026-11-05). Same object back when nothing drifted, so this is a
+          // no-op on every ordinary pull.
+          const fresh = reconcileSession(session, users);
+          if (fresh && fresh !== session) onSessionChange?.(fresh);
         })
         .catch(() => {
           /* offline — the cached roster from login still works */
@@ -198,7 +209,7 @@ export default function App({ session, onLogout }: AppProps = {}) {
     pullUsers();
     window.addEventListener('focus', pullUsers);
     return () => window.removeEventListener('focus', pullUsers);
-  }, [session]);
+  }, [session, onSessionChange]);
   const [aiStatus, setAiStatus] = useState<'checking' | 'ok' | 'off'>('checking');
   const [syncStatus, setSyncStatus] = useState<'checking' | 'synced' | 'local'>('checking');
 

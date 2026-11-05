@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App';
 import ErrorBoundary from './components/ErrorBoundary';
@@ -19,6 +19,14 @@ installStaleChunkAutoReload();
 function AuthGate() {
   const [session, setSession] = useState<Session | null>(() => loadSession());
 
+  // Stable identity: App's roster effect lists this in its deps, and an inline
+  // arrow would give it a new one every render and re-fetch the team list on
+  // each one.
+  const onSessionChange = useCallback((s: Session) => {
+    saveSession(s);
+    setSession(s);
+  }, []);
+
   if (!session) {
     return (
       <Login
@@ -33,6 +41,12 @@ function AuthGate() {
   return (
     <App
       session={session}
+      // The users blob is authoritative for who someone is; the session is a
+      // copy taken at login that nothing used to refresh. App calls this when
+      // the roster pull shows the two have drifted — a rename or a role change
+      // then lands without anyone having to sign out, which matters because
+      // nobody ever does.
+      onSessionChange={onSessionChange}
       onLogout={() => {
         clearSession();
         setSession(null);

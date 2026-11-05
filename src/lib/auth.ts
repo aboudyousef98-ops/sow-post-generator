@@ -3,6 +3,7 @@
 // MUST stay in sync with the seeded admin in netlify/functions/users.mts.
 
 import type { Session, TeamUser, UserRole } from '../types';
+import { renameValue } from './renames';
 
 const KEY_SESSION = 'sowpost.session';
 const KEY_USERS = 'sowpost.users';
@@ -84,10 +85,51 @@ export function loadSession(): Session | null {
   try {
     const raw = localStorage.getItem(KEY_SESSION);
     const s = raw ? (JSON.parse(raw) as Session) : null;
-    return s && typeof s.username === 'string' && typeof s.displayName === 'string' ? s : null;
+    if (!s || typeof s.username !== 'string' || typeof s.displayName !== 'string') return null;
+    // The session is written ONCE at login and sessions never expire, so a
+    // browser that signed in before the 2026-10-17 rename still carries the
+    // old spelling — which is what made Yarob see himself twice in every
+    // people picker, and made `me` fail an exact match against his own renamed
+    // rows. Normalising here fixes it on the very first paint, before any
+    // network. reconcileSession() below is the general case.
+    const displayName = renameValue(s.displayName);
+    if (displayName === s.displayName) return s;
+    // Write the normalised form back, rather than re-deriving it on every
+    // load forever. Without this the old spelling sits in localStorage
+    // permanently, and deleting its LEGACY_NAMES entry — which renames.ts
+    // says to do once no cache holds the old value — would silently bring
+    // the duplicate back.
+    const fixed = { ...s, displayName };
+    saveSession(fixed);
+    return fixed;
   } catch {
     return null;
   }
+}
+
+/**
+ * Bring a signed-in session back in line with the shared user list.
+ *
+ * The users blob is the only authoritative source for who someone is, and the
+ * session is a copy taken at login that nothing ever refreshed. Any rename or
+ * role change in Admin → Users therefore never reached a browser that stayed
+ * signed in — and nobody signs out, so "never" meant weeks.
+ *
+ * Returns the SAME session object when nothing changed, so a caller can store
+ * it unconditionally without causing a re-render every poll.
+ *
+ * Deliberately does NOT sign anyone out when their record is missing or
+ * deleted: a stale or half-fetched cache must never be the thing that locks
+ * someone out of the tool mid-shift.
+ */
+export function reconcileSession(session: Session | null, users: TeamUser[]): Session | null {
+  if (!session) return null;
+  const record = findUser(users, session.username);
+  if (!record) return session;
+  const displayName = renameValue((record.displayName ?? '').trim());
+  if (!displayName) return session;
+  if (displayName === session.displayName && record.role === session.role) return session;
+  return { ...session, displayName, role: record.role };
 }
 
 export function saveSession(session: Session): void {
@@ -126,11 +168,15 @@ export function saveCachedUsers(users: TeamUser[]): void {
  * offline/first-run case where no user list has been received yet.
  */
 export function extraWorkRoster(me?: string, fallback: string[] = []): string[] {
+  // Normalised BEFORE the Set, not after: a Set collapses exact strings only,
+  // so "Ya'rob Alnabelsi" and "Yarob Alnabelsi" both survived it and the same
+  // person appeared twice in every picker (reported by Yarob, 2026-11-05).
+  const clean = (n: string) => renameValue(n.trim());
   const cached = activeUsers(loadCachedUsers())
-    .map((u) => (u.displayName ?? '').trim())
+    .map((u) => clean(u.displayName ?? ''))
     .filter(Boolean);
-  const names = new Set(cached.length > 0 ? cached : fallback.map((n) => n.trim()).filter(Boolean));
-  const mine = (me ?? '').trim();
+  const names = new Set(cached.length > 0 ? cached : fallback.map(clean).filter(Boolean));
+  const mine = clean(me ?? '');
   if (mine) names.add(mine);
   return [...names].sort((a, b) => a.localeCompare(b));
 }

@@ -13,6 +13,7 @@ import {
   makeUser,
   mergeUsers,
   newSalt,
+  reconcileSession,
   saveCachedUsers,
   saveSession,
   verifyPassword,
@@ -120,11 +121,15 @@ describe('extraWorkRoster', () => {
 
   it('lists every account by display name, alphabetically', () => {
     saveCachedUsers([
+      // Stored under the pre-2026-10-17 spelling on purpose: a cached roster
+      // can still hold it, and the roster is expected to normalise rather
+      // than pass it through. Was asserted as "Ya'rob Alnabelsi" until
+      // 2026-11-05, when that turned out to be how he saw himself twice.
       user('yalnabelsi', { displayName: "Ya'rob Alnabelsi" }),
       user('aboudyousef', { displayName: 'Aboud Yousef', role: 'admin' }),
       user('ayaghmour', { displayName: 'Anas Yaghmour' }),
     ]);
-    expect(extraWorkRoster()).toEqual(['Aboud Yousef', 'Anas Yaghmour', "Ya'rob Alnabelsi"]);
+    expect(extraWorkRoster()).toEqual(['Aboud Yousef', 'Anas Yaghmour', 'Yarob Alnabelsi']);
   });
 
   it('excludes deleted users', () => {
@@ -160,5 +165,115 @@ describe('extraWorkRoster', () => {
       user('b', { displayName: '   ' }),
     ]);
     expect(extraWorkRoster()).toEqual(['Padded Name']);
+  });
+});
+
+// Yarob reported seeing his own name twice, and only he saw it (2026-11-05).
+//
+// The session is written ONCE at login (main.tsx) and never refreshed, and
+// sessions do not expire. He last signed in before the 2026-10-17 rename, so
+// his browser still held displayName "Ya'rob Alnabelsi" while the shared users
+// blob — checked against the live backup — correctly held "Yarob Alnabelsi".
+// extraWorkRoster dedupes with a Set, which only collapses EXACT strings, so
+// both spellings survived into every people picker on his screen.
+//
+// Worse than cosmetic: `me` is the actor stamped on everything he writes, and
+// it is matched exactly when filtering by coordinator or asking the activity
+// log "what did I touch yesterday".
+describe('a stale session cannot resurrect a renamed person', () => {
+  beforeEach(() => localStorage.clear());
+
+  const roster: TeamUser[] = [
+    user('aboudyousef', { displayName: 'Aboud Yousef' }),
+    user('yalnabelsi', { displayName: 'Yarob Alnabelsi' }),
+  ];
+
+  it('loadSession normalises a legacy display name', () => {
+    localStorage.setItem(
+      'sowpost.session',
+      JSON.stringify({ username: 'yalnabelsi', displayName: "Ya'rob Alnabelsi", role: 'member' }),
+    );
+    expect(loadSession()?.displayName).toBe('Yarob Alnabelsi');
+  });
+
+  it('the roster shows one Yarob, not two, even from a legacy session name', () => {
+    saveCachedUsers(roster);
+    const names = extraWorkRoster("Ya'rob Alnabelsi");
+    expect(names.filter((n) => n.toLowerCase().includes('nabelsi'))).toEqual(['Yarob Alnabelsi']);
+  });
+
+  it('a legacy name inside the cached user list is collapsed too', () => {
+    saveCachedUsers([user('yalnabelsi', { displayName: "Ya'rob Alnabelsi" })]);
+    expect(extraWorkRoster('Yarob Alnabelsi')).toEqual(['Yarob Alnabelsi']);
+  });
+
+  it('the curly-apostrophe spelling collapses as well', () => {
+    saveCachedUsers(roster);
+    expect(extraWorkRoster('Ya’rob Alnabelsi')).toEqual(['Aboud Yousef', 'Yarob Alnabelsi']);
+  });
+
+  // The general fix: the users blob is authoritative, so ANY rename reaches a
+  // signed-in browser on the next roster pull — not just the one in the
+  // legacy map.
+  describe('reconcileSession', () => {
+    it('adopts the display name the team list holds', () => {
+      const stale = { username: 'yalnabelsi', displayName: 'Old Spelling', role: 'member' as const };
+      expect(reconcileSession(stale, roster)?.displayName).toBe('Yarob Alnabelsi');
+    });
+
+    it('adopts a role change too — a demotion must not need a re-login', () => {
+      const stale = { username: 'yalnabelsi', displayName: 'Yarob Alnabelsi', role: 'admin' as const };
+      expect(reconcileSession(stale, roster)?.role).toBe('member');
+    });
+
+    it('returns the SAME object when nothing changed, so React does not churn', () => {
+      const good = { username: 'yalnabelsi', displayName: 'Yarob Alnabelsi', role: 'member' as const };
+      expect(reconcileSession(good, roster)).toBe(good);
+    });
+
+    it('leaves the session alone when the roster has not arrived', () => {
+      const s = { username: 'yalnabelsi', displayName: 'Yarob Alnabelsi', role: 'member' as const };
+      expect(reconcileSession(s, [])).toBe(s);
+    });
+
+    it('does NOT sign out a user the roster no longer lists', () => {
+      // Deleting someone is an admin action with its own consequences; having
+      // a stale cache must never be the thing that logs a person out.
+      const s = { username: 'ghost', displayName: 'Ghost', role: 'member' as const };
+      expect(reconcileSession(s, roster)).toBe(s);
+    });
+
+    it('ignores a deleted record rather than adopting its name', () => {
+      const dead = [user('yalnabelsi', { displayName: 'Deleted Name', deletedAt: '2026-11-01T00:00:00.000Z' })];
+      const s = { username: 'yalnabelsi', displayName: 'Yarob Alnabelsi', role: 'member' as const };
+      expect(reconcileSession(s, dead)).toBe(s);
+    });
+
+    it('no session is nothing to reconcile', () => {
+      expect(reconcileSession(null, roster)).toBeNull();
+    });
+  });
+});
+
+describe('the normalised session is written back, not just re-derived', () => {
+  beforeEach(() => localStorage.clear());
+
+  it('persists the corrected name so the legacy entry can be retired', () => {
+    localStorage.setItem(
+      'sowpost.session',
+      JSON.stringify({ username: 'yalnabelsi', displayName: "Ya'rob Alnabelsi", role: 'member' }),
+    );
+    loadSession();
+    const stored = JSON.parse(localStorage.getItem('sowpost.session') as string);
+    expect(stored.displayName).toBe('Yarob Alnabelsi');
+    expect(stored.username).toBe('yalnabelsi');
+    expect(stored.role).toBe('member');
+  });
+
+  it('does not touch storage when there was nothing to normalise', () => {
+    const good = JSON.stringify({ username: 'orajab', displayName: 'Omar Rajab', role: 'member' });
+    localStorage.setItem('sowpost.session', good);
+    loadSession();
+    expect(localStorage.getItem('sowpost.session')).toBe(good);
   });
 });
