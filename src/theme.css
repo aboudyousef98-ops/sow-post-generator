@@ -305,6 +305,26 @@ h4 {
   margin: 0 auto;
 }
 
+/**
+ * The Board only (Aboud 2026-11-06: "why dont we have this window wide").
+ *
+ * 1360px is a READING width — right for Compose, Requirements and SOW Notes,
+ * which are forms and prose. It is wrong for the board, which is a 12-column
+ * grid: at 1360px the table was scrolling 528px of itself out of sight while
+ * ~640px of empty page sat on either side. Clipped AND wasteful.
+ *
+ * 1900px is not a round number, it is the measured one: the active table wants
+ * 1628px and the Installation Review table wants 1798px (it carries the extra
+ * Reviewer column). 1900 clears both, so on a wide monitor nothing scrolls
+ * horizontally at all. Deliberately NOT `none` — on an ultrawide, a 3000px row
+ * puts "Project name" and "Last update" a desk apart and scanning gets worse,
+ * not better. On a laptop this is inert: the narrower viewport wins and the
+ * table scrolls exactly as it did before.
+ */
+.page.page-wide {
+  max-width: 1900px;
+}
+
 /* Phase 8 (Option A): form on the left, a sticky readiness + live preview
    aside on the right. Below 980px the aside drops under the form and stops
    sticking, so the one-page vertical flow comes back on a narrow screen. */
@@ -1561,6 +1581,17 @@ table.list tr.row:hover {
 .list-page {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+/**
+ * ...except the board, which borrows .list-page for its card chrome but is a
+ * wide data grid, not a reading-width list. 1100px here was the REAL cap —
+ * nested inside .page's 1360px, it is what actually clipped 528px of table off
+ * the right while the page still had room. Drafts and History keep 1100px;
+ * the board is bounded by .page-wide instead.
+ */
+.list-page.board-page {
+  max-width: none;
 }
 
 .list-head {

@@ -84,4 +84,20 @@ describe('Board → Compose linking', () => {
     fireEvent.click(screen.getByLabelText('Unlink from the board'));
     expect(screen.getByText(/link this post to/)).toBeTruthy();
   });
+
+  // Aboud 2026-11-06: the board is a 12-column grid and was scrolling itself
+  // out of sight inside a 1360px reading width. The wider cap is the board's
+  // alone — widening the form tabs too would make those read worse.
+  it('only the Board tab gets the wide page cap', () => {
+    render(<App session={ADMIN} />);
+
+    const main = () => document.querySelector('main.page')!;
+    expect(main().className).toContain('page-wide');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Compose' }));
+    expect(main().className).not.toContain('page-wide');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }));
+    expect(main().className).toContain('page-wide');
+  });
 });

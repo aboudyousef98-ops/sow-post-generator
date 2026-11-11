@@ -941,7 +941,8 @@ export default function App({ session, onLogout, onSessionChange }: AppProps = {
         </nav>
       )}
 
-      <main className="page">
+      {/* The board gets a wider cap than the form tabs — see .page-wide. */}
+      <main className={tab === 'board' ? 'page page-wide' : 'page'}>
         {tab === 'board' && (
           <BoardTab
             board={boardState}
