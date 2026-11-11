@@ -167,3 +167,65 @@ Driven in the real app on `localhost:8888` (signed in, live data, **read-only
   AL for this run…"* — worth reviewing once the team uses the dropdowns, since
   the derived bullet may make some of those chips redundant.
 - No board column for the wire material. Deliberately out of scope.
+
+---
+
+# DEPLOYED — 2026-11-11
+
+**Live:** `6af42a21d37498dd77bef507` (replaced `6aeca8d9` of 2026-11-05).
+`netlify deploy --build --prod` — sow is still NOT git-connected (re-verified
+via `getSite`: no `repo_url`), so the CLI is the only path, and `--build` is
+what injects the real `VITE_API_PATH_TOKEN` instead of baking `changeme`.
+Clean first attempt: 9 files, 12 functions, 18.3s.
+
+Shipped alongside item 1 of the package (Board wide-page cap), which had been
+sitting uncommitted in the working tree.
+
+## Data backup + diff (CLAUDE.md rule)
+
+- Pre:  `_versions/v38-live-backup-2026-11-11-predeploy/`
+- Post: `_versions/v39-live-backup-2026-11-11-postdeploy/`
+
+452 projects · 3285 activity · 65 updates · 409 records · 5 users · 75
+extra-work entries · 2 requirement boards.
+
+**All five stores byte-identical across the deploy.** No teammate wrote during
+the window, and the deploy touched nothing.
+
+## One artifact, from my own verification
+
+Driving the live site afterwards, I set the three dropdowns on the open draft
+**Andrew Devlieger** and reverted them. Production autosaves drafts, so that
+round trip persisted:
+
+- `wire: {}` — an empty object. `wireStatus({})` is `'unknown'` and
+  `wireFeedbackLine` returns `''`, so the post and every SF field render
+  exactly as before. Inert.
+- `updatedAt` 2026-11-10T10:32:44Z → 2026-11-11T08:43:03Z.
+
+Everything else on that record is byte-identical, and the other four stores
+are untouched. Deliberately NOT "fixed": undoing it means another write to the
+live store to correct a timestamp, which is a worse trade than the artifact.
+**Lesson for next time: verify on the unique deploy URL, or on a throwaway
+draft — not on a real one, because Compose autosaves.**
+
+## Verified live, on production
+
+- Rating list ends at **225 A**.
+- Size hint: `200 A · Table 310.12 → Copper #2/0 AWG · Aluminum #4/0 AWG`.
+- Flag: `✗ Mismatch — SLD copper, BOS aluminum`. The old strip is gone
+  (`.wire-strip` absent from the DOM).
+- SF **Design Feedback** field led with the full generated sentence —
+  *"…Please update the design SLD to #4/0 AWG aluminum for the 200 A service
+  (NEC Table 310.12) and re-upload it to Salesforce so the planset matches the
+  BOS."* — above the three bullets the coordinator had already typed. Ordering
+  is right on real data, not just in the fixture.
+
+## Still open
+
+1. **The team has not been told.** New row in Compose, new advisory line in the
+   readiness card. Also still un-told: the board re-rank from 2026-11-05.
+2. **`#` on kcmil.** AWG sizes carry the prefix, kcmil do not (`#3/0 AWG` but
+   `250 kcmil`). Only visible at 225 A aluminum. Confirm with Aboud.
+3. `main` was merged with `feat/board-automations` as part of this deploy —
+   that blocker is closed. Neither branch is pushed to `origin` yet.
