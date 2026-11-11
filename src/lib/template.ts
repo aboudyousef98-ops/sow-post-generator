@@ -7,14 +7,33 @@ import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
 import { batteryAnalysisLines, conduitRunLines, installNoteLines } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
+import { wireFeedbackLine } from './wireMaterial';
 
-/** A feedback note's bullet lines: polished when available+enabled, else raw; the default phrase when empty. */
+/**
+ * A feedback note's bullet lines: polished when available+enabled, else raw;
+ * the default phrase when empty.
+ *
+ * Design Feedback additionally LEADS with the wire-material verdict (Aboud
+ * 2026-11-11), derived from the two dropdowns rather than typed into the box.
+ * Prepending here rather than in buildLines() is deliberate: this one function
+ * is also what fills the Salesforce "Design Feedback" field (sfSubmission.ts),
+ * so the Slack post and the SF record can never disagree about the material —
+ * which is the exact disagreement Solrite was rejecting.
+ *
+ * The verdict is not a PolishKey, so no AI path can reword it, and it
+ * suppresses the "All good." default: a stated material IS the feedback.
+ */
 export function effectiveNoteLines(
   record: PostRecord,
   key: 'siteSurvey' | 'design' | 'homeowner',
   settings: Settings,
 ): string[] {
-  const lines = noteLines(effectiveText(record.notes[key], key, record));
+  const typed = noteLines(effectiveText(record.notes[key], key, record));
+  if (key === 'design') {
+    const verdict = wireFeedbackLine(record);
+    if (verdict) return [verdict, ...typed];
+  }
+  const lines = typed;
   if (lines.length) return lines;
   const defaults = settings.defaults ?? {
     siteSurvey: 'All good.',

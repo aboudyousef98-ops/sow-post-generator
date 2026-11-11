@@ -19,6 +19,7 @@ import type { Ahj, Level, PolishKey, PostRecord, Region, RewriteMode, Settings, 
 import InstallNotesCard from './InstallNotesCard';
 import NoteBox from './NoteBox';
 import OutputColumn from './OutputColumn';
+import WireCheckRow from './WireCheckRow';
 
 interface Props {
   record: PostRecord;
@@ -789,6 +790,10 @@ export default function ComposeTab({
 
       <div className="card">
         <h3>Feedback</h3>
+        {/* Wire material check (Aboud 2026-11-11) — above the boxes on purpose:
+            it writes the first bullet of Design Feedback, so the picks and the
+            sentence they produce are read in one glance. */}
+        <WireCheckRow record={record} update={update} toast={toast} />
         {FEEDBACK_FIELDS.map(({ key, label, placeholder }) => (
           <NoteBox
             key={key}

@@ -1384,6 +1384,16 @@ table.list tr.row:hover {
   background: var(--dyn-teal);
 }
 
+/* Advisory — seen, but not a gap (Aboud 2026-11-11, the wire material check).
+   Amber "!" rather than the orange empty ring a real gap gets, so it never
+   reads as "you cannot post yet". */
+.readiness-checks li.advisory .check-ring {
+  border-color: var(--dyn-orange);
+  background: var(--dyn-warn-bg);
+  color: var(--dyn-orange);
+  font-weight: 800;
+}
+
 .check-label {
   flex: 1;
 }
@@ -2247,6 +2257,70 @@ table.list tr.row:hover {
   color: var(--dyn-muted);
   margin-top: 2px;
 }
+/* Wire material check (Aboud 2026-11-11) — the verdict strip under the two
+   dropdowns, in the Feedback card above Design Feedback. Three states, all on
+   existing tokens: muted while unanswered, teal on a match, amber on a
+   mismatch. A mismatch is not an error — it is a change the Design Feedback is
+   now asking for — so it uses the warn family, never the red one. */
+.wire-size-hint {
+  margin: 0 0 8px;
+  font-size: 12.5px;
+  color: var(--dyn-ink);
+}
+
+.wire-size-hint .field-hint {
+  max-width: none;
+}
+
+.wire-strip {
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1.5;
+  border: 1px solid transparent;
+  background: var(--dyn-bg);
+  border-color: var(--dyn-border);
+  color: var(--dyn-muted);
+}
+
+.wire-strip.match {
+  background: var(--dyn-teal-soft);
+  border-color: var(--dyn-teal-line);
+  color: var(--dyn-ink);
+}
+
+.wire-strip.mismatch {
+  background: var(--dyn-warn-bg);
+  border-color: var(--dyn-orange);
+  color: var(--dyn-ink);
+}
+
+.wire-verdict {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.wire-sentence {
+  margin-top: 4px;
+}
+
+.wire-alu-flag {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--dyn-yellow);
+  color: var(--dyn-warn-ink);
+}
+
+/* Sits beside the three selects, whose labels push their controls down a line. */
+.wire-same {
+  align-self: center;
+  margin-top: 4px;
+}
+
 .roof-warning {
   margin: 6px 0 0;
   padding: 8px 12px;

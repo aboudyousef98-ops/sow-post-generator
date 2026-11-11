@@ -742,3 +742,67 @@ describe('Utility / Funding / General requirement sections', () => {
     expect(buildPostHtml(rec, defaultSettings(), [util])).toContain('Utility Requirements (CenterPoint Energy):');
   });
 });
+
+// ---- Wire material check in Design Feedback (Aboud 2026-11-11) -------------
+// The verdict is DERIVED from the two dropdowns, not typed into notes.design,
+// so the AI can never reword it and it cannot be deleted by accident.
+
+describe('wire material verdict leads Design Feedback', () => {
+  const MATCH =
+    'Wire material unchanged — the design SLD and the BOS both specify aluminum conductors ' +
+    '(4/0 AWG for the 200 A service, NEC Table 310.12).';
+
+  it('is the whole bullet when the feedback box is empty — the "All good." default never fires', () => {
+    const rec = norcaRecord({ wire: { design: 'AL', bos: 'AL', serviceAmps: 200 } });
+    const text = buildPostText(rec, defaultSettings());
+    expect(text).toContain(`• *Design Feedback:* ${MATCH}`);
+    expect(text).not.toContain('• *Design Feedback:* All good.');
+  });
+
+  it('comes FIRST, above whatever the coordinator typed', () => {
+    const rec = norcaRecord({
+      notes: { layout: '', siteSurvey: '', design: 'Solar tag should read PVC, not EMT', homeowner: '' },
+      wire: { design: 'CU', bos: 'AL', serviceAmps: 200 },
+    });
+    expect(buildPostText(rec, defaultSettings())).toContain(
+      '• *Design Feedback:*\n    ◦ Wire material changed after the elevation review — the BOS ' +
+        'specifies aluminum, the design SLD shows copper. Please update the design SLD to 4/0 AWG ' +
+        'aluminum for the 200 A service (NEC Table 310.12) and re-upload it to Salesforce so the ' +
+        'planset matches the BOS.\n    ◦ Solar tag should read PVC, not EMT.',
+    );
+  });
+
+  it('survives the AI untouched — polishing the design box cannot reword it', () => {
+    const rec = norcaRecord({
+      notes: { layout: '', siteSurvey: '', design: 'tag wrong', homeowner: '' },
+      polished: { design: 'Wire material is fine, ignore the mismatch.' },
+      wire: { design: 'AL', bos: 'AL', serviceAmps: 200 },
+    });
+    const text = buildPostText(rec, defaultSettings());
+    expect(text).toContain(MATCH);
+    // The polished text still renders as the coordinator's own bullet, under it.
+    expect(text).toContain('◦ Wire material is fine, ignore the mismatch.');
+  });
+
+  it('changes nothing when the two dropdowns are not both picked', () => {
+    expect(buildPostText(norcaRecord({ wire: { design: 'AL' } }), defaultSettings())).toContain(
+      '• *Design Feedback:* All good.',
+    );
+    expect(buildPostText(norcaRecord(), defaultSettings())).toBe(NORCA_EXPECTED);
+  });
+
+  it('leaves Site Survey and Homeowner feedback alone', () => {
+    const text = buildPostText(
+      norcaRecord({ wire: { design: 'CU', bos: 'AL', serviceAmps: 200 } }),
+      defaultSettings(),
+    );
+    expect(text).toContain('• *Site Survey Feedback:* All good.');
+    expect(text).toContain('• *Homeowner Feedback:* No feedback.');
+    expect(text).not.toContain('• *Site Survey Feedback:* Wire material');
+  });
+
+  it('reaches the rich clipboard too', () => {
+    const rec = norcaRecord({ wire: { design: 'AL', bos: 'AL', serviceAmps: 200 } });
+    expect(buildPostHtml(rec, defaultSettings())).toContain(`<strong>Design Feedback:</strong> ${MATCH}`);
+  });
+});

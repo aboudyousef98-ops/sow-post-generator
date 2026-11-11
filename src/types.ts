@@ -210,6 +210,27 @@ export interface InstallNotes {
   other: string;
 }
 
+// ---- Wire material check (Aboud 2026-11-11) ------------------------------
+// Solrite rejects a project when the conductors in the install evidence are
+// not the ones on the submitted planset ("evidence (Al) … planset (Cu)"). The
+// material can legitimately change after the elevation review; what was
+// missing was anything in the handoff that SAID so. These two picks drive a
+// derived first bullet under Design Feedback — see lib/wireMaterial.ts.
+
+export type WireMaterial = 'CU' | 'AL';
+
+/** Service or feeder rating, in amperes — the rows of NEC Table 310.12. */
+export type ServiceAmps = 100 | 110 | 125 | 150 | 175 | 200 | 225 | 250 | 300 | 350 | 400;
+
+export interface WireCheck {
+  /** Drives the conductor size quoted in the feedback line. Optional. */
+  serviceAmps?: ServiceAmps;
+  /** What the design SLD / planset uploaded to Salesforce shows. */
+  design?: WireMaterial;
+  /** What the BOS and the installation will actually use. */
+  bos?: WireMaterial;
+}
+
 /**
  * Every free-text box the AI may polish. Dropdown-derived values (walls,
  * orientation, stories, service) are deliberately NOT here — they can never be
@@ -235,6 +256,17 @@ export interface PostRecord {
   notes: Notes; // raw drafts (never overwritten by AI)
   /** Guided Installation Notes (Phase 7). Absent on pre-Phase-7 records until `migrateRecord()` seeds it. */
   installNotes?: InstallNotes;
+  /**
+   * Wire material check (Aboud 2026-11-11). OPTIONAL — the same no-migration
+   * contract as roofMaterial/batteryBase: records written before this date
+   * simply have no key, and render exactly as they did.
+   *
+   * Deliberately TOP LEVEL rather than inside InstallNotes: it drives Design
+   * Feedback, not the Installation Notes bullet, and keeping it out of
+   * InstallNotes means it can never become a PolishKey — so no AI path can
+   * reword the material. Pinned by wireMaterial.test.ts.
+   */
+  wire?: WireCheck;
   /** AI results per box; an absent key means "not polished". */
   polished?: Partial<Record<PolishKey, string>>;
   /**

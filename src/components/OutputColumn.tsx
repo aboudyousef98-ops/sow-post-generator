@@ -10,6 +10,7 @@ import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
 import { noteCheck } from '../lib/api';
+import { SHORT, wireStatus } from '../lib/wireMaterial';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
 import type { BoardProject } from '../board/types';
 import type { Ahj, PostRecord, Settings } from '../types';
@@ -33,6 +34,13 @@ interface Check {
   label: string;
   done: boolean;
   action?: string;
+  /**
+   * An amber "!" ring instead of a tick or an empty ring (Aboud 2026-11-11).
+   * A thing worth seeing that is NOT a gap: it never touches `ready`, which
+   * stays driven by missingRequired() alone. Built for the wire material
+   * check, which this site deliberately does not gate.
+   */
+  tone?: 'advisory';
 }
 
 export default function OutputColumn({ record, settings, ahjs, boardProjects, update, onMarkPosted, toast }: Props) {
@@ -169,6 +177,24 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
   // boards since 2026-10-08, and a utility must not match a Jurisdiction.
   const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
   const ahjApproved = !!ahjMatch && record.ahjApprovedId === ahjMatch.ahj.id;
+  // Wire material (Aboud 2026-11-11). Advisory in every state but a clean
+  // match: unanswered and mismatched both stay visible here, but neither
+  // blocks — the site does not gate fields, so visibility is the whole
+  // mechanism. A mismatch is NOT an error: it is a legitimate change that the
+  // Design Feedback is now asking the designer to carry into the SLD.
+  const wire = record.wire ?? {};
+  const wireCheck: Check =
+    wireStatus(record) === 'match'
+      ? { label: `Wire material matches — ${SHORT[wire.bos!].toLowerCase()}`, done: true }
+      : wireStatus(record) === 'mismatch'
+        ? {
+            label: `Wire material mismatch — SLD ${SHORT[wire.design!].toLowerCase()}, BOS ${SHORT[wire.bos!].toLowerCase()}`,
+            done: false,
+            tone: 'advisory',
+            action: 'In Design Feedback',
+          }
+        : { label: 'Wire material not confirmed', done: false, tone: 'advisory', action: 'Pick' };
+
   // The battery installation analysis is deliberately absent from this list
   // (Aboud 2026-11-03) — it is not required, so it must not read as a gap.
   const checks: Check[] = [
@@ -187,6 +213,7 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
         : 'No AHJ board on file',
       done: true,
     },
+    wireCheck,
   ];
 
   return (
@@ -204,8 +231,8 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
 
         <ul className="readiness-checks">
           {checks.map((c) => (
-            <li key={c.label} className={c.done ? 'done' : 'todo'}>
-              <span className="check-ring">{c.done ? '✓' : ''}</span>
+            <li key={c.label} className={c.done ? 'done' : c.tone === 'advisory' ? 'advisory' : 'todo'}>
+              <span className="check-ring">{c.done ? '✓' : c.tone === 'advisory' ? '!' : ''}</span>
               <span className="check-label">{c.label}</span>
               {!c.done && c.action && <span className="check-action">{c.action}</span>}
             </li>

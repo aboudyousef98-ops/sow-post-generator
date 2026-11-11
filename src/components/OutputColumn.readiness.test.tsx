@@ -84,3 +84,55 @@ describe('readiness card — the battery analysis never gates posting', () => {
     expect(screen.getByText('Site address')).toBeTruthy();
   });
 });
+
+// ---- Wire material (Aboud 2026-11-11) --------------------------------------
+// Same contract as the battery block: shown, never gated. The site does not
+// use Required — the row is advisory so the gap is visible without blocking.
+
+describe('readiness card — the wire material check never gates posting', () => {
+  afterEach(cleanup);
+
+  function renderWire(wire: PostRecord['wire']) {
+    render(
+      <OutputColumn
+        record={makeRecord({ wire })}
+        settings={defaultSettings()}
+        boardProjects={[]}
+        update={() => {}}
+        onMarkPosted={() => {}}
+        onNewPost={() => {}}
+        onSaveDraft={() => {}}
+        toast={() => {}}
+      />,
+    );
+  }
+
+  it('unanswered is advisory, not a gap — still Ready to post', () => {
+    renderWire(undefined);
+    expect(screen.getByText(/Ready to post/i)).toBeTruthy();
+    expect(copyButton().disabled).toBe(false);
+    expect(markPosted().disabled).toBe(false);
+    const row = screen.getByText('Wire material not confirmed').closest('li')!;
+    expect(row.className).toBe('advisory');
+  });
+
+  it('a MISMATCH is advisory too — it is a legitimate change, not an error', () => {
+    renderWire({ design: 'CU', bos: 'AL' });
+    expect(screen.getByText(/Ready to post/i)).toBeTruthy();
+    expect(copyButton().disabled).toBe(false);
+    const row = screen.getByText(/Wire material mismatch — SLD copper, BOS aluminum/).closest('li')!;
+    expect(row.className).toBe('advisory');
+    expect(row.textContent).toContain('In Design Feedback');
+  });
+
+  it('a match ticks green', () => {
+    renderWire({ design: 'AL', bos: 'AL' });
+    const row = screen.getByText('Wire material matches — aluminum').closest('li')!;
+    expect(row.className).toBe('done');
+  });
+
+  it('never changes the "things before posting" count', () => {
+    renderWire({ design: 'CU', bos: 'AL' });
+    expect(screen.queryByText(/things before posting/i)).toBeNull();
+  });
+});

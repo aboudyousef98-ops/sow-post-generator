@@ -302,3 +302,42 @@ describe('battery installation analysis — SF placement and plain-text shape', 
     expect(v.endsWith('All required clearance requirements have been met.')).toBe(true);
   });
 });
+
+// ---- Wire material check (Aboud 2026-11-11) --------------------------------
+// The whole point of the feature: the SF Design Feedback field and the Slack
+// post must state the SAME material, because Solrite compares the planset
+// against the install evidence.
+
+describe('wire material verdict in the SF Design Feedback field', () => {
+  it('opens the field, above whatever the coordinator typed', () => {
+    const v = fieldValue(
+      rec({
+        notes: { layout: '', siteSurvey: '', design: 'Solar tag should read PVC, not EMT', homeowner: '' },
+        wire: { design: 'CU', bos: 'AL', serviceAmps: 200 },
+      }),
+      'design',
+    );
+    expect(v.split('\n')[0]).toBe(
+      '- Wire material changed after the elevation review — the BOS specifies aluminum, the design ' +
+        'SLD shows copper. Please update the design SLD to 4/0 AWG aluminum for the 200 A service ' +
+        '(NEC Table 310.12) and re-upload it to Salesforce so the planset matches the BOS.',
+    );
+    expect(v).toContain('- Solar tag should read PVC, not EMT.');
+  });
+
+  it('is the entire field, with no "All good." default, when nothing was typed', () => {
+    const v = fieldValue(rec({ wire: { design: 'AL', bos: 'AL' } }), 'design');
+    expect(v).toBe('Wire material unchanged — the design SLD and the BOS both specify aluminum conductors.');
+  });
+
+  it('leaves the field exactly as it was when the dropdowns are unanswered', () => {
+    expect(fieldValue(rec(), 'design')).toBe('All good.');
+  });
+
+  it('never leaks into any other SF field', () => {
+    const fields = buildSfSubmission(rec({ wire: { design: 'CU', bos: 'AL' } }), defaultSettings());
+    for (const f of fields) {
+      if (f.id !== 'design') expect(f.value).not.toContain('Wire material');
+    }
+  });
+});
