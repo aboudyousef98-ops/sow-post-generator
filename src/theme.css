@@ -2257,62 +2257,53 @@ table.list tr.row:hover {
   color: var(--dyn-muted);
   margin-top: 2px;
 }
-/* Wire material check (Aboud 2026-11-11) — the verdict strip under the two
-   dropdowns, in the Feedback card above Design Feedback. Three states, all on
-   existing tokens: muted while unanswered, teal on a match, amber on a
-   mismatch. A mismatch is not an error — it is a change the Design Feedback is
-   now asking for — so it uses the warn family, never the red one. */
+/* Wire material check (Aboud 2026-11-11). One row: three picks, a shortcut
+   button, and a one-line flag. The flag is the ONLY verdict in the form — the
+   strip that repeated the generated sentence was cut on sight ("no need for
+   this long things"), because the sentence is already on screen in the Slack
+   preview and the SF Design Feedback field.
+
+   A mismatch uses the warn family, never the danger one: it is a legitimate
+   change the Design Feedback is now asking for, not an error. */
 .wire-size-hint {
-  margin: 0 0 8px;
+  margin: 0 0 10px;
   font-size: 12.5px;
   color: var(--dyn-ink);
 }
 
-.wire-size-hint .field-hint {
-  max-width: none;
-}
-
-.wire-strip {
-  margin: 0 0 14px;
-  padding: 9px 12px;
-  border-radius: 6px;
-  font-size: 13px;
-  line-height: 1.5;
-  border: 1px solid transparent;
+.wire-flag {
+  align-self: center;
+  margin-top: 4px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--dyn-border);
   background: var(--dyn-bg);
-  border-color: var(--dyn-border);
   color: var(--dyn-muted);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
-.wire-strip.match {
+.wire-flag.match {
   background: var(--dyn-teal-soft);
   border-color: var(--dyn-teal-line);
-  color: var(--dyn-ink);
+  color: var(--dyn-teal-ink);
 }
 
-.wire-strip.mismatch {
+.wire-flag.mismatch {
   background: var(--dyn-warn-bg);
   border-color: var(--dyn-orange);
-  color: var(--dyn-ink);
-}
-
-.wire-verdict {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.wire-sentence {
-  margin-top: 4px;
+  color: var(--dyn-warn-ink);
 }
 
 .wire-alu-flag {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--dyn-yellow);
+  margin: 0 0 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--dyn-warn-bg);
+  border: 1px solid var(--dyn-yellow);
   color: var(--dyn-warn-ink);
+  font-size: 13px;
 }
 
 /* Sits beside the three selects, whose labels push their controls down a line. */

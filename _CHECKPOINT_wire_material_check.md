@@ -25,17 +25,21 @@ Feedback box, and one derived sentence.
 
 | Field | Required? | Purpose |
 |---|---|---|
-| Service rating | no | 100–400 A, NEC Table 310.12 rows. Names the size in the ask. |
+| Service rating | no | 100–225 A (Aboud: *"remove 250A and above… we dont use them"*). Names the size in the ask. |
 | Design SLD shows | no | What the planset in Salesforce says. |
 | BOS / install uses | no | What will actually be installed. |
 
-The verdict strip under them shows one of three states and the **exact
-sentence** Design Feedback will carry:
+A one-line flag sits on the same row as the picks:
 
-- **unknown** (grey) — "Pick both to state the match in Design Feedback."
-- **match** (teal) — "✓ Match — aluminum in both."
-- **mismatch** (amber) — "✗ Mismatch — SLD copper, BOS aluminum." + a
-  **Copy ask** button that puts just the request on the clipboard.
+- **unknown** (grey) — `Not confirmed`
+- **match** (teal) — `✓ Match — aluminum`
+- **mismatch** (amber) — `✗ Mismatch — SLD copper, BOS aluminum`
+
+The first build put a full strip there, repeating the generated sentence with
+a "Copy ask" button. Aboud cut it on sight — *"i want it, but only a flag
+saying if we match or not, no need for this long things"*. He was right: the
+sentence was already on screen twice, in the Slack preview and in the SF
+Design Feedback field. The flag is the only verdict the form shows now.
 
 Generated sentences (`src/lib/wireMaterial.ts`):
 
@@ -62,7 +66,7 @@ service rating is picked.
 | **BOS never auto-fills** | A silent default is exactly how the mismatches went unnoticed. "Same as design" makes the no-change case one click instead. |
 | **Says nothing while unanswered** | A "pending" line inside a Solrite submission is worse than silence. The gap is shown in the form and the readiness card instead. |
 
-## 4. Two things worth knowing
+## 4. Three things worth knowing
 
 **The reference graphic has a typo.** The Table 310.12 image circulated to the
 team prints `30/` for 225 A copper. The real table reads **3/0 AWG**. The code
@@ -72,14 +76,22 @@ picture.
 **Free jurisdiction cross-check.** Othman's 509-jurisdiction aluminum list was
 already in the tool (`src/lib/aluminumWiring.ts`, added 2026-10-20). When the
 BOS picks aluminum **and** the jurisdiction's stance starts with `Not allowed`
-or `Restricted`, the strip echoes that requirement. Display-only, never posted
+or `Restricted`, a yellow line under the row echoes that requirement. Display-only, never posted
 — same contract as the existing Jurisdiction `.alu-banner`. This catches a
 second class of rejection before it happens. It stays silent on a copper BOS,
 because copper in a copper-only city is exactly right.
 
-**Table 310.12 scope**, repeated as a hint under the rating: dwelling
-*service/feeder* conductors, where no adjustment or correction factors apply.
-It is guidance for the wording — the coordinator still picks the material.
+**The dropdown stops at 225 A, the table does not.** `SERVICE_AMPS` (what the
+dropdown offers) is 100–225; `TABLE_310_12` keeps all 11 NEC rows and the
+`ServiceAmps` type still admits 250–400, so a record saved with one of those —
+or a sheet that brings them back — still resolves a size rather than rendering
+a dangling sentence.
+
+The size hint under the rating is the bare lookup: `200 A · Table 310.12 →
+Copper 2/0 AWG · Aluminum 4/0 AWG`. The scope footnote that first sat beneath
+it ("dwelling service/feeder conductors, where no adjustment or correction
+factors apply") was cut as noise — the scope still lives in a code comment in
+`wireMaterial.ts`, where the next person to change the table will read it.
 
 ## 5. Readiness card
 
@@ -103,7 +115,7 @@ error — it is a legitimate change the Design Feedback is now asking for.
 `PostRecord.wire?` — all optional, `schemaVersion` stays 1, no migration),
 `src/lib/template.ts` (`effectiveNoteLines`), `src/components/ComposeTab.tsx`
 (renders the row), `src/components/OutputColumn.tsx` (`tone`, one row),
-`src/theme.css` (`.wire-strip` family + `li.advisory`),
+`src/theme.css` (`.wire-flag` family + `li.advisory`),
 `src/lib/template.test.ts`, `src/lib/sfSubmission.test.ts`,
 `src/components/OutputColumn.readiness.test.tsx`.
 
@@ -113,26 +125,30 @@ mobile (Compose is desktop-only), `Skeleton.tsx` (no new screen).
 
 ## 7. Tested
 
-Full gate: `npx vitest run --no-file-parallelism` → **69 files, 1248 tests, all
+Full gate: `npx vitest run --no-file-parallelism` → **69 files, 1249 tests, all
 green**. `npm run typecheck` and `npm run lint` clean.
 
-New coverage (32 tests): all 11 table rows incl. the 3/0 pin · `wireStatus`
+New coverage (33 tests): all 11 table rows incl. the 3/0 pin · `wireStatus`
 tri-state · all four sentence shapes · the AI-reach guards · Design Feedback
 ordering and the suppressed "All good." default · the SF field · no leak into
-any other SF field or into Site Survey / Homeowner · all three strip states ·
-"Same as design" · no BOS auto-fill · the jurisdiction flag on and off ·
+any other SF field or into Site Survey / Homeowner · all three flag states ·
+the flag staying short (no sentence, no strip, no copy button) ·
+the 100–225 A option list · no scope footnote · "Same as design" · no BOS auto-fill · the jurisdiction flag on and off ·
 readiness never flipping `ready`.
 
 Driven in the real app on `localhost:8888` (signed in, live data, **read-only
 — nothing saved**):
 
-1. Unanswered → grey strip, amber `Wire material not confirmed · Pick`,
+1. Unanswered → grey `Not confirmed` flag, amber readiness row `Wire material
+   not confirmed · Pick`,
    **Ready to post still green**. ✅
-2. 200 A → `200 A · Table 310.12 → Copper 2/0 AWG · Aluminum 4/0 AWG`. ✅
-3. SLD Copper + BOS Aluminum → amber strip with the full ask; the SF
-   **Design Feedback** field read back byte-identical to the strip. ✅
-4. **Same as design** → teal strip, bullet flipped to "unchanged", readiness
-   row went green. ✅
+2. 200 A → `200 A · Table 310.12 → Copper 2/0 AWG · Aluminum 4/0 AWG`, and the
+   rating list ends at 225 A. ✅
+3. SLD Copper + BOS Aluminum → amber `✗ Mismatch — SLD copper, BOS aluminum`;
+   the SF **Design Feedback** field read back the full generated sentence,
+   byte-identical to the unit test. ✅
+4. **Same as design** → teal `✓ Match — copper`, bullet flipped to
+   "unchanged", readiness row went green. ✅
 5. Dropdowns reset to blank; the open draft left exactly as found.
 
 ## 8. Not done / open

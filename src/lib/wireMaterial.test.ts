@@ -2,6 +2,7 @@
 // rejections for "evidence (Al) does not match the planset (Cu)".
 
 import { describe, expect, it } from 'vitest';
+import type { ServiceAmps } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
 import { POLISH_KEYS } from './installNotes';
 import {
@@ -16,8 +17,11 @@ import {
 
 describe('TABLE_310_12', () => {
   it('carries every row of the NEC table, in ascending order', () => {
-    expect(SERVICE_AMPS).toEqual([100, 110, 125, 150, 175, 200, 225, 250, 300, 350, 400]);
-    for (const a of SERVICE_AMPS) {
+    // The dropdown stops at 225 A (Aboud 2026-11-11) — the table keeps the
+    // rows above it so an older record still resolves a size.
+    expect(SERVICE_AMPS).toEqual([100, 110, 125, 150, 175, 200, 225]);
+    expect(Object.keys(TABLE_310_12).map(Number)).toEqual([100, 110, 125, 150, 175, 200, 225, 250, 300, 350, 400]);
+    for (const a of Object.keys(TABLE_310_12).map(Number) as ServiceAmps[]) {
       expect(TABLE_310_12[a].cu).toBeTruthy();
       expect(TABLE_310_12[a].al).toBeTruthy();
     }

@@ -26,8 +26,16 @@ const WORD: Record<WireMaterial, string> = { CU: 'copper', AL: 'aluminum' };
 /** The material as it reads in a UI chip. */
 export const SHORT: Record<WireMaterial, string> = { CU: 'Copper', AL: 'Aluminum' };
 
-/** Table 310.12 rows, ascending — also the dropdown order. */
-export const SERVICE_AMPS: ServiceAmps[] = [100, 110, 125, 150, 175, 200, 225, 250, 300, 350, 400];
+/**
+ * What the Service rating dropdown offers, ascending.
+ *
+ * Stops at 225 A (Aboud 2026-11-11: "remove 250A and above from the drop
+ * down we dont use them"). TABLE_310_12 below deliberately keeps the full
+ * table: `ServiceAmps` still admits 250–400, so a record saved with one of
+ * those — or a sheet that later brings them back — still resolves a size
+ * instead of rendering a dangling sentence.
+ */
+export const SERVICE_AMPS: ServiceAmps[] = [100, 110, 125, 150, 175, 200, 225];
 
 /**
  * NEC Table 310.12 — Single-Phase Dwelling Services and Feeders.

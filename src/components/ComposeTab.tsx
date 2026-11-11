@@ -793,7 +793,7 @@ export default function ComposeTab({
         {/* Wire material check (Aboud 2026-11-11) — above the boxes on purpose:
             it writes the first bullet of Design Feedback, so the picks and the
             sentence they produce are read in one glance. */}
-        <WireCheckRow record={record} update={update} toast={toast} />
+        <WireCheckRow record={record} update={update} />
         {FEEDBACK_FIELDS.map(({ key, label, placeholder }) => (
           <NoteBox
             key={key}
