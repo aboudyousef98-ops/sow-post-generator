@@ -28,8 +28,8 @@ describe('TABLE_310_12', () => {
   });
 
   it('matches the printed table at the rows the team actually sees', () => {
-    expect(TABLE_310_12[200]).toEqual({ cu: '2/0 AWG', al: '4/0 AWG' });
-    expect(TABLE_310_12[100]).toEqual({ cu: '4 AWG', al: '2 AWG' });
+    expect(TABLE_310_12[200]).toEqual({ cu: '#2/0 AWG', al: '#4/0 AWG' });
+    expect(TABLE_310_12[100]).toEqual({ cu: '#4 AWG', al: '#2 AWG' });
     expect(TABLE_310_12[400]).toEqual({ cu: '400 kcmil', al: '600 kcmil' });
   });
 
@@ -37,14 +37,26 @@ describe('TABLE_310_12', () => {
   // the graphic; NEC Table 310.12 reads 3/0 AWG. Pinned so nobody "fixes" the
   // code back to the picture.
   it('reads 3/0 AWG at 225 A copper, not the "30/" of the reference image', () => {
-    expect(TABLE_310_12[225].cu).toBe('3/0 AWG');
+    expect(TABLE_310_12[225].cu).toBe('#3/0 AWG');
   });
 
   it('wireSizeFor resolves both materials, and nothing without a rating', () => {
-    expect(wireSizeFor(200, 'AL')).toBe('4/0 AWG');
-    expect(wireSizeFor(200, 'CU')).toBe('2/0 AWG');
+    expect(wireSizeFor(200, 'AL')).toBe('#4/0 AWG');
+    expect(wireSizeFor(200, 'CU')).toBe('#2/0 AWG');
     expect(wireSizeFor(undefined, 'AL')).toBeUndefined();
     expect(wireSizeFor(200, undefined)).toBeUndefined();
+  });
+
+  // Aboud 2026-11-11: "all wires must have a prefix #2/0 #3/0 #3 #4 like
+  // this". Every example he gave was an AWG gauge — "#250 kcmil" is not a
+  // thing, so the prefix stops at the AWG/kcmil boundary.
+  it('prefixes every AWG size with #, and no kcmil size', () => {
+    const sizes = Object.values(TABLE_310_12).flatMap((r) => [r.cu, r.al]);
+    expect(sizes.length).toBe(22);
+    for (const s of sizes) {
+      if (s.includes('AWG')) expect(s.startsWith('#')).toBe(true);
+      else expect(s).toMatch(/^\d+ kcmil$/);
+    }
   });
 
   it('offers exactly two materials', () => {
@@ -81,7 +93,7 @@ describe('wireFeedbackLine', () => {
   it('states an unchanged material, with the size when the rating is known', () => {
     expect(wireFeedbackLine(makeRecord({ wire: { design: 'AL', bos: 'AL', serviceAmps: 200 } }))).toBe(
       'Wire material unchanged — the design SLD and the BOS both specify aluminum conductors ' +
-        '(4/0 AWG for the 200 A service, NEC Table 310.12).',
+        '(#4/0 AWG for the 200 A service, NEC Table 310.12).',
     );
   });
 
@@ -94,7 +106,7 @@ describe('wireFeedbackLine', () => {
   it('asks for the SLD change, naming the size, when the rating is known', () => {
     expect(wireFeedbackLine(makeRecord({ wire: { design: 'CU', bos: 'AL', serviceAmps: 200 } }))).toBe(
       'Wire material changed after the elevation review — the BOS specifies aluminum, the design SLD ' +
-        'shows copper. Please update the design SLD to 4/0 AWG aluminum for the 200 A service ' +
+        'shows copper. Please update the design SLD to #4/0 AWG aluminum for the 200 A service ' +
         '(NEC Table 310.12) and re-upload it to Salesforce so the planset matches the BOS.',
     );
   });
@@ -111,7 +123,7 @@ describe('wireFeedbackLine', () => {
 describe('wireRequestText', () => {
   it('is the ask on its own, for pasting to the designer', () => {
     expect(wireRequestText(makeRecord({ wire: { design: 'CU', bos: 'AL', serviceAmps: 150 } }))).toBe(
-      'Please update the design SLD to 2/0 AWG aluminum for the 150 A service (NEC Table 310.12) ' +
+      'Please update the design SLD to #2/0 AWG aluminum for the 150 A service (NEC Table 310.12) ' +
         'and re-upload it to Salesforce so the planset matches the BOS.',
     );
   });

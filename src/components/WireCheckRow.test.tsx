@@ -65,8 +65,8 @@ describe('WireCheckRow', () => {
   it('quotes Table 310.12 for the picked rating', () => {
     mount();
     fireEvent.change(ratingSelect(), { target: { value: '225' } });
-    // 3/0, not the "30/" typo in the reference graphic.
-    expect(screen.getByText(/Copper 3\/0 AWG · Aluminum 250 kcmil/)).toBeTruthy();
+    // #3/0, not the "30/" typo in the reference graphic. kcmil takes no #.
+    expect(screen.getByText(/Copper #3\/0 AWG · Aluminum 250 kcmil/)).toBeTruthy();
   });
 
   // Aboud 2026-11-11: "remove 250A and above from the drop down we dont use them".

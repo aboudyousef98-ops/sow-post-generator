@@ -319,7 +319,7 @@ describe('wire material verdict in the SF Design Feedback field', () => {
     );
     expect(v.split('\n')[0]).toBe(
       '- Wire material changed after the elevation review — the BOS specifies aluminum, the design ' +
-        'SLD shows copper. Please update the design SLD to 4/0 AWG aluminum for the 200 A service ' +
+        'SLD shows copper. Please update the design SLD to #4/0 AWG aluminum for the 200 A service ' +
         '(NEC Table 310.12) and re-upload it to Salesforce so the planset matches the BOS.',
     );
     expect(v).toContain('- Solar tag should read PVC, not EMT.');

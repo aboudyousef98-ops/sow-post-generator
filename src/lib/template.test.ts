@@ -750,7 +750,7 @@ describe('Utility / Funding / General requirement sections', () => {
 describe('wire material verdict leads Design Feedback', () => {
   const MATCH =
     'Wire material unchanged — the design SLD and the BOS both specify aluminum conductors ' +
-    '(4/0 AWG for the 200 A service, NEC Table 310.12).';
+    '(#4/0 AWG for the 200 A service, NEC Table 310.12).';
 
   it('is the whole bullet when the feedback box is empty — the "All good." default never fires', () => {
     const rec = norcaRecord({ wire: { design: 'AL', bos: 'AL', serviceAmps: 200 } });
@@ -766,7 +766,7 @@ describe('wire material verdict leads Design Feedback', () => {
     });
     expect(buildPostText(rec, defaultSettings())).toContain(
       '• *Design Feedback:*\n    ◦ Wire material changed after the elevation review — the BOS ' +
-        'specifies aluminum, the design SLD shows copper. Please update the design SLD to 4/0 AWG ' +
+        'specifies aluminum, the design SLD shows copper. Please update the design SLD to #4/0 AWG ' +
         'aluminum for the 200 A service (NEC Table 310.12) and re-upload it to Salesforce so the ' +
         'planset matches the BOS.\n    ◦ Solar tag should read PVC, not EMT.',
     );

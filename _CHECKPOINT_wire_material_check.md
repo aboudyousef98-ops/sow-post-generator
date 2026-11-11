@@ -44,11 +44,11 @@ Design Feedback field. The flag is the only verdict the form shows now.
 Generated sentences (`src/lib/wireMaterial.ts`):
 
 > Wire material unchanged — the design SLD and the BOS both specify aluminum
-> conductors (4/0 AWG for the 200 A service, NEC Table 310.12).
+> conductors (#4/0 AWG for the 200 A service, NEC Table 310.12).
 
 > Wire material changed after the elevation review — the BOS specifies
 > aluminum, the design SLD shows copper. Please update the design SLD to
-> 4/0 AWG aluminum for the 200 A service (NEC Table 310.12) and re-upload it
+> #4/0 AWG aluminum for the 200 A service (NEC Table 310.12) and re-upload it
 > to Salesforce so the planset matches the BOS.
 
 Both the `(…)` size clause and the "for the 200 A service" clause drop when no
@@ -66,10 +66,10 @@ service rating is picked.
 | **BOS never auto-fills** | A silent default is exactly how the mismatches went unnoticed. "Same as design" makes the no-change case one click instead. |
 | **Says nothing while unanswered** | A "pending" line inside a Solrite submission is worse than silence. The gap is shown in the form and the readiness card instead. |
 
-## 4. Three things worth knowing
+## 4. Four things worth knowing
 
 **The reference graphic has a typo.** The Table 310.12 image circulated to the
-team prints `30/` for 225 A copper. The real table reads **3/0 AWG**. The code
+team prints `30/` for 225 A copper. The real table reads **#3/0 AWG**. The code
 uses 3/0; `wireMaterial.test.ts` pins it so nobody "corrects" it back to the
 picture.
 
@@ -88,10 +88,17 @@ or a sheet that brings them back — still resolves a size rather than rendering
 a dangling sentence.
 
 The size hint under the rating is the bare lookup: `200 A · Table 310.12 →
-Copper 2/0 AWG · Aluminum 4/0 AWG`. The scope footnote that first sat beneath
+Copper #2/0 AWG · Aluminum #4/0 AWG`. The scope footnote that first sat beneath
 it ("dwelling service/feeder conductors, where no adjustment or correction
 factors apply") was cut as noise — the scope still lives in a code comment in
 `wireMaterial.ts`, where the next person to change the table will read it.
+
+**AWG sizes carry a `#`, kcmil sizes do not.** Aboud 2026-11-11: *"all wires
+must have a prefix #2/0 #3/0 #3 #4 like this"*. Every example he gave was an
+AWG gauge, and `#250 kcmil` is not written that way anywhere, so the prefix
+stops at the AWG/kcmil boundary — `#3/0 AWG` but `250 kcmil`. Pinned by a test
+that walks all 22 values. **Flag this one to Aboud if he meant kcmil too** —
+it is a one-line change.
 
 ## 5. Readiness card
 
@@ -125,10 +132,10 @@ mobile (Compose is desktop-only), `Skeleton.tsx` (no new screen).
 
 ## 7. Tested
 
-Full gate: `npx vitest run --no-file-parallelism` → **69 files, 1249 tests, all
+Full gate: `npx vitest run --no-file-parallelism` → **69 files, 1250 tests, all
 green**. `npm run typecheck` and `npm run lint` clean.
 
-New coverage (33 tests): all 11 table rows incl. the 3/0 pin · `wireStatus`
+New coverage (34 tests): all 11 table rows incl. the #3/0 pin and the #-on-AWG-only rule · `wireStatus`
 tri-state · all four sentence shapes · the AI-reach guards · Design Feedback
 ordering and the suppressed "All good." default · the SF field · no leak into
 any other SF field or into Site Survey / Homeowner · all three flag states ·
@@ -142,7 +149,7 @@ Driven in the real app on `localhost:8888` (signed in, live data, **read-only
 1. Unanswered → grey `Not confirmed` flag, amber readiness row `Wire material
    not confirmed · Pick`,
    **Ready to post still green**. ✅
-2. 200 A → `200 A · Table 310.12 → Copper 2/0 AWG · Aluminum 4/0 AWG`, and the
+2. 200 A → `200 A · Table 310.12 → Copper #2/0 AWG · Aluminum #4/0 AWG`, and the
    rating list ends at 225 A. ✅
 3. SLD Copper + BOS Aluminum → amber `✗ Mismatch — SLD copper, BOS aluminum`;
    the SF **Design Feedback** field read back the full generated sentence,

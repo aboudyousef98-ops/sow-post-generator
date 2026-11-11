@@ -47,19 +47,24 @@ export const SERVICE_AMPS: ServiceAmps[] = [100, 110, 125, 150, 175, 200, 225];
  * picks the material.
  *
  * NOTE on 225 A copper: the reference graphic the team circulated prints
- * "30/" there. That is a typo in the graphic; the code reads 3/0 AWG, which is
- * what the real table says. Pinned by wireMaterial.test.ts so it is not
+ * "30/" there. That is a typo in the graphic; the code reads #3/0 AWG, which
+ * is what the real table says. Pinned by wireMaterial.test.ts so it is not
  * "corrected" back to the picture.
+ *
+ * AWG sizes carry the "#" prefix the team writes (Aboud 2026-11-11: "all
+ * wires must have a prefix #2/0 #3/0 #3 #4 like this"). kcmil sizes do NOT —
+ * "#250 kcmil" is not a thing; the number sign belongs to AWG gauges only,
+ * and every example he gave was an AWG size.
  */
 export const TABLE_310_12: Record<ServiceAmps, { cu: string; al: string }> = {
-  100: { cu: '4 AWG', al: '2 AWG' },
-  110: { cu: '3 AWG', al: '1 AWG' },
-  125: { cu: '2 AWG', al: '1/0 AWG' },
-  150: { cu: '1 AWG', al: '2/0 AWG' },
-  175: { cu: '1/0 AWG', al: '3/0 AWG' },
-  200: { cu: '2/0 AWG', al: '4/0 AWG' },
-  225: { cu: '3/0 AWG', al: '250 kcmil' },
-  250: { cu: '4/0 AWG', al: '300 kcmil' },
+  100: { cu: '#4 AWG', al: '#2 AWG' },
+  110: { cu: '#3 AWG', al: '#1 AWG' },
+  125: { cu: '#2 AWG', al: '#1/0 AWG' },
+  150: { cu: '#1 AWG', al: '#2/0 AWG' },
+  175: { cu: '#1/0 AWG', al: '#3/0 AWG' },
+  200: { cu: '#2/0 AWG', al: '#4/0 AWG' },
+  225: { cu: '#3/0 AWG', al: '250 kcmil' },
+  250: { cu: '#4/0 AWG', al: '300 kcmil' },
   300: { cu: '250 kcmil', al: '350 kcmil' },
   350: { cu: '350 kcmil', al: '500 kcmil' },
   400: { cu: '400 kcmil', al: '600 kcmil' },

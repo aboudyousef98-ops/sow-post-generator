@@ -84,7 +84,7 @@ Full detail, including the decisions taken and what was deliberately left out:
 website"*. Visibility replaces it: an amber advisory row in the readiness card
 that never flips `ready`. Pinned by `OutputColumn.readiness.test.tsx`.
 
-Full gate green: `vitest run --no-file-parallelism` → **69 files, 1249 tests**.
+Full gate green: `vitest run --no-file-parallelism` → **69 files, 1250 tests**.
 `tsc --noEmit` and `eslint` clean. Driven in the real app on `localhost:8888`.
 
 ---
