@@ -206,6 +206,16 @@ export interface InstallNotes {
    * same no-migration contract as concretePad; undefined renders as "No".
    */
   panelFacesFront?: boolean;
+  /**
+   * Trench required (Aboud 2026-11-12, Slack #design-sow-team): electricians
+   * were not burying conduit to code and inspections failed, so a ticked box
+   * appends one fixed sentence to the Conduit Raceway bullet stating the NEC
+   * Table 300.5 cover depth. OPTIONAL — same no-migration contract as
+   * panelFacesFront. Derived, never typed: the sentence is TRENCH_LINE in
+   * installNotes.ts and is not a PolishKey, so no AI path can reword the
+   * code reference.
+   */
+  trench?: boolean;
   /** "Anything else" — free-form, rendered with no label. */
   other: string;
 }

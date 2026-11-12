@@ -151,6 +151,16 @@ describe('Installation Window and Planning', () => {
     expect(fieldValue(rec(), 'window')).not.toContain('Conduit Raceway');
   });
 
+  // Trench (Aboud 2026-11-12): one source — conduitRunLines — feeds this blob
+  // AND the Slack post, so the two can never disagree about the depth.
+  it('trench ticked → the NEC 300.5 depth sentence lands in the blob, even with no runs typed', () => {
+    const r = rec({ installNotes: { ...emptyInstallNotes(), trench: true } });
+    const v = fieldValue(r, 'window');
+    expect(v).toContain('Conduit Raceway\n---------------');
+    expect(v).toContain('- Trenching: A trench is required for the underground conduit run');
+    expect(v).toContain('NEC Table 300.5');
+  });
+
   it('the clearance boilerplate appears EXACTLY once — as the final sentence, even when typed into a notes box', () => {
     const r = rec({
       installNotes: {

@@ -7,7 +7,10 @@ Running list of work that is finished and tested locally but deliberately
 **not shipped**. Deploy the whole package at once, following the live-data
 backup rule in `CLAUDE.md` §"Deploy rule".
 
-Branch: `feat/board-automations` (still unmerged to `main` — see below).
+> **2026-11-11: items 1 and 2 SHIPPED** in deploy `6af42a21` ("yalla
+> deployyyy") — all 5 stores byte-identical, `main` merged and pushed. They
+> stay below as the record of that package. **Item 3 onward is the NEW
+> pending package.**
 
 ---
 
@@ -89,13 +92,46 @@ Full gate green: `vitest run --no-file-parallelism` → **69 files, 1250 tests**
 
 ---
 
+## 3. Trench checkbox — NEC 300.5 depth note (2026-11-12) ✅ done, tested — PENDING
+
+**Ask (Slack #design-sow-team, 2026-11-12):** Jamal — electricians might not
+follow the burial code and inspections fail; Omar — "We will start adding
+this in our elevations and submission notes going forward". Aboud: a
+`[] Trench?` checkbox; ticked → one sentence in the planning stating the
+trench depth.
+
+**Change.** `trench?: boolean` on `InstallNotes` (optional — the
+panelFacesFront no-migration contract). A "Trench?" checkbox in Compose under
+the Conduit raceway subhead. Ticked → the fixed `TRENCH_LINE` sentence
+renders LAST under the **Conduit Raceway** bullet, and alone it still makes
+the bullet appear. One source (`conduitRunLines`) feeds the Slack post AND
+the SF "Installation Window and Planning" blob, so they can never disagree.
+Not a PolishKey — the AI can never reword the code reference. No
+`missingRequired` gate (standing rule).
+
+**The sentence** (NEC Table 300.5 col 3; 18" is COVER to the TOP of the
+conduit — Aboud's thread; 24" under driveways — Abdallah):
+
+> A trench is required for the underground conduit run — minimum 18" of
+> cover from finished grade to the top of the conduit per NEC Table 300.5
+> (24" under driveways), so the trench must be at least 18" plus the conduit
+> diameter deep (e.g. 20" for a 2" conduit).
+
+**Files (6 touched):** `src/types.ts`, `src/lib/installNotes.ts`,
+`src/components/InstallNotesCard.tsx`, `src/lib/record.ts` (hasContent —
+trench-only drafts autosave), + pins in `installNotes.test.ts`,
+`template.test.ts`, `sfSubmission.test.ts`, `record.test.ts`.
+
+Full gate green: `vitest run --no-file-parallelism` → **69 files, 1258
+tests**. `tsc --noEmit` and `eslint --max-warnings 0` clean.
+
+---
+
 ## Blocking the deploy
 
-1. **`feat/board-automations` is not merged to `main`.** `main` does NOT
-   reflect production; the 2026-11-05 deploy (`6aeca8d9`) shipped from this
-   branch. Merge before the package goes out.
-2. Live-data backup is **mandatory** before and after — pull all Netlify
+1. Live-data backup is **mandatory** before and after — pull all Netlify
    Blobs into `_versions/vNN-live-backup-YYYY-MM-DD/` and diff after.
+2. Wait for Aboud's deploy trigger ("yalla deploy") — package deploys only.
 
 ## Designed but not built
 

@@ -8,6 +8,7 @@ import {
   installNoteLines,
   needsRoofConduitRework,
   rawTextFor,
+  TRENCH_LINE,
 } from './installNotes';
 import { makeRecord } from './__fixtures__/makeRecord';
 
@@ -355,6 +356,35 @@ describe('conduitRunLines (spec/10 §3.2)', () => {
     expect(conduitRunLines(n({ loadRun: '2" PVC from the meter\ntwo 90° bends' }), off)).toEqual([
       { label: 'Load run', text: '', sub: ['2" PVC from the meter.', 'Two 90° bends.'] },
     ]);
+  });
+
+  // ---- Trench (Aboud 2026-11-12) ------------------------------------------
+  // The sentence quotes NEC Table 300.5 and is derived, never typed: ticking
+  // the box is the ONLY way it appears, and no AI path can reword it.
+
+  it('trench ticked → the fixed depth sentence renders last, after the runs', () => {
+    expect(conduitRunLines(n({ solarRun: 'east wall', trench: true }), off)).toEqual([
+      { label: 'Solar run', text: 'east wall.', sub: [] },
+      { label: 'Trenching', text: TRENCH_LINE, sub: [] },
+    ]);
+  });
+
+  it('trench alone still makes the bullet appear — the depth note IS the content', () => {
+    expect(conduitRunLines(n({ trench: true }), off)).toEqual([
+      { label: 'Trenching', text: TRENCH_LINE, sub: [] },
+    ]);
+  });
+
+  it('unticked or absent → nothing (pre-2026-11-12 records render unchanged)', () => {
+    expect(conduitRunLines(n(), off)).toEqual([]);
+    expect(conduitRunLines(n({ trench: undefined }), off)).toEqual([]);
+  });
+
+  it('the sentence states the 18" cover, the driveway 24", and the code table', () => {
+    expect(TRENCH_LINE).toContain('18" of cover');
+    expect(TRENCH_LINE).toContain('NEC Table 300.5');
+    expect(TRENCH_LINE).toContain('24" under driveways');
+    expect(TRENCH_LINE).toContain('top of the conduit');
   });
 });
 

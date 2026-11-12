@@ -58,6 +58,11 @@ describe('hasContent — installNotes (carried fix, Phase 7 review)', () => {
     expect(hasContent(r)).toBe(true);
   });
 
+  it('a record with ONLY the trench box ticked counts as content (Aboud 2026-11-12)', () => {
+    const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), trench: true } });
+    expect(hasContent(r)).toBe(true);
+  });
+
   it('a record with ONLY the extra-work answer counts as content', () => {
     const r = makeRecord({ sf: blankSf, installNotes: { ...emptyInstallNotes(), batteryBaseNeedsWork: false } });
     expect(hasContent(r)).toBe(true);

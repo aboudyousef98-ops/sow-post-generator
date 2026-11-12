@@ -489,6 +489,24 @@ describe('Installation Notes + Conduit Raceway bullets (spec/10 §4)', () => {
     expect(text).not.toContain('Conduit Raceway');
   });
 
+  // Trench (Aboud 2026-11-12). The depth sentence rides the Conduit Raceway
+  // bullet, LAST after the runs, and makes the bullet appear even alone.
+  it('trench ticked → the NEC 300.5 sentence closes the Conduit Raceway bullet', () => {
+    const text = buildPostText(
+      withNotes({ solarRun: '1-1/4" PVC', trench: true }),
+      defaultSettings(),
+    );
+    expect(text).toContain('◦ Solar run: 1-1/4" PVC.');
+    expect(text).toContain('◦ Trenching: A trench is required for the underground conduit run');
+    expect(text).toContain('NEC Table 300.5 (24" under driveways)');
+    expect(text.indexOf('Solar run')).toBeLessThan(text.indexOf('Trenching'));
+  });
+
+  it('trench alone still produces the Conduit Raceway bullet', () => {
+    const text = buildPostText(withNotes({ trench: true }), defaultSettings());
+    expect(text).toContain('• *Conduit Raceway:* Trenching: A trench is required');
+  });
+
   it('the HTML version mirrors the text version and escapes values', () => {
     const html = buildPostHtml(withNotes({ stories: 1, solarRun: '1-1/4" PVC <east>' }), defaultSettings());
     expect(html).toContain(

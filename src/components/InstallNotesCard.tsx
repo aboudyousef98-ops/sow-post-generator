@@ -425,6 +425,27 @@ export default function InstallNotesCard({
       )}
 
       <div className="install-subhead">Conduit raceway</div>
+      {/* Trench checkbox (Aboud 2026-11-12). Ticked → the fixed NEC Table
+          300.5 depth sentence joins the Conduit Raceway bullet (TRENCH_LINE).
+          Unticked stores undefined, matching panelFacesFront. */}
+      <div className="install-row">
+        <div className="field">
+          Trench?
+          <div className="service-ticks">
+            <label className="service-tick">
+              <input
+                type="checkbox"
+                checked={n.trench ?? false}
+                onChange={(e) => setNotes({ trench: e.target.checked || undefined })}
+              />
+              Trenching required
+            </label>
+          </div>
+          <span className="field-hint">
+            Adds the NEC Table 300.5 depth note: 18" cover to the top of the conduit, 24" under driveways
+          </span>
+        </div>
+      </div>
       <div className="note-grid">{RUN_FIELDS.map((f) => box(f, 2))}</div>
 
       <div className="note-grid">

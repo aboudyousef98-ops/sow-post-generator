@@ -392,14 +392,35 @@ export function batteryAnalysisLines(n: InstallNotes | undefined, p: PolishState
   return lines;
 }
 
-/** The `Conduit Raceway` bullet's sub-bullets. All four empty -> bullet dropped. */
+/**
+ * The trench sentence (Aboud 2026-11-12, Slack #design-sow-team). Jamal:
+ * electricians don't always follow the burial code and the inspection fails.
+ * NEC Table 300.5 col 3 sets 18" minimum COVER, measured from finished grade
+ * to the TOP of the conduit — so the trench itself is 18" + the conduit
+ * diameter — and 24" under driveways (Abdallah). Width is not set by code,
+ * so the sentence deliberately says nothing about it.
+ */
+export const TRENCH_LINE =
+  'A trench is required for the underground conduit run — minimum 18" of cover from ' +
+  'finished grade to the top of the conduit per NEC Table 300.5 (24" under driveways), ' +
+  'so the trench must be at least 18" plus the conduit diameter deep ' +
+  '(e.g. 20" for a 2" conduit).';
+
+/**
+ * The `Conduit Raceway` bullet's sub-bullets. All four runs empty and no
+ * trench -> bullet dropped. The trench line renders LAST, after the runs,
+ * and alone it still makes the bullet appear — the depth note is the whole
+ * point when the run details are not typed yet.
+ */
 export function conduitRunLines(n: InstallNotes | undefined, p: PolishState): PostValue[] {
   if (!n) return [];
   // Order fixed by Aboud, 2026-09-30: grid/service first, then load, solar,
   // battery — the order the crew actually runs them on site.
   const runs: InstallTextField[] = ['serviceRun', 'loadRun', 'solarRun', 'batteryRun'];
-  return runs.flatMap((f) => {
+  const lines: PostValue[] = runs.flatMap((f) => {
     const def = field(f);
     return labelledRun(def.label, n[f] ?? '', def.key, p);
   });
+  if (n.trench) lines.push({ label: 'Trenching', text: TRENCH_LINE, sub: [] });
+  return lines;
 }

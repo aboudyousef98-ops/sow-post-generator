@@ -65,6 +65,7 @@ export function hasContent(r: PostRecord): boolean {
     n?.roofRating !== undefined ||
     n?.roofMaterial !== undefined ||
     n?.panelFacesFront !== undefined ||
+    n?.trench !== undefined ||
     // Battery installation analysis (Aboud 2026-11-03). The three tri-state
     // answers are listed explicitly because `false` is a real answer here —
     // a truthiness check would treat "No" as "not answered" and lose the draft.
