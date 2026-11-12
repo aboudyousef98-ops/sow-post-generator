@@ -380,11 +380,14 @@ describe('conduitRunLines (spec/10 §3.2)', () => {
     expect(conduitRunLines(n({ trench: undefined }), off)).toEqual([]);
   });
 
-  it('the sentence states the 18" cover, the driveway 24", and the code table', () => {
+  it('the sentence states the 18" cover, the driveway 24", the code table, and names the DEPTH', () => {
     expect(TRENCH_LINE).toContain('18" of cover');
     expect(TRENCH_LINE).toContain('NEC Table 300.5');
     expect(TRENCH_LINE).toContain('24" under driveways');
     expect(TRENCH_LINE).toContain('top of the conduit');
+    // Aboud 2026-11-12: say "depth" outright — cover and depth are different
+    // numbers, and the sentence must leave no room to read 18" as the depth.
+    expect(TRENCH_LINE).toContain('trench depth');
   });
 });
 
