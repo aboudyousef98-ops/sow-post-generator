@@ -403,8 +403,7 @@ export function batteryAnalysisLines(n: InstallNotes | undefined, p: PolishState
 export const TRENCH_LINE =
   'A trench is required for the underground conduit run — minimum 18" of cover from ' +
   'finished grade to the top of the conduit per NEC Table 300.5 (24" under driveways), ' +
-  'so the trench depth must be at least 18" plus the conduit diameter ' +
-  '(e.g. a 20" deep trench for a 2" conduit).';
+  'so the trench depth must be at least 18" plus the conduit diameter.';
 
 /**
  * The `Conduit Raceway` bullet's sub-bullets. All four runs empty and no

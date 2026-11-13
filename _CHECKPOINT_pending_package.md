@@ -115,10 +115,13 @@ conduit — Aboud's thread; 24" under driveways — Abdallah):
 > A trench is required for the underground conduit run — minimum 18" of
 > cover from finished grade to the top of the conduit per NEC Table 300.5
 > (24" under driveways), so the trench depth must be at least 18" plus the
-> conduit diameter (e.g. a 20" deep trench for a 2" conduit).
+> conduit diameter.
 
-(Revised 2026-11-12, Aboud: "indicate that we are referring to the depth of
-the trench" — the word "depth" is now explicit, pinned by a test.)
+(Revised twice and **APPROVED by Aboud 2026-11-13**: 2026-11-12 "indicate
+that we are referring to the depth of the trench" → the word "depth" made
+explicit, pinned by a test; 2026-11-13 the `(e.g. a 20" deep trench for a
+2" conduit)` example removed — "remove this and save the rest, park it,
+i will deploy later".)
 
 **Files (6 touched):** `src/types.ts`, `src/lib/installNotes.ts`,
 `src/components/InstallNotesCard.tsx`, `src/lib/record.ts` (hasContent —
