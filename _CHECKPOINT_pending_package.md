@@ -294,6 +294,47 @@ Final gate: **72 files / 1302 tests green**, `tsc`, `eslint
 
 ---
 
+## 7. Active Projects collapse + Slack requests + crew-days (2026-11-15) ✅ done, tested — PENDING
+
+Three same-day asks after the audit:
+
+**(a) Active Projects.** The main table is titled "Active Projects" with a
+count chip and collapses like the sibling sections (`KEY_ACTIVE_OPEN`,
+search forces open without writing the preference).
+
+**(b) Paste from Slack — the 2026-11-06 agreed design, now BUILT.** He asked
+"i don't see the Paste from Slack anywhere … make sure this function is
+working". New `requests?: ProjectRequest[]` on BoardState (merged by
+id/updatedAt, tombstoned, on BOTH client `mergeBoard` and server
+`boardMerge` — PutSchema extended, the strict-schema lesson). Procedure as
+agreed: batch paste → `parseSlackPaste` chunks on blank lines →
+`suggestProject` fuzzy name match (all name words, word-boundary; no guess
+without a match) → human confirms every match; unmatched park in the inbox
+until their row exists (attach/remove there). Amber `● n` chip in the name
+cell → viewer modal with Mark resolved. Soft popup at "Working on it"
+(by-name, like isReviewLabel); HARD GATE at "Ready to submit"/isDone: each
+request confirmed "Resolved — this is done" before the status lands, then
+the held change re-dispatches through guardedPatch so needs-a-note gates
+still run (putRequests advances boardRef synchronously — without that the
+gate re-pops forever). Bulk Set-status filters blocked rows with a naming
+toast; mobile refuses the move with a pointer to desktop (no resolve UI
+there). Deferred from the original design: the show-requests /
+require-requests-resolved ActionKinds in the Automations panel — the gates
+are built-in like the rating/note gates instead.
+
+**(c) SVT Scheduling.** `svt.twoDay` (never deployed) replaced by
+`crewDays?: 1 | 2` select + polishable `schedulingNotes` box
+(`svt.schedulingNotes` on client AND server polish schema). The SVT post's
+Scheduling bullet prints ONE_DAY_LINE/TWO_DAY_LINE + the notes.
+
+Gate: **73 files / 1320 tests** green, tsc + eslint + build + nosecrets
+clean; all three driven end-to-end on localhost (match screen, inbox park,
+chip, gate hold+release, scheduling bullet). Demo data on LOCAL blobs:
+Glenda Hodge carries an open wire request; Maria M Acevedo waits in the
+inbox.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
