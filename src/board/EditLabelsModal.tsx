@@ -142,7 +142,10 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      {/* Status rows carry six flags on their own line — a bit of extra width
+          keeps that line from wrapping twice. NOT `.modal.wide`: that variant
+          strips the padding and expects the child to build its own chrome. */}
+      <div className={`modal${columnKey === 'status' ? ' board-labels' : ''}`} onClick={(e) => e.stopPropagation()}>
         <h3>
           Edit {columnKey === 'status' ? 'Status' : columnKey === 'phase' ? 'Design/Schedule' : 'Pre-Design status'}{' '}
           labels
@@ -200,6 +203,28 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                       if (e.key === 'Escape') (e.target as HTMLInputElement).value = l.name;
                     }}
                   />
+                  <span className="board-label-tools">
+                    <button type="button" className="btn small secondary" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${l.name} up`}>
+                      ↑
+                    </button>
+                    <button type="button" className="btn small secondary" disabled={i === options.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${l.name} down`}>
+                      ↓
+                    </button>
+                    <button
+                      type="button"
+                      className="btn small secondary"
+                      disabled={l.isSystem}
+                      title={l.isSystem ? 'Built-in labels can be renamed or recolored, not archived' : 'Archive this label'}
+                      onClick={() => requestArchive(l)}
+                    >
+                      Archive
+                    </button>
+                  </span>
+                  {/* The flags live on their OWN line under the name (found by
+                      the 2026-11-15 pre-deploy audit: a sixth status flag
+                      squeezed the rename input to zero width and the row
+                      scrolled sideways). */}
+                  <div className="board-label-flags">
                   <label className="board-label-flag" title="Applied to new projects">
                     <input type="radio" name={`default-${columnKey}`} checked={l.isDefault} onChange={() => setDefault(l)} />
                     default
@@ -306,23 +331,7 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                       </label>
                     </>
                   )}
-                  <span className="board-label-tools">
-                    <button type="button" className="btn small secondary" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${l.name} up`}>
-                      ↑
-                    </button>
-                    <button type="button" className="btn small secondary" disabled={i === options.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${l.name} down`}>
-                      ↓
-                    </button>
-                    <button
-                      type="button"
-                      className="btn small secondary"
-                      disabled={l.isSystem}
-                      title={l.isSystem ? 'Built-in labels can be renamed or recolored, not archived' : 'Archive this label'}
-                      onClick={() => requestArchive(l)}
-                    >
-                      Archive
-                    </button>
-                  </span>
+                  </div>
                 </div>
               ))}
             </div>

@@ -342,6 +342,26 @@ export function positionForMove(ordered: BoardProject[], from: number, to: numbe
   return null;
 }
 
+/**
+ * The patch, plus the Pre-Design sub-status DEFAULT when this change moves
+ * the row into a pre-design status and it has none yet (Aboud 2026-11-15:
+ * the new column must never start blank). Pure, and applied by EVERY write
+ * path — the cell pick, bulk "Set status", a gate resolution, an automation
+ * follow-up — so no entry route can leave the column empty. A row that
+ * already carries a sub-status keeps it.
+ */
+export function withPredesignDefault(
+  project: BoardProject,
+  patch: ProjectPatch,
+  labels: BoardLabel[],
+): ProjectPatch {
+  if (!('statusId' in patch)) return patch;
+  if (!isPredesignLabel(labelById(labels, patch.statusId ?? null))) return patch;
+  if (project.preDesignStatusId) return patch;
+  const def = defaultLabel(labels, 'predesign');
+  return def ? { ...patch, preDesignStatusId: def.id } : patch;
+}
+
 /** Apply a patch and stamp updatedAt/updatedBy. Never mutates. */
 export function patchProject(
   project: BoardProject,

@@ -51,6 +51,10 @@ interface Props {
   onToggle: (key: PolishKey, usePolished: boolean) => void;
   onClearDropped: (key: PolishKey) => void;
   onClearDrift: (key: PolishKey) => void;
+  /** The Polish/rewrite buttons, rendered at the card's end — ComposeTab owns
+   * them (runAi state); a lone "AI polish" card for two buttons was a box too
+   * many (audit 2026-11-15). */
+  actions?: React.ReactNode;
 }
 
 export default function SvtCard({
@@ -63,6 +67,7 @@ export default function SvtCard({
   onToggle,
   onClearDropped,
   onClearDrift,
+  actions,
 }: Props) {
   const n = record.installNotes ?? emptyInstallNotes();
   const s: SvtNotes = record.svt ?? {};
@@ -88,6 +93,37 @@ export default function SvtCard({
     update((r) => {
       const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
       return { ...r, svt: { ...r.svt, [field]: value }, polished };
+    });
+  };
+
+  /** Chip clicks append a line and invalidate stale polish, like typing does
+   * (the chips went missing here at first — audit 2026-11-15). */
+  const appendInstallChip = (field: InstallTextField, key: PolishKey, phrase: string) => {
+    onClearDropped(key);
+    onClearDrift(key);
+    update((r) => {
+      const cur = r.installNotes ?? emptyInstallNotes();
+      const existing = cur[field];
+      const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
+      return {
+        ...r,
+        installNotes: { ...cur, [field]: existing ? `${existing.replace(/\s+$/, '')}\n${phrase}` : phrase },
+        polished,
+      };
+    });
+  };
+
+  const appendSvtChip = (field: SvtTextField, key: PolishKey, phrase: string) => {
+    onClearDropped(key);
+    onClearDrift(key);
+    update((r) => {
+      const existing = r.svt?.[field];
+      const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
+      return {
+        ...r,
+        svt: { ...r.svt, [field]: existing ? `${existing.replace(/\s+$/, '')}\n${phrase}` : phrase },
+        polished,
+      };
     });
   };
 
@@ -119,6 +155,7 @@ export default function SvtCard({
         onChange={(v) => setInstallText(field, def.key, v)}
         onKeyDown={onKeyDown}
         chips={settings.chips[def.key]}
+        onChip={(phrase) => appendInstallChip(field, def.key, phrase)}
         polished={record.polished?.[def.key]}
         usePolished={record.usePolished[def.key] !== false}
         onToggle={(use) => onToggle(def.key, use)}
@@ -141,6 +178,7 @@ export default function SvtCard({
         onChange={(v) => setSvtText(field, def.key, v)}
         onKeyDown={onKeyDown}
         chips={settings.chips[def.key]}
+        onChip={(phrase) => appendSvtChip(field, def.key, phrase)}
         polished={record.polished?.[def.key]}
         usePolished={record.usePolished[def.key] !== false}
         onToggle={(use) => onToggle(def.key, use)}
@@ -166,13 +204,13 @@ export default function SvtCard({
 
   return (
     <div className="card">
-      <h3>Pre-design analysis</h3>
+      <h3>Pre-Design analysis</h3>
 
       <div className="install-subhead">Battery location</div>
       <div className="note-grid">{installBox('batteryLocation', 'Battery location (SOW preferred)', 1)}</div>
       <div className="install-row">
         <label className="field">
-          HO agrees with the proposed location?
+          Homeowner agrees with the proposed location?
           <select value={yesNoValue(s.hoAgrees)} onChange={(e) => setSvt({ hoAgrees: yesNoParse(e.target.value) })}>
             <option value="">—</option>
             <option value="yes">Yes</option>
@@ -188,7 +226,7 @@ export default function SvtCard({
         </div>
       )}
       {altCount >= 1 && (
-        <div className="svt-alt">
+        <div>
           <div className="svt-alt-head">
             <span className="install-subhead">Alternative location</span>
             {altCount === 1 && (
@@ -204,7 +242,7 @@ export default function SvtCard({
         </div>
       )}
       {altCount >= 2 && (
-        <div className="svt-alt">
+        <div>
           <div className="svt-alt-head">
             <span className="install-subhead">Alternative location 2</span>
             <button type="button" className="btn link small" onClick={() => removeAlt(2)}>
@@ -379,9 +417,11 @@ export default function SvtCard({
               Two-day job
             </label>
           </div>
-          <span className="field-hint">CLR books two consecutive crew days in the GANTT</span>
+          <span className="field-hint">CLR books two consecutive crew days in the Gantt chart</span>
         </div>
       </div>
+
+      {actions}
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
   liveProjects,
   newProject,
   patchProject,
+  withPredesignDefault,
   type ProjectPatch,
 } from '../lib/board';
 import { sortByStatus, splitSections } from '../lib/boardViews';
@@ -85,6 +86,7 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
   const [coordFilter, setCoordFilter] = useState<string | null>(null);
   const [doneOpen, setDoneOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
+  const [predesignOpen, setPredesignOpen] = useState(false);
   const [addName, setAddName] = useState('');
   const [sheet, setSheet] = useState<Sheet | null>(null);
   const [colWidths, setColWidths] = useState<Record<string, number>>({ ...DEFAULT_WIDTHS });
@@ -107,7 +109,9 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
   const phaseLabels = labelsFor(board.labels, 'phase');
 
   // Same mutation funnel as BoardTab.applyPatch — one row, one activity entry.
-  const applyPatch = (project: BoardProject, patch: ProjectPatch, withUpdate?: ProjectUpdate) => {
+  const applyPatch = (project: BoardProject, rawPatch: ProjectPatch, withUpdate?: ProjectUpdate) => {
+    // Entering Pre-Design seeds the sub-status default here too (2026-11-15).
+    const patch = withPredesignDefault(project, rawPatch, board.labels);
     const patched = patchProject(project, patch, me);
     const act = activityForPatch(project, patch, me, board.labels);
     const extra = withUpdate ? [activityEntry(project.id, me, 'update-post')] : [];
@@ -182,9 +186,13 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
         .sort((a, b) => b.position - a.position),
     [board.projects, needle, mine, me, coordFilter, statusFilter, phaseFilter],
   );
-  // Same three sections as the desktop board, same rules (lib/boardViews).
+  // Same sections as the desktop board, same rules (lib/boardViews).
+  // (Installation Review rows are still not listed here — a pre-existing
+  // mobile gap; Pre-Design joined 2026-11-15 because a phone user picking the
+  // new status otherwise watched the row vanish from their own screen.)
   const {
     active: activeUnsorted,
+    preDesign,
     outOfScope,
     completed,
   } = useMemo(() => splitSections(visible, board.labels), [visible, board.labels]);
@@ -405,9 +413,30 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
           </button>
         </div>
 
-        {/* Out of SOW scope, then Completed — the desktop order, so the two
-            boards read the same way (Aboud 2026-10-19). */}
+        {/* Pre-Design, then Out of SOW scope, then Completed — the desktop
+            order, so the two boards read the same way (Aboud 2026-10-19 /
+            2026-11-15). */}
         <div className="m-done-wrap">
+          <div className="m-card m-predesign">
+            <button className="m-done-toggle" onClick={() => setPredesignOpen(!predesignOpen)}>
+              <span className={`m-caret ${predesignOpen ? 'open' : ''}`}>▸</span>
+              Pre-Design
+              <span className="m-done-count">{preDesign.length}</span>
+            </button>
+            {predesignOpen && (
+              <div className="m-done-list">
+                {preDesign.map((c) => (
+                  <div key={c.id} className="m-done-item">
+                    <span className="m-done-name">{c.name}</span>
+                    <span className="m-done-coord">{c.coordinator}</span>
+                    <span className="m-done-pill">
+                      {labelById(board.labels, c.preDesignStatusId ?? null)?.name ?? 'Pre-Design'}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="m-card m-scope">
             <button className="m-done-toggle" onClick={() => setScopeOpen(!scopeOpen)}>
               <span className={`m-caret ${scopeOpen ? 'open' : ''}`}>▸</span>

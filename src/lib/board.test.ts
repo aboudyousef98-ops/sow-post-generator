@@ -20,6 +20,7 @@ import {
   positionForMove,
   predesignStatusIds,
   seedLabels,
+  withPredesignDefault,
 } from './board';
 
 const T0 = '2026-10-02T10:00:00.000Z';
@@ -288,6 +289,35 @@ describe('isPredesignLabel / predesignStatusIds', () => {
   it('predesignStatusIds collects every flagged status label', () => {
     const ids = predesignStatusIds([label({ id: 'a' }), label({ id: 'b', name: 'Hold' })]);
     expect(ids).toEqual(new Set(['a']));
+  });
+});
+
+// Entering Pre-Design seeds the sub-status default in EVERY write path —
+// the cell pick, bulk "Set status", a gate resolution, an automation. Found
+// by the 2026-11-15 pre-deploy audit: only the cell pick did it at first.
+describe('withPredesignDefault', () => {
+  const labels = seedLabels();
+
+  it('adds the default sub-status when moving into Pre-Design with none set', () => {
+    const p = proj();
+    expect(withPredesignDefault(p, { statusId: 'status-predesign' }, labels)).toEqual({
+      statusId: 'status-predesign',
+      preDesignStatusId: 'predesign-working',
+    });
+  });
+
+  it('keeps an existing sub-status', () => {
+    const p = proj({ preDesignStatusId: 'predesign-done' });
+    expect(withPredesignDefault(p, { statusId: 'status-predesign' }, labels)).toEqual({
+      statusId: 'status-predesign',
+    });
+  });
+
+  it('leaves every other patch alone', () => {
+    const p = proj();
+    expect(withPredesignDefault(p, { statusId: 'status-done' }, labels)).toEqual({ statusId: 'status-done' });
+    expect(withPredesignDefault(p, { rating: 3 }, labels)).toEqual({ rating: 3 });
+    expect(withPredesignDefault(p, { statusId: null }, labels)).toEqual({ statusId: null });
   });
 });
 

@@ -46,7 +46,6 @@ import {
   activityForPatch,
   autoSortOn,
   cleanName,
-  defaultLabel,
   findDuplicate,
   isOutOfScopeLabel,
   isPredesignLabel,
@@ -56,6 +55,7 @@ import {
   newProject,
   nextPrefs,
   patchProject,
+  withPredesignDefault,
   type LinkedPosts,
   type ProjectPatch,
 } from '../lib/board';
@@ -909,7 +909,7 @@ export default function BoardTab({
   /** One-field optimistic write + activity entry. Single source of mutation. */
   const applyPatch = (
     project: BoardProject,
-    patch: ProjectPatch,
+    rawPatch: ProjectPatch,
     extraActivity?: BoardActivity,
     /** The explanation a gate collected, written to Updates with the patch. */
     withUpdate?: ProjectUpdate,
@@ -917,6 +917,9 @@ export default function BoardTab({
     alsoLog?: BoardActivity,
   ) => {
     const cur = boardRef.current;
+    // Entering Pre-Design seeds the sub-status default — here, at the single
+    // source of mutation, so every entry route gets it (audit 2026-11-15).
+    const patch = withPredesignDefault(project, rawPatch, cur.labels);
     const next = patchProject(project, patch, me);
     const entry = extraActivity ?? activityForPatch(project, patch, me, cur.labels);
     const added = [entry, alsoLog].filter((e): e is BoardActivity => Boolean(e));
@@ -947,7 +950,11 @@ export default function BoardTab({
       applyPatch(project, patch);
       return;
     }
-    const merged = { ...patch, ...followUpPatch(matched, me) };
+    const merged = withPredesignDefault(
+      project,
+      { ...patch, ...followUpPatch(matched, me) },
+      boardRef.current.labels,
+    );
     const posts = autoUpdates(matched, project.id, me);
     // applyPatch takes ONE update; more than one is rare enough that writing
     // them straight is clearer than widening its signature.
@@ -1100,15 +1107,18 @@ export default function BoardTab({
     const cur = boardRef.current;
     const now = new Date().toISOString();
     const ids = new Set(rows.map((r) => r.id));
+    // Per ROW, not once for the batch: a row that already carries a Pre-Design
+    // sub-status must keep it while its neighbours get the default.
+    const patchFor = (p: BoardProject) => withPredesignDefault(p, patch, cur.labels);
     const entries = rows
-      .map((r) => activityForPatch(r, patch, me, cur.labels))
+      .map((r) => activityForPatch(r, patchFor(r), me, cur.labels))
       .filter((e): e is BoardActivity => Boolean(e));
     const posts = (withUpdates ?? []).map((u) => activityEntry(u.projectId, me, 'update-post', undefined, now));
     let updates = cur.updates ?? [];
     for (const u of withUpdates ?? []) updates = putUpdate(updates, u);
     setBoard({
       ...cur,
-      projects: cur.projects.map((p) => (ids.has(p.id) ? patchProject(p, patch, me, now) : p)),
+      projects: cur.projects.map((p) => (ids.has(p.id) ? patchProject(p, patchFor(p), me, now) : p)),
       activity: [...entries, ...posts, ...cur.activity],
       updates,
     });
@@ -1788,20 +1798,15 @@ export default function BoardTab({
             valueId={row.original.statusId}
             onPick={(statusId) => {
               const prev = row.original.statusId;
-              // Entering Pre-Design seeds the sub-status with its default
-              // ("Working on it") so the new column never starts blank; a row
-              // that already has one keeps it (Aboud 2026-11-15).
-              const picked = labelById(boardRef.current.labels, statusId);
-              const patch: ProjectPatch =
-                isPredesignLabel(picked) && !row.original.preDesignStatusId
-                  ? { statusId, preDesignStatusId: defaultLabel(boardRef.current.labels, 'predesign')?.id ?? null }
-                  : { statusId };
+              // Entering Pre-Design seeds the sub-status default centrally —
+              // withPredesignDefault runs inside applyPatch/bulkApply, so this
+              // path and every other one behave the same (audit 2026-11-15).
               // Everything goes through the guard: it is what applies the
               // "needs a note" gate (#6, and Pending Update since 2026-11-05)
               // AND the team's own automations. It returns false when a gate
               // is holding the change, in which case there is nothing to
               // announce yet — the modal is the announcement.
-              if (!guardedPatch(row.original, patch)) return;
+              if (!guardedPatch(row.original, { statusId })) return;
               // Crossing INTO a done or out-of-scope label hides the row from
               // the main board — announce where it went, with a way back.
               const from = sectionOf(labelById(boardRef.current.labels, prev));

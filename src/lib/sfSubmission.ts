@@ -82,9 +82,10 @@ export function buildSfSubmission(record: PostRecord, settings: Settings, ahjs?:
   // cases after it) + conduit raceway, one fact per line. Walls, battery
   // location, stories and the disconnect duration are omitted — each lands in
   // its own SF field (walls: the Battery and Equipment Location sentence, per
-  // the same audit). The clearance boilerplate is this blob's FINAL sentence
-  // (matching his filled SF record) — strays typed into a notes box are
-  // filtered so it appears exactly once, at the end.
+  // the same audit). The clearance boilerplate closes the GENERATED part of
+  // the blob (strays typed into a notes box are filtered so it appears
+  // exactly once); since 2026-11-15 any APPROVED requirement sections follow
+  // it, so the include checkboxes reach SF too.
   const clearanceRe = /clearance requirements have been met/i;
   const windowParts = [
     `Level ${record.level} – ${LEVEL_NAMES[record.level]}.\nPlanning window: ${LEVEL_INFO[record.level].window}.`,

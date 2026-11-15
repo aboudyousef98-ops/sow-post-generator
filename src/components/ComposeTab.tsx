@@ -96,6 +96,13 @@ export default function ComposeTab({
   // same AI note check that guards Copy for Slack runs against the current
   // post, and grounded hits pop a NON-BLOCKING dialog. null = nothing to say.
   const [reminders, setReminders] = useState<NoteHit[] | null>(null);
+  // The dialog appears UNPROMPTED (async, after the polish lands), so focus
+  // must move to it — otherwise keystrokes keep landing in the form behind
+  // the overlay and a screen reader never hears it (audit 2026-11-15).
+  const remindersOkRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (reminders) remindersOkRef.current?.focus();
+  }, [reminders]);
   const fileInput = useRef<HTMLInputElement>(null);
   // The record as it is RIGHT NOW, for code that resumes after an await and
   // must not act on the version it closed over (see runAi).
@@ -323,6 +330,9 @@ export default function ComposeTab({
           text,
           notes.map((n) => ({ lineId: n.lineId, text: n.text })),
         );
+        // The AI round-trip takes seconds; switching drafts meanwhile must
+        // not pop record A's reminders over record B (audit 2026-11-15).
+        if (recordRef.current.id !== polishedRecord.id) return;
         const byId = new Map(notes.map((n) => [n.lineId, n]));
         const hits = res.hits
           .filter((h) => triggerIsGrounded(text, h.trigger))
@@ -392,14 +402,18 @@ export default function ComposeTab({
         }));
         setPolishState({ busy: false, ms: res.ms });
         // Reminders read the record AS POLISHED — built locally rather than
-        // waiting on the state update, which has not re-rendered yet.
+        // waiting on the state update, which has not re-rendered yet. Skipped
+        // outright when the user already switched drafts during the rewrite
+        // await: a reminder about the previous record would mislead.
         const cur = recordRef.current;
-        void checkReminders({
-          ...cur,
-          polished: { ...cur.polished, ...polished },
-          usePolished: { ...cur.usePolished, ...use },
-          polishMode: { ...cur.polishMode, ...modes },
-        });
+        if (cur.id === record.id) {
+          void checkReminders({
+            ...cur,
+            polished: { ...cur.polished, ...polished },
+            usePolished: { ...cur.usePolished, ...use },
+            polishMode: { ...cur.polishMode, ...modes },
+          });
+        }
       } catch (err) {
         setPolishState({ busy: false, error: (err as { message?: string })?.message || 'Request failed.' });
       }
@@ -487,26 +501,27 @@ export default function ComposeTab({
           buttons"): SVT pre-design vs full SOW scope, as two prominent mode
           cards at the top of the page. SVT first — the earlier pipeline
           stage. Both edit the one draft; shared fields appear in both. */}
-      <div className="compose-mode-switch" role="tablist" aria-label="Compose mode">
+      {/* Toggle buttons, not ARIA tabs: tab semantics without arrow-key
+          roving would announce "tab" and then not behave like one (audit
+          2026-11-15), and aria-pressed is exactly what a two-state button is. */}
+      <div className="compose-mode-switch" role="group" aria-label="Compose mode">
         <button
           type="button"
-          role="tab"
-          aria-selected={composeMode === 'svt'}
+          aria-pressed={composeMode === 'svt'}
           className={`mode-card${composeMode === 'svt' ? ' active' : ''}`}
           onClick={() => setComposeMode('svt')}
         >
-          <span className="mode-card-title">SVT — Pre-design</span>
+          <span className="mode-card-title">SVT — Pre-Design</span>
           <span className="mode-card-sub">Survey analysis for the SVT team</span>
         </button>
         <button
           type="button"
-          role="tab"
-          aria-selected={composeMode === 'sow'}
+          aria-pressed={composeMode === 'sow'}
           className={`mode-card${composeMode === 'sow' ? ' active' : ''}`}
           onClick={() => setComposeMode('sow')}
         >
           <span className="mode-card-title">SOW — Full scope</span>
-          <span className="mode-card-sub">Full scope-of-work post</span>
+          <span className="mode-card-sub">Scope post for the design handoff</span>
         </button>
       </div>
 
@@ -777,7 +792,11 @@ export default function ComposeTab({
                     update((r) => ({ ...r, ahjApprovedId: approvedId }));
                   }}
                 />
-                Include AHJ requirements in the post
+                {/* In SVT mode the tick persists but only the full SOW post
+                    appends sections — say so rather than looking broken. */}
+                {composeMode === 'svt'
+                  ? 'Include AHJ requirements in the full SOW post (not this SVT post)'
+                  : 'Include AHJ requirements in the post'}
               </label>
             </div>
           )}
@@ -813,7 +832,9 @@ export default function ComposeTab({
                   checked={approved}
                   onChange={(e) => update((r) => ({ ...r, [field]: e.target.checked ? board.id : undefined }))}
                 />
-                Include {label} requirements in the post
+                {composeMode === 'svt'
+                  ? `Include ${label} requirements in the full SOW post (not this SVT post)`
+                  : `Include ${label} requirements in the post`}
               </label>
             </div>
           ))}
@@ -920,23 +941,18 @@ export default function ComposeTab({
           The full-SOW cards stay mounted-off rather than hidden so each tab
           renders only what it needs; the record underneath is the same. */}
       {composeMode === 'svt' && (
-        <>
-          <SvtCard
-            record={record}
-            settings={settings}
-            update={update}
-            onKeyDown={noteKeyDown}
-            dropped={dropped}
-            drift={bulletDrift}
-            onToggle={togglePolished}
-            onClearDropped={clearDropped}
-            onClearDrift={clearDrift}
-          />
-          <div className="card">
-            <h3>AI polish</h3>
-            {aiActions}
-          </div>
-        </>
+        <SvtCard
+          record={record}
+          settings={settings}
+          update={update}
+          onKeyDown={noteKeyDown}
+          dropped={dropped}
+          drift={bulletDrift}
+          onToggle={togglePolished}
+          onClearDropped={clearDropped}
+          onClearDrift={clearDrift}
+          actions={aiActions}
+        />
       )}
 
       {composeMode === 'sow' && (
@@ -1097,7 +1113,16 @@ export default function ComposeTab({
           is acknowledging it. Appears only when something grounded matched. */}
       {reminders && (
         <div className="modal-overlay" onClick={() => setReminders(null)}>
-          <div className="modal note-check-modal" onClick={(e) => e.stopPropagation()}>
+          <div
+            className="modal note-check-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Reminders"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setReminders(null);
+            }}
+          >
             <h3>
               Reminders — {reminders.length} requirement note{reminders.length === 1 ? '' : 's'} may apply
             </h3>
@@ -1117,7 +1142,7 @@ export default function ComposeTab({
               ))}
             </ul>
             <div className="modal-actions">
-              <button type="button" className="btn primary" onClick={() => setReminders(null)}>
+              <button type="button" ref={remindersOkRef} className="btn primary" onClick={() => setReminders(null)}>
                 Got it
               </button>
             </div>

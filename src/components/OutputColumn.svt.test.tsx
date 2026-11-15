@@ -44,6 +44,25 @@ describe('OutputColumn — SVT pre-design mode', () => {
     expect(screen.queryByRole('tab', { name: /Salesforce fields/i })).toBeNull();
   });
 
+  it('the readiness list describes the SVT post, not the SOW handoff (audit 2026-11-15)', () => {
+    renderColumn('svt');
+    // The three pre-design advisories…
+    expect(screen.getByText('Battery location filled')).toBeTruthy();
+    expect(screen.getByText('Homeowner agreement answered')).toBeTruthy();
+    expect(screen.getByText('Conduit path ticked')).toBeTruthy();
+    // …and none of the SOW-stage rows (the wire advisory had no control to
+    // answer it in this mode, and nothing is ever "appended" to an SVT post).
+    expect(screen.queryByText(/Wire material/)).toBeNull();
+    expect(screen.queryByText(/Level 1 chosen/)).toBeNull();
+    expect(screen.queryByText(/requirements appended|requirements reviewed/)).toBeNull();
+  });
+
+  it('the SVT advisories never gate the copy (no Required fields — house rule)', () => {
+    renderColumn('svt'); // makeRecord has no battery location, no svt answers
+    expect((screen.getByRole('button', { name: /Copy SVT post/i }) as HTMLButtonElement).disabled).toBe(false);
+    expect(screen.getByText(/Ready to post/i)).toBeTruthy();
+  });
+
   it('the same four required fields gate the SVT copy', () => {
     const record = makeRecord();
     record.sf = { ...record.sf, siteAddress: '' };

@@ -133,6 +133,15 @@ describe('buildSvtPostText', () => {
     expect(buildSvtPostText(rec)).toContain('Why it does not work: raw reason.');
   });
 
+  it('the "Anything else" box stays a full-SOW detail — never in the SVT post', () => {
+    // Found by the 2026-11-15 pre-deploy audit: svtPost passed 'other' in the
+    // omit list but installNoteLines never checked it, so the box leaked.
+    const rec = svtRecord({
+      installNotes: { ...emptyInstallNotes(), other: 'Bring the 40 ft ladder for the rear roof' },
+    });
+    expect(buildSvtPostText(rec)).not.toContain('40 ft ladder');
+  });
+
   it('an empty record still renders the header and the duration line', () => {
     const text = buildSvtPostText(makeRecord());
     expect(text).toContain('*Pre-Design Analysis — Norca Garcia*');

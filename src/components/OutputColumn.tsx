@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
-import { buildSvtPostHtml, buildSvtPostText } from '../lib/svtPost';
+import { buildSvtPostHtml, buildSvtPostText, SVT_PATHS } from '../lib/svtPost';
 import { noteCheck } from '../lib/api';
 import { SHORT, wireStatus } from '../lib/wireMaterial';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
@@ -227,24 +227,55 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
 
   // The battery installation analysis is deliberately absent from this list
   // (Aboud 2026-11-03) — it is not required, so it must not read as a gap.
-  const checks: Check[] = [
+  const requiredChecks: Check[] = [
     { label: 'Customer name', done: !missing.includes('Customer name'), action: 'Fill in' },
     { label: 'Jurisdiction', done: !missing.includes('Jurisdiction'), action: 'Fill in' },
     { label: 'Site address', done: !missing.includes('Site address'), action: 'Fill in' },
     ...(missing.includes('Region text')
       ? [{ label: 'Region text', done: false, action: 'Fill in' } as Check]
       : []),
-    { label: `Level ${record.level} chosen · ${LEVEL_NAMES[record.level]}`, done: true },
-    {
-      label: ahjMatch
-        ? ahjApproved
-          ? `${ahjMatch.ahj.name} requirements appended`
-          : `${ahjMatch.ahj.name} requirements reviewed, not appended`
-        : 'No AHJ board on file',
-      done: true,
-    },
-    wireCheck,
   ];
+  // The SVT list describes the SVT post it sits beside (audit 2026-11-15):
+  // the SOW-stage rows made no sense at pre-design — the wire advisory had
+  // nowhere to be answered (WireCheckRow is a SOW-tab control), and "Level
+  // chosen" / "requirements appended" describe the handoff post. All three
+  // SVT rows are advisories, never gates — the house rule.
+  const checks: Check[] =
+    mode === 'svt'
+      ? [
+          ...requiredChecks,
+          {
+            label: 'Battery location filled',
+            done: !!record.installNotes?.batteryLocation?.trim(),
+            tone: 'advisory',
+            action: 'Fill in',
+          },
+          {
+            label: 'Homeowner agreement answered',
+            done: record.svt?.hoAgrees !== undefined,
+            tone: 'advisory',
+            action: 'Answer',
+          },
+          {
+            label: 'Conduit path ticked',
+            done: SVT_PATHS.some((p) => record.svt?.[p.field]) || !!record.svt?.pathNotes?.trim(),
+            tone: 'advisory',
+            action: 'Tick',
+          },
+        ]
+      : [
+          ...requiredChecks,
+          { label: `Level ${record.level} chosen · ${LEVEL_NAMES[record.level]}`, done: true },
+          {
+            label: ahjMatch
+              ? ahjApproved
+                ? `${ahjMatch.ahj.name} requirements appended`
+                : `${ahjMatch.ahj.name} requirements reviewed, not appended`
+              : 'No AHJ board on file',
+            done: true,
+          },
+          wireCheck,
+        ];
 
   return (
     <aside className="compose-aside">

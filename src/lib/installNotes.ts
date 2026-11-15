@@ -341,8 +341,13 @@ export function installNoteLines(
   }
 
   // 3. "Anything else" — unlabelled, one bullet per line, exactly as the old
-  //    free-text Installation Layout note rendered. Keeps the migration invisible.
-  lines.push(...noteLines(effectiveText(n.other, 'install.other', p)));
+  //    free-text Installation Layout note rendered. Keeps the migration
+  //    invisible. Omittable since 2026-11-15: the SVT pre-design post leaves
+  //    it out (a full-SOW detail), and the omit check was missing — found by
+  //    the pre-deploy audit, pinned in svtPost.test.ts.
+  if (!omit.includes('other')) {
+    lines.push(...noteLines(effectiveText(n.other, 'install.other', p)));
+  }
 
   if (!omit.includes('specialCases')) {
     const def = field('specialCases');
