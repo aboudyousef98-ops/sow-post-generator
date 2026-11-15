@@ -406,17 +406,53 @@ this run), full gate clean, verified live.
 
 ---
 
+## 10. Users management — email + inline account editing (2026-11-15) ✅ done, tested — PENDING
+
+Commit `d330117`. Admin → Users becomes the account manager Aboud asked for
+("manage the users accounts, emails, password"): **Email column** (optional,
+contact-info only — never used for login; `TeamUser.email?`, no-migration),
+**inline Edit** per row (display name + email; hint that old posts/board rows
+keep the previous name), add-form gains "Email (optional)",
+`normalizeEmail`/`looksLikeEmail` guards in `src/lib/auth.ts`. Password reset
+and role/archive controls already existed and stay. Skeleton column added.
+Post-deploy this screen is how the **5-password rotation** chore gets done.
+
+---
+
+## 11. Per-column board permissions (2026-11-15) ✅ done, tested — PENDING
+
+Commit `7e40e93`. The ask: "a dropdown for each column where i can assign
+editing permission … refai to edit the stars column but khaled mattar view
+only … hide columns from some users."
+
+- **Admin-only "🔒 Permissions"** button on the board toolbar → modal with a
+  row per column (name, coordinator, reviewer, status, pre-design status,
+  designed date, phase, rating): **Edit** picker (Everyone default / named
+  members) + **Hide from** picker (every column except project name).
+- Keyed by **username** (renames can't flip access); **admins are never
+  restricted** and always see everything; client-side honest-team
+  enforcement (accepted threat model).
+- Enforced at every write path — desktop applyPatch / applyWithAutomations /
+  bulkApply and mobile applyPatch — blocked edits toast "View only" and
+  change nothing. Hidden columns vanish from the table **and** the Columns ▾
+  menu.
+- Storage: `columnPerms` on the board blob — `mergeById` client+server,
+  `Stamped` entry in the strict PutSchema (max 200, the `updates`-incident
+  lesson applied), tombstone-revive on re-set. Optional field, old blobs and
+  old clients untouched, schemaVersion stays 1.
+- New: `src/lib/columnPerms.ts` (+tests), `src/board/PermissionsModal.tsx`.
+- Gate: **76 files / 1352 tests** all green (no flake this run), tsc, lint,
+  build, nosecrets clean. Verified live on localhost: modal, member picker,
+  set→label updates→revert persisted; member-side blocking covered by
+  component tests (only one real login exists locally).
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
    Blobs into `_versions/vNN-live-backup-YYYY-MM-DD/` and diff after.
 2. Wait for Aboud's deploy trigger ("yalla deploy") — package deploys only.
-
-## Designed but not built
-
-- **Slack material-requests capture** — brainstormed 2026-11-05/06, design
-  agreed (batch "Paste from Slack" inbox + soft popup at "Working on it" +
-  hard gate at Ready to submit / Done). Spec not yet written.
 
 ## Unrelated, still open
 
