@@ -391,6 +391,21 @@ switch, Escape).
 
 ---
 
+## 9. SVT Salesforce view + SOW default/left (2026-11-15) ✅ done, tested — PENDING
+
+(1) **SVT output gains "Slack post | Salesforce"** — the same bullets
+(`buildSvtLines`, one source) rendered via `buildSvtSfText()` with the SF
+plain-text conventions (`underline`/`runLines` now EXPORTED from
+sfSubmission.ts so the conventions live once): dashed title underlines,
+`- ` lines, nested indents. The main button follows the view — "Copy for
+Salesforce" copies plain text only. (2) **SOW is the LEFT and DEFAULT mode
+card**; the localStorage persistence was removed so Compose always opens on
+SOW. Panel-button polish rode earlier in `item 8` (Add request under its
+box, ↩ Reply pill). Gate: **74 files / 1334 tests** green (flake included
+this run), full gate clean, verified live.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
