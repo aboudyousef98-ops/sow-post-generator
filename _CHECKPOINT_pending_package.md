@@ -348,6 +348,12 @@ inbox.
   <select> — 400 rows outgrew it.
 Gate after the round: **73 files / 1322 tests** green, full gate clean,
 driven on localhost.
+- **Chips merged into ONE pill** (follow-up same day — "their feature is the
+  same"): quiet `💬 +` with nothing, teal `💬 n` with updates, AMBER with
+  `● n` (or `💬 n · ● n`) the moment requests are open — the louder state
+  wins. 73 files / 1323 tests green. (One `App.integration` flake during the
+  gate reproduced identically with the change stashed — pre-existing
+  machine-load timing, green on re-run; the vitest-sequential rule stands.)
 
 ---
 
