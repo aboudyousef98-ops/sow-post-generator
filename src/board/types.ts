@@ -199,6 +199,34 @@ export interface ProjectUpdate {
 }
 
 /**
+ * One designer request captured from Slack (Aboud 2026-11-06 design, built
+ * 2026-11-15): "for rebecca post we will need to special order cu ser wires",
+ * "call me before you start this one". Pasted in batch from
+ * #design-sow-team, matched to a board row, surfaced as an amber chip, shown
+ * at "Working on it" and REQUIRED resolved at "Ready to submit"/"Done".
+ *
+ * Not a ProjectUpdate on purpose: an update is prose with no lifecycle; a
+ * request has state (open → resolved), an external author, and a resolution.
+ * Merged by id/updatedAt with a delete tombstone — the `automations` contract.
+ */
+export interface ProjectRequest {
+  id: string; // uuid — merge key
+  /** null = parked in the inbox: the message names a project whose row does
+   * not exist yet (it happened — Maria M Acevedo). Attached later by hand
+   * from the Paste from Slack screen. */
+  projectId: string | null;
+  /** The pasted Slack message, verbatim — the designer's words, never reworded. */
+  text: string;
+  addedBy: string;
+  addedAt: string;
+  resolvedBy?: string;
+  resolvedAt?: string;
+  deleted?: { at: string; by: string };
+  /** Merge key — newer wins, same contract as everything else here. */
+  updatedAt: string;
+}
+
+/**
  * What a user-written automation fires on. CHANGE triggers only — this site
  * has no server that can run a job, so a time-based trigger could only fire
  * when somebody happened to have the board open. See lib/automations.ts.
@@ -297,4 +325,10 @@ export interface BoardState {
    * reader must tolerate `undefined` — mergeBoard normalises it to [].
    */
   updates: ProjectUpdate[];
+  /**
+   * Slack-captured designer requests, added 2026-11-15. Same contract as
+   * `automations`: absent on older boards, merged by id with newer updatedAt
+   * winning (tombstones included), read through lib/requests.liveRequests.
+   */
+  requests?: ProjectRequest[];
 }

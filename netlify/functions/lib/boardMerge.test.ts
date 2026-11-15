@@ -185,3 +185,15 @@ describe('mergePrefs mirrors the client', () => {
     expect(merged.projects).toHaveLength(1);
   });
 });
+
+describe('requests (Slack-captured, 2026-11-15)', () => {
+  test('accepts the key, merges by id/updatedAt, and tolerates its absence', () => {
+    const a = { id: 'r1', updatedAt: '2026-11-15T10:00:00.000Z', text: 'order the wires' };
+    const b = { id: 'r1', updatedAt: '2026-11-15T11:00:00.000Z', text: 'order the wires', resolvedAt: 'x' };
+    const base = { projects: [], labels: [], activity: [], updates: [] };
+    expect(PutSchema.parse({ ...base, requests: [a] }).requests).toEqual([a]);
+    expect(PutSchema.parse(base).requests).toEqual([]); // old client omits the key
+    const merged = mergeBoard({ ...base, requests: [a] }, { ...base, requests: [b] });
+    expect(merged.requests).toEqual([b]);
+  });
+});

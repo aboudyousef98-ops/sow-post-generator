@@ -161,6 +161,7 @@ export const SVT_TEXT_FIELDS: { key: PolishKey; field: SvtTextField; label: stri
   { key: 'svt.alt2Location', field: 'alt2Location', label: 'Alternative location 2' },
   { key: 'svt.alt2Reason', field: 'alt2Reason', label: 'Reason' },
   { key: 'svt.pathNotes', field: 'pathNotes', label: 'Path notes' },
+  { key: 'svt.schedulingNotes', field: 'schedulingNotes', label: 'Scheduling notes' },
 ];
 
 /** Every polishable box. Order is the request order sent to /api/rewrite.

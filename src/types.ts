@@ -236,7 +236,8 @@ export type SvtTextField =
   | 'alt1Reason'
   | 'alt2Location'
   | 'alt2Reason'
-  | 'pathNotes';
+  | 'pathNotes'
+  | 'schedulingNotes';
 
 export interface SvtNotes {
   /**
@@ -270,11 +271,15 @@ export interface SvtNotes {
   /** Anything about the path the ticks cannot say. */
   pathNotes?: string;
   /**
-   * Two-day job (Issam, #sow-svt-collab 2026-11-13): SOW marks the job and the
-   * CLR team books two consecutive GANTT slots with the right HO expectations.
-   * Prints TWO_DAY_LINE; derived, never typed.
+   * One- or two-day job (Issam, #sow-svt-collab 2026-11-13; widened from a
+   * two-day tick on Aboud's 2026-11-15 review): SOW calls the crew days and
+   * the CLR team books the Gantt accordingly — two-day means two consecutive
+   * slots with the right HO expectations. Prints ONE_DAY_LINE/TWO_DAY_LINE;
+   * derived, never typed. Unanswered prints nothing.
    */
-  twoDay?: boolean;
+  crewDays?: 1 | 2;
+  /** Anything scheduling should know (HO availability, access windows…). */
+  schedulingNotes?: string;
 }
 
 // ---- Wire material check (Aboud 2026-11-11) ------------------------------

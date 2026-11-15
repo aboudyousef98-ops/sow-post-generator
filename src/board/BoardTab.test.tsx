@@ -455,6 +455,92 @@ describe('BoardTab — Tier 1', () => {
     expect(screen.getByText('Karan Staggers')).toBeTruthy();
   });
 
+  // ---- Slack requests (Aboud 2026-11-06 design, built 2026-11-15) -----------
+
+  it('Paste from Slack matches a message to its row and shows the amber chip', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Paste from Slack/ }));
+    fireEvent.change(screen.getByLabelText('Pasted Slack messages'), {
+      target: { value: 'for Martha Thompson please special order the Cu SER wires' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Match messages' }));
+    // The fuzzy guess pre-fills the picker — a human still confirms.
+    expect((screen.getByLabelText('Attach to project') as HTMLSelectElement).value).toBe('pj-1');
+    fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const chip = screen.getByTitle(/Open Slack requests/);
+    expect(chip.textContent).toContain('1');
+  });
+
+  it('an unmatched message parks in the inbox instead of guessing', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Paste from Slack/ }));
+    fireEvent.change(screen.getByLabelText('Pasted Slack messages'), {
+      target: { value: 'please call me before starting the Maria M Acevedo job' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Match messages' }));
+    expect((screen.getByLabelText('Attach to project') as HTMLSelectElement).value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
+    expect(screen.getByText(/Inbox — waiting for their rows \(1\)/)).toBeTruthy();
+    // No chip anywhere: the request has no row yet.
+    expect(screen.queryByTitle(/Open Slack requests/)).toBeNull();
+  });
+
+  it('an open request hard-gates Done and resolving in the modal releases it', () => {
+    const board = withRows();
+    board.requests = [
+      {
+        id: 'req-1',
+        projectId: 'pj-1',
+        text: 'special order Cu SER wires — make sure it is in the BOS',
+        addedBy: 'Hamzah Malas',
+        addedAt: '2026-11-15T10:00:00.000Z',
+        updatedAt: '2026-11-15T10:00:00.000Z',
+      },
+    ];
+    render(<Harness initial={board} />);
+    const martha = screen.getByText('Martha Thompson').closest('tr')!;
+    fireEvent.click(within(martha).getByRole('button', { name: 'New project' }));
+    fireEvent.click(screen.getByRole('option', { name: 'Done' }));
+    // Held: the gate lists the request; the row has NOT moved.
+    expect(screen.getByText(/1 open Slack request on Martha Thompson/)).toBeTruthy();
+    expect(within(screen.getByText('Martha Thompson').closest('tr')!).getByText('New project')).toBeTruthy();
+    // Confirm it is done → the status change lands (the row moves into the
+    // collapsed Completed section, so the toast is the visible evidence).
+    fireEvent.click(screen.getByRole('checkbox', { name: /Resolved — this is done/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Resolve it and set/ }));
+    expect(screen.queryByText(/open Slack request on/)).toBeNull();
+    expect(toasts.some((t) => t.text === 'Martha Thompson → Done.')).toBe(true);
+  });
+
+  // ---- Active Projects collapse (Aboud 2026-11-15) --------------------------
+
+  it('the active table is titled Active Projects and collapses like the other sections', () => {
+    render(<Harness initial={withHold()} />);
+    const toggle = screen.getByRole('button', { name: /Active Projects/ });
+    // Open by default: rows and the add-project input are there.
+    expect(screen.getByText('Martha Thompson')).toBeTruthy();
+    expect(screen.getByLabelText('Add project')).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    expect(screen.queryByLabelText('Add project')).toBeNull();
+    // The count chip still says how many rows are hiding (withRows' three
+    // active ones — the Hold row lives in its own section).
+    expect(within(toggle).getByText('3')).toBeTruthy();
+
+    fireEvent.click(toggle);
+    expect(screen.getByText('Martha Thompson')).toBeTruthy();
+  });
+
+  it('a search reopens a collapsed active table without writing the preference', () => {
+    render(<Harness initial={withHold()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Active Projects/ }));
+    expect(screen.queryByText('Martha Thompson')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: 'Martha' } });
+    expect(screen.getByText('Martha Thompson')).toBeTruthy();
+  });
+
   it('the section sits between the active table and Completed projects', () => {
     render(<Harness initial={withHold()} />);
     const cards = Array.from(document.querySelectorAll('.list-card'));

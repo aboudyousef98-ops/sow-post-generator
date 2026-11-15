@@ -35,10 +35,11 @@ export const SVT_PATHS: {
 ];
 
 /**
- * The two-day flag's sentence (Issam, 2026-11-13): SOW marks the job as
- * two-day and the CLR team books two consecutive GANTT slots with the right
- * homeowner expectations. Derived, never a PolishKey.
+ * The crew-days sentences (Issam, 2026-11-13; widened to a one/two pick on
+ * Aboud's 2026-11-15 review): SOW calls the crew days and the CLR team books
+ * the Gantt accordingly. Derived, never PolishKeys.
  */
+export const ONE_DAY_LINE = 'One-day job — one crew day covers it.';
 export const TWO_DAY_LINE = 'Two-day job — schedule two consecutive crew days.';
 
 export const HO_AGREES_LINE = 'The homeowner agrees with the proposed battery location.';
@@ -89,6 +90,17 @@ function pathLines(record: PostRecord): string[] {
   return lines;
 }
 
+/** The Scheduling bullet: the crew-days call, then anything scheduling
+ * should know. Unanswered prints nothing — the house tri-state contract. */
+function schedulingLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  const lines: string[] = [];
+  if (s.crewDays === 1) lines.push(ONE_DAY_LINE);
+  else if (s.crewDays === 2) lines.push(TWO_DAY_LINE);
+  lines.push(...noteLines(effectiveText(s.schedulingNotes ?? '', 'svt.schedulingNotes', record)));
+  return lines;
+}
+
 /**
  * The SVT post's bullets, in fixed order. The Installation Notes bullet is
  * installNoteLines — the exact builder the SOW post uses — which covers walls,
@@ -105,7 +117,7 @@ export function buildSvtLines(record: PostRecord): PostItem[] {
       label: 'Installation Notes',
       values: installNoteLines(record.installNotes, record, record.sf.utility, ['batteryLocation', 'other']),
     },
-    { label: 'Scheduling', values: record.svt?.twoDay ? [TWO_DAY_LINE] : [] },
+    { label: 'Scheduling', values: schedulingLines(record) },
   ];
   return items.filter((it) => it.values.length > 0);
 }

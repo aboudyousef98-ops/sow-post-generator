@@ -48,6 +48,10 @@ export const PutSchema = z
     // strict-schema reason as `prefs` and `updates`, and defaulted to [] so an
     // older client that omits the key keeps saving.
     automations: z.array(Stamped).max(500).optional().default([]),
+    // Slack-captured requests, added 2026-11-15. Optional + defaulted for the
+    // exact strict-schema reason documented on `updates` above — a key the
+    // client sends and the server does not declare 400s EVERY board save.
+    requests: z.array(Stamped).max(5000).optional().default([]),
   })
   .strict();
 
@@ -62,6 +66,7 @@ export interface BoardBlob {
   updates: Stamped[];
   prefs?: Prefs;
   automations?: Stamped[];
+  requests?: Stamped[];
 }
 
 export function mergeStamped(current: Stamped[], incoming: Stamped[]): Stamped[] {
@@ -96,6 +101,10 @@ export function mergeBoard(current: BoardBlob | null, incoming: BoardBlob): Boar
     // Same contract as labels and updates — a rule's deletedAt tombstone
     // carries a newer updatedAt and therefore wins.
     automations: mergeStamped(cur.automations ?? [], incoming.automations ?? []),
+    // Slack-captured requests (2026-11-15) — same contract. Must mirror
+    // src/lib/board.ts mergeBoard, or a client and the server converge on
+    // different boards.
+    requests: mergeStamped(cur.requests ?? [], incoming.requests ?? []),
   };
 }
 

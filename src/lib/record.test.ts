@@ -97,8 +97,8 @@ describe('hasContent — svt pre-design fields', () => {
     expect(hasContent(r)).toBe(true);
   });
 
-  it('a record with ONLY the two-day tick counts as content', () => {
-    const r = makeRecord({ sf: blankSf, svt: { twoDay: true } });
+  it('a record with ONLY the crew-days pick counts as content', () => {
+    const r = makeRecord({ sf: blankSf, svt: { crewDays: 1 } });
     expect(hasContent(r)).toBe(true);
   });
 

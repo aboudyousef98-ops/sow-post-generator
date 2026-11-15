@@ -3163,6 +3163,73 @@ tr:hover .board-label-cell.empty {
   background: #c4314b;
 }
 
+/* Slack-captured requests (Aboud 2026-11-06 design, built 2026-11-15) ------ */
+/* The amber chip in the name cell — open designer requests on this row. */
+.board-req-chip {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--dyn-warn-bg);
+  color: var(--dyn-warn-ink);
+  white-space: nowrap;
+}
+.board-req-chip:hover {
+  background: var(--dyn-yellow);
+}
+/* The capture/confirm/gate lists — dense, one block per message. */
+.req-confirm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 340px;
+  overflow: auto;
+}
+.req-confirm {
+  border: 1px solid var(--dyn-border);
+  border-radius: var(--radius-input);
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.req-confirm.req-done {
+  opacity: 0.6;
+}
+.req-text {
+  white-space: pre-wrap;
+  line-height: 1.5;
+  font-size: 13.5px;
+  color: var(--dyn-ink);
+}
+.req-meta {
+  font-size: 12px;
+  color: var(--dyn-muted);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.req-inbox-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Active Projects — the main table's own collapse toggle (Aboud 2026-11-15:
+   "make it collapse like other groups"). House navy, teal count chip with
+   navy ink (white on teal fails contrast). */
+.board-active-toggle {
+  color: var(--dyn-navy);
+}
+.board-active-toggle .board-done-count {
+  background: var(--dyn-teal);
+  color: var(--dyn-navy);
+}
+
 /* Pre-Design — the SVT collab taskforce's survey-stage analyses, in the
    seeded "Pre-Design" status label's own light blue (Aboud 2026-11-15). */
 .board-predesign .board-done-toggle {

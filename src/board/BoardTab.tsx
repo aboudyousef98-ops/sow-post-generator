@@ -107,6 +107,7 @@ import type {
   BoardProject,
   BoardState,
   LabelColumnKey,
+  ProjectRequest,
   ProjectUpdate,
   UpdateKind,
 } from './types';
@@ -122,6 +123,8 @@ import AutomationsModal from './AutomationsModal';
 import UpdatesModal from './UpdatesModal';
 import UpdateSearchModal from './UpdateSearchModal';
 import RequireNoteModal, { type NoteGate } from './RequireNoteModal';
+import { PasteFromSlackModal, RequestsGateModal, RequestsViewerModal } from './RequestsModal';
+import { isReadyOrDoneLabel, isWorkingLabel, openRequestsFor } from '../lib/requests';
 import EditLabelsModal from './EditLabelsModal';
 import ImportModal, { type ImportRequest } from './ImportModal';
 import Popover from './Popover';
@@ -134,6 +137,7 @@ const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
 const KEY_SCOPE_OPEN = 'sowpost.board.scopeOpen.v1';
 const KEY_REVIEW_OPEN = 'sowpost.board.reviewOpen.v1';
 const KEY_PREDESIGN_OPEN = 'sowpost.board.predesignOpen.v1';
+const KEY_ACTIVE_OPEN = 'sowpost.board.activeOpen.v1';
 const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
 const KEY_ORDER = 'sowpost.board.colOrder.v1';
 
@@ -144,7 +148,7 @@ const KEY_ORDER = 'sowpost.board.colOrder.v1';
 type Section = 'active' | 'predesign' | 'review' | 'scope' | 'done';
 
 const SECTION_TITLE: Record<Section, string> = {
-  active: 'the board',
+  active: 'Active Projects',
   predesign: 'Pre-Design',
   review: 'Installation Review',
   scope: 'Out of SOW scope',
@@ -745,6 +749,15 @@ export default function BoardTab({
   const [editLabels, setEditLabels] = useState<LabelColumnKey | null>(null);
   const [activityFor, setActivityFor] = useState<BoardProject | null>(null);
   const [updatesFor, setUpdatesFor] = useState<BoardProject | null>(null);
+  // Slack-captured requests (Aboud 2026-11-06 design, built 2026-11-15).
+  const [slackOpen, setSlackOpen] = useState(false);
+  const [reqView, setReqView] = useState<{ project: BoardProject; soft?: boolean } | null>(null);
+  const [reqGate, setReqGate] = useState<{
+    project: BoardProject;
+    patch: ProjectPatch;
+    open: ProjectRequest[];
+    targetName: string;
+  } | null>(null);
   const [askOpen, setAskOpen] = useState(false);
   /**
    * A patch held hostage until the user explains it (#3 rating, #6 pending,
@@ -785,6 +798,8 @@ export default function BoardTab({
   // is live work waiting on someone, not a parking space (Aboud 2026-11-03).
   const [reviewOpen, setReviewOpen] = useState(() => localStorage.getItem(KEY_REVIEW_OPEN) !== '0');
   const [predesignOpen, setPredesignOpen] = useState(() => localStorage.getItem(KEY_PREDESIGN_OPEN) !== '0');
+  // The main table collapses like its sibling sections (Aboud 2026-11-15).
+  const [activeOpen, setActiveOpen] = useState(() => localStorage.getItem(KEY_ACTIVE_OPEN) !== '0');
   const addRef = useRef<HTMLInputElement>(null);
   // Tier 1: group by, collapsed groups, and bulk selection.
   const [groupBy, setGroupBy] = useState<GroupKey>(
@@ -839,6 +854,9 @@ export default function BoardTab({
   useEffect(() => {
     localStorage.setItem(KEY_PREDESIGN_OPEN, predesignOpen ? '1' : '0');
   }, [predesignOpen]);
+  useEffect(() => {
+    localStorage.setItem(KEY_ACTIVE_OPEN, activeOpen ? '1' : '0');
+  }, [activeOpen]);
   useEffect(() => {
     localStorage.setItem(KEY_GROUP_BY, groupBy);
   }, [groupBy]);
@@ -895,6 +913,31 @@ export default function BoardTab({
 
   /** projectId → live update count, for the Updates column badge. */
   const updateCountById = useMemo(() => updateCounts(board.updates), [board.updates]);
+
+  /** Open Slack requests per row — what the amber chip shows and the gates
+   * block on (2026-11-15). */
+  const openReqCountById = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const r of board.requests ?? []) {
+      if (r.deleted || r.resolvedAt || !r.projectId) continue;
+      map.set(r.projectId, (map.get(r.projectId) ?? 0) + 1);
+    }
+    return map;
+  }, [board.requests]);
+
+  /** Upsert requests in ONE board write (paste batch, resolve, attach).
+   * boardRef is advanced SYNCHRONOUSLY: the gate's confirm writes the
+   * resolutions and then immediately re-dispatches the held status change,
+   * and that second write must see them or the gate re-pops forever. */
+  const putRequests = (items: ProjectRequest[]) => {
+    if (!items.length) return;
+    const cur = boardRef.current;
+    const byId = new Map((cur.requests ?? []).map((r) => [r.id, r]));
+    for (const r of items) byId.set(r.id, r);
+    const next = { ...cur, requests: [...byId.values()] };
+    boardRef.current = next;
+    setBoard(next);
+  };
   // What the per-column filters read a cell as. See lib/boardColumns.
   const columnCtx = useMemo(
     () => ({ labels: board.labels, installByProject, updateCountById }),
@@ -1004,6 +1047,19 @@ export default function BoardTab({
     }
 
     if ('statusId' in patch) {
+      // Hard gate FIRST (Aboud 2026-11-06, built 2026-11-15): open Slack
+      // requests must be resolved before "Ready to submit"/"Done" — the
+      // friction belongs at the moment the BOS is finished. Resolving in the
+      // modal re-dispatches this guard, so a needs-a-note gate still runs
+      // after it.
+      const target = labelById(boardRef.current.labels, (patch.statusId as string) ?? null);
+      if (isReadyOrDoneLabel(target)) {
+        const open = openRequestsFor(boardRef.current.requests, project.id);
+        if (open.length) {
+          setReqGate({ project, patch, open, targetName: target!.name });
+          return false;
+        }
+      }
       // Which statuses gate is DATA now, not a name in this file: any status
       // ticked "needs a note" in Edit labels lands here, which is how
       // "Pending Update" joined "Pending Additional Information" without a
@@ -1607,7 +1663,7 @@ export default function BoardTab({
     // like "nothing appears". The user's own open/shut preferences are not
     // written to.
     const base = [
-      ...active,
+      ...(activeOpen || searching ? active : []),
       ...(predesignOpen || searching ? preDesign : []),
       ...(reviewOpen || searching ? installReview : []),
       ...(scopeOpen || searching ? outOfScope : []),
@@ -1619,7 +1675,7 @@ export default function BoardTab({
       if (collapsed[g.key]) for (const p of g.rows) hidden.add(p.id);
     }
     return hidden.size ? base.filter((p) => !hidden.has(p.id)) : base;
-  }, [active, installReview, preDesign, outOfScope, completed, predesignOpen, reviewOpen, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
+  }, [active, installReview, preDesign, outOfScope, completed, activeOpen, predesignOpen, reviewOpen, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
 
   /**
    * Rows a bulk action will touch. Resolved from every LIVE project, not from
@@ -1728,6 +1784,18 @@ export default function BoardTab({
         cell: ({ row }) => (
           <div className="board-name-wrap">
             <NameCell project={row.original} onRename={(name) => applyPatch(row.original, { name: cleanName(name) })} />
+            {/* Open Slack requests — the amber chip (Aboud 2026-11-06 design,
+                2026-11-15). No column of its own: the chip IS the column. */}
+            {(openReqCountById.get(row.original.id) ?? 0) > 0 && (
+              <button
+                type="button"
+                className="board-req-chip"
+                title="Open Slack requests from the designers — read before working, resolve before Done"
+                onClick={() => setReqView({ project: row.original })}
+              >
+                ● {openReqCountById.get(row.original.id)}
+              </button>
+            )}
             <RowMenu
               project={row.original}
               isAdmin={isAdmin}
@@ -1807,6 +1875,12 @@ export default function BoardTab({
               // is holding the change, in which case there is nothing to
               // announce yet — the modal is the announcement.
               if (!guardedPatch(row.original, { statusId })) return;
+              // Work starts → show the designers' open requests once
+              // (soft popup, Aboud 2026-11-06; nothing blocked).
+              const landed = labelById(boardRef.current.labels, statusId);
+              if (isWorkingLabel(landed) && (openReqCountById.get(row.original.id) ?? 0) > 0) {
+                setReqView({ project: row.original, soft: true });
+              }
               // Crossing INTO a done or out-of-scope label hides the row from
               // the main board — announce where it went, with a way back.
               const from = sectionOf(labelById(boardRef.current.labels, prev));
@@ -1992,7 +2066,7 @@ export default function BoardTab({
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh
     // when the data they RENDER changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board.labels, authors, me, isAdmin, postsByProject, installByProject, updateCountById, today, selected, allShownSelected, someShownSelected],
+    [board.labels, authors, me, isAdmin, postsByProject, installByProject, updateCountById, openReqCountById, today, selected, allShownSelected, someShownSelected],
   );
 
   // Reconciled every render: a saved order from an older release must not hide
@@ -2336,6 +2410,14 @@ export default function BoardTab({
           <button
             type="button"
             className="btn small secondary"
+            onClick={() => setSlackOpen(true)}
+            title="Paste the designers' Slack requests — matched to their projects, shown when work starts, required resolved before Done"
+          >
+            📥 Paste from Slack
+          </button>
+          <button
+            type="button"
+            className="btn small secondary"
             onClick={() => setImportOpen(true)}
             title="Paste a Scope of Work Assignments report and add whatever is missing"
           >
@@ -2379,6 +2461,23 @@ export default function BoardTab({
           </Popover>
         </div>
 
+        {/* The main table collapses like its sibling sections (Aboud
+            2026-11-15: "make it collapse like other groups"). A search forces
+            it open without writing the preference — the same contract the
+            other sections follow. */}
+        <button
+          type="button"
+          className="board-done-toggle board-active-toggle"
+          aria-expanded={activeOpen || searching}
+          onClick={() => setActiveOpen((v) => !v)}
+        >
+          <span className={`board-done-caret ${activeOpen || searching ? 'open' : ''}`}>▸</span>
+          Active Projects
+          <span className="board-done-count">{active.length}</span>
+        </button>
+
+        {(activeOpen || searching) && (
+        <>
         {/* ONE context for rows and columns; each sortable says which it is.
             The axis modifier is picked from what is actually moving, so a row
             cannot drift sideways and a header cannot drift down. */}
@@ -2554,6 +2653,8 @@ export default function BoardTab({
             </span>
           )}
         </div>
+        </>
+        )}
       </div>
 
       {/* Out of SOW scope sits BETWEEN active and Completed on purpose
@@ -2632,25 +2733,41 @@ export default function BoardTab({
             onChange={(ids) => {
               const label = labelById(board.labels, ids[0] ?? null);
               if (!label) return;
+              // The Slack-requests hard gate holds here too (2026-11-15):
+              // rows still owing a request stay put and are named; the rest
+              // of the batch proceeds. One modal cannot collect resolutions
+              // for many rows honestly, so blocked rows are resolved from
+              // their own amber chips first.
+              let rows = picked;
+              if (isReadyOrDoneLabel(label)) {
+                const blocked = rows.filter((p) => (openReqCountById.get(p.id) ?? 0) > 0);
+                if (blocked.length) {
+                  rows = rows.filter((p) => !(openReqCountById.get(p.id) ?? 0));
+                  toast(
+                    `${blocked.length} selected project${blocked.length === 1 ? ' still owes' : 's still owe'} open Slack requests (amber chip) — resolve those first.`,
+                  );
+                  if (!rows.length) return;
+                }
+              }
               // This used to call bulkApply directly, so moving 20 rows to
               // "Pending Additional Information" slipped the gate entirely and
               // posted nothing. One explanation now covers the whole batch.
               if (labelRequiresNote(label)) {
                 const g = statusGate(label);
                 setGate({
-                  projects: picked,
+                  projects: rows,
                   patch: { statusId: label.id },
                   kind: isPendingInfoLabel(label.name) ? 'pending-info' : 'status',
                   describe: label.name,
                   gate: {
                     ...g,
-                    prompt: `${picked.length} project${picked.length === 1 ? '' : 's'} moving to “${label.name}”. The same update is posted to every one of them.`,
-                    confirmLabel: `Set ${picked.length} and post`,
+                    prompt: `${rows.length} project${rows.length === 1 ? '' : 's'} moving to “${label.name}”. The same update is posted to every one of them.`,
+                    confirmLabel: `Set ${rows.length} and post`,
                   },
                 });
                 return;
               }
-              bulkApply(picked, { statusId: label.id }, label.name);
+              bulkApply(rows, { statusId: label.id }, label.name);
               clearSelection();
             }}
           />
@@ -2767,6 +2884,48 @@ export default function BoardTab({
         />
       )}
 
+      {slackOpen && (
+        <PasteFromSlackModal
+          projects={board.projects}
+          requests={board.requests ?? []}
+          me={me}
+          onPut={putRequests}
+          toast={toast}
+          onClose={() => setSlackOpen(false)}
+        />
+      )}
+      {reqView && (
+        <RequestsViewerModal
+          project={reqView.project}
+          requests={board.requests ?? []}
+          me={me}
+          soft={reqView.soft}
+          onPut={putRequests}
+          onClose={() => setReqView(null)}
+        />
+      )}
+      {reqGate && (
+        <RequestsGateModal
+          project={reqGate.project}
+          open={reqGate.open}
+          me={me}
+          targetName={reqGate.targetName}
+          onCancel={() => setReqGate(null)}
+          onConfirm={(resolved) => {
+            // Write the resolutions, then re-dispatch the held change through
+            // the guard so a needs-a-note gate still gets its say.
+            putRequests(resolved);
+            const held = reqGate;
+            setReqGate(null);
+            const cur = boardRef.current.projects.find((p) => p.id === held.project.id);
+            if (cur) {
+              if (guardedPatch(cur, held.patch)) {
+                toast(`${held.project.name} → ${held.targetName}.`);
+              }
+            }
+          }}
+        />
+      )}
       {editLabels && (
         <EditLabelsModal
           columnKey={editLabels}

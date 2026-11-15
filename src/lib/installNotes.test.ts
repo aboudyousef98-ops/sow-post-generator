@@ -428,6 +428,7 @@ describe('POLISH_KEYS — SVT pre-design boxes (Aboud 2026-11-15)', () => {
       'svt.alt2Location',
       'svt.alt2Reason',
       'svt.pathNotes',
+      'svt.schedulingNotes',
     ]);
   });
 });

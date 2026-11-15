@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
 import { emptyInstallNotes } from './installNotes';
-import { buildSvtPostHtml, buildSvtPostText, TWO_DAY_LINE } from './svtPost';
+import { buildSvtPostHtml, buildSvtPostText, ONE_DAY_LINE, TWO_DAY_LINE } from './svtPost';
 
 // The SVT pre-design post (Aboud 2026-11-15, #sow-svt-collab taskforce):
 // scope-of-work notes within hours of the site survey, BEFORE design, so
@@ -37,7 +37,7 @@ describe('buildSvtPostText', () => {
         pathAttic: true,
         pathExternal: true,
         pathNotes: 'external run crosses the pool-view wall',
-        twoDay: true,
+        crewDays: 2,
       },
     });
     expect(buildSvtPostText(rec)).toBe(`*Pre-Design Analysis — Norca Garcia*
@@ -112,9 +112,18 @@ describe('buildSvtPostText', () => {
     );
   });
 
-  it('the scheduling bullet appears only when two-day is ticked', () => {
+  it('the scheduling bullet appears only when crew days or notes are given', () => {
     expect(buildSvtPostText(svtRecord())).not.toContain('*Scheduling:*');
-    expect(buildSvtPostText(svtRecord({ svt: { twoDay: true } }))).toContain(`• *Scheduling:* ${TWO_DAY_LINE}`);
+    expect(buildSvtPostText(svtRecord({ svt: { crewDays: 2 } }))).toContain(`• *Scheduling:* ${TWO_DAY_LINE}`);
+    expect(buildSvtPostText(svtRecord({ svt: { crewDays: 1 } }))).toContain(`• *Scheduling:* ${ONE_DAY_LINE}`);
+  });
+
+  it('scheduling notes ride the bullet, with or without a crew-days pick (Aboud 2026-11-15)', () => {
+    const both = buildSvtPostText(svtRecord({ svt: { crewDays: 2, schedulingNotes: 'HO travels — avoid Fridays' } }));
+    expect(both).toContain(`    ◦ ${TWO_DAY_LINE}`);
+    expect(both).toContain('    ◦ HO travels — avoid Fridays.');
+    const alone = buildSvtPostText(svtRecord({ svt: { schedulingNotes: 'HO travels — avoid Fridays' } }));
+    expect(alone).toContain('• *Scheduling:* HO travels — avoid Fridays.');
   });
 
   it('drops the kW/utility meta parts that are missing', () => {

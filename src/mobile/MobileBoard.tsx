@@ -24,6 +24,7 @@ import {
   type ProjectPatch,
 } from '../lib/board';
 import { sortByStatus, splitSections } from '../lib/boardViews';
+import { isReadyOrDoneLabel, openRequestsFor } from '../lib/requests';
 import { isoToUs, relativeTime } from '../lib/dates';
 import {
   deleteUpdate,
@@ -158,6 +159,14 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
       return;
     }
     if ('statusId' in patch) {
+      // The Slack-requests hard gate holds on a phone too (2026-11-15), but
+      // the resolve UI is desktop-only — so the move is refused with a
+      // pointer rather than silently slipping the gate.
+      const target = labelById(board.labels, (patch.statusId as string) ?? null);
+      if (isReadyOrDoneLabel(target) && openRequestsFor(board.requests, project.id).length) {
+        toast('Open Slack requests on this project — resolve them on the desktop board first (amber chip).');
+        return;
+      }
       // Reads the same label flag the desktop board reads, so a status the
       // team gates is gated on a phone too — "Pending Update" included.
       const label = labelById(board.labels, (patch.statusId as string) ?? null);

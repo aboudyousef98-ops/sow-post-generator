@@ -34,6 +34,7 @@ export const POLISH_KEYS = [
   'svt.alt2Location',
   'svt.alt2Reason',
   'svt.pathNotes',
+  'svt.schedulingNotes',
 ] as const;
 
 const RequestItem = z.object({ id: z.enum(POLISH_KEYS), text: z.string().max(3000) }).strict();

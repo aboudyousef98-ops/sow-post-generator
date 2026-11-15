@@ -83,7 +83,7 @@ export function hasContent(r: PostRecord): boolean {
     s?.pathExternal !== undefined ||
     s?.pathTrench !== undefined ||
     s?.pathExisting !== undefined ||
-    s?.twoDay !== undefined ||
+    s?.crewDays !== undefined ||
     (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }

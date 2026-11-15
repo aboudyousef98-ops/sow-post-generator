@@ -404,22 +404,23 @@ export default function SvtCard({
 
       <div className="install-subhead">Special</div>
       <div className="note-grid">{installBox('specialCases', 'Anything special about this project?', 3)}</div>
+
+      <div className="install-subhead">Scheduling</div>
       <div className="install-row">
-        <div className="field">
-          Scheduling
-          <div className="service-ticks">
-            <label className="service-tick">
-              <input
-                type="checkbox"
-                checked={s.twoDay ?? false}
-                onChange={(e) => setSvt({ twoDay: e.target.checked || undefined })}
-              />
-              Two-day job
-            </label>
-          </div>
-          <span className="field-hint">CLR books two consecutive crew days in the Gantt chart</span>
-        </div>
+        <label className="field">
+          Crew days
+          <select
+            value={s.crewDays ?? ''}
+            onChange={(e) => setSvt({ crewDays: e.target.value ? (Number(e.target.value) as 1 | 2) : undefined })}
+          >
+            <option value="">—</option>
+            <option value={1}>One-day job</option>
+            <option value={2}>Two-day job</option>
+          </select>
+          <span className="field-hint">Two-day → CLR books two consecutive crew days in the Gantt chart</span>
+        </label>
       </div>
+      <div className="note-grid">{svtBox('schedulingNotes', 'Scheduling notes', 2)}</div>
 
       {actions}
     </div>

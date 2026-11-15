@@ -258,6 +258,9 @@ export function mergeBoard(rawCurrent: BoardState, rawIncoming: Partial<BoardSta
     // a hard delete would be resurrected by the next sync from a cache that
     // still has the rule.
     automations: mergeById(current.automations ?? [], incoming.automations ?? []),
+    // Slack-captured requests (2026-11-15) — same contract again; a
+    // resolution or delete tombstone carries a newer updatedAt and wins.
+    requests: mergeById(current.requests ?? [], incoming.requests ?? []),
   };
 }
 
