@@ -26,6 +26,14 @@ export const POLISH_KEYS = [
   'siteSurvey',
   'design',
   'homeowner',
+  // SVT pre-design boxes (Aboud 2026-11-15) — appended, matching the client.
+  'svt.hoLocation',
+  'svt.hoReason',
+  'svt.alt1Location',
+  'svt.alt1Reason',
+  'svt.alt2Location',
+  'svt.alt2Reason',
+  'svt.pathNotes',
 ] as const;
 
 const RequestItem = z.object({ id: z.enum(POLISH_KEYS), text: z.string().max(3000) }).strict();

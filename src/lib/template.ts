@@ -145,10 +145,15 @@ export function finalTags(record: PostRecord): string[] {
   });
 }
 
+/** One post bullet. `values` holds one entry per sub-bullet; a single value renders inline. */
+export interface PostItem {
+  label: string;
+  values: PostValue[];
+}
+
 interface PostLines {
   intro: string[];
-  /** One entry per bullet. `values` holds one entry per sub-bullet; a single value renders inline. */
-  items: { label: string; values: PostValue[] }[];
+  items: PostItem[];
   tags: string[];
 }
 
@@ -278,16 +283,15 @@ export function requirementSections(
   return out;
 }
 
-/** Slack mrkdwn version (also the plain-text clipboard fallback). Bulleted list. */
-export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj[]): string {
-  // Typed by hand in the preview: it replaces the generated post outright.
-  if (record.manualText?.trim()) return record.manualText;
-
-  const { intro, items, tags } = buildLines(record, settings);
-  const lines = [...intro];
+/**
+ * The bullet list as Slack mrkdwn lines — shared by the SOW post and the SVT
+ * pre-design post (svtPost.ts), so the two can never drift in format.
+ * One value stays inline; several become indented sub-bullets under the
+ * label, and a value with its own points gets a third level beneath it.
+ */
+export function renderItemsText(items: PostItem[]): string[] {
+  const lines: string[] = [];
   for (const it of items) {
-    // One value stays inline; several become indented sub-bullets under the
-    // label, and a value with its own points gets a third level beneath it.
     if (it.values.length === 1 && !valueSub(it.values[0]).length) {
       lines.push(`• *${it.label}:* ${valueText(it.values[0])}`);
     } else {
@@ -298,6 +302,16 @@ export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj
       }
     }
   }
+  return lines;
+}
+
+/** Slack mrkdwn version (also the plain-text clipboard fallback). Bulleted list. */
+export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj[]): string {
+  // Typed by hand in the preview: it replaces the generated post outright.
+  if (record.manualText?.trim()) return record.manualText;
+
+  const { intro, items, tags } = buildLines(record, settings);
+  const lines = [...intro, ...renderItemsText(items)];
   for (const sec of requirementSections(record, ahjs)) {
     lines.push(`*${sec.title}:*`);
     // Multi-line posts keep their line breaks, indented under the bullet.
@@ -309,6 +323,28 @@ export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj
 
 function esc(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+/** Exported for svtPost.ts — one escaping rule for every clipboard HTML. */
+export const escapeHtml = esc;
+
+/** The bullet list as rich-clipboard HTML — the renderItemsText counterpart. */
+export function renderItemsHtml(items: PostItem[]): string {
+  const li = (v: PostValue) =>
+    valueSub(v).length
+      ? `<li>${valueHtml(v)}<ul>${valueSub(v)
+          .map((sv) => `<li>${esc(sv)}</li>`)
+          .join('')}</ul></li>`
+      : `<li>${valueHtml(v)}</li>`;
+  return [
+    '<ul>',
+    ...items.map((it) =>
+      it.values.length === 1 && !valueSub(it.values[0]).length
+        ? `<li><strong>${esc(it.label)}:</strong> ${valueHtml(it.values[0])}</li>`
+        : `<li><strong>${esc(it.label)}:</strong><ul>${it.values.map(li).join('')}</ul></li>`,
+    ),
+    '</ul>',
+  ].join('');
 }
 
 /** Rich-text clipboard version: <p> lines, <strong> labels, <ul> bullets, tags plain. */
@@ -373,22 +409,7 @@ export function buildPostHtml(record: PostRecord, settings: Settings, ahjs?: Ahj
   if (record.manualText?.trim()) return textToHtml(record.manualText);
 
   const { intro, items, tags } = buildLines(record, settings);
-  const li = (v: PostValue) =>
-    valueSub(v).length
-      ? `<li>${valueHtml(v)}<ul>${valueSub(v)
-          .map((sv) => `<li>${esc(sv)}</li>`)
-          .join('')}</ul></li>`
-      : `<li>${valueHtml(v)}</li>`;
-  const parts = [
-    ...intro.map((l) => `<p>${esc(l)}</p>`),
-    '<ul>',
-    ...items.map((it) =>
-      it.values.length === 1 && !valueSub(it.values[0]).length
-        ? `<li><strong>${esc(it.label)}:</strong> ${valueHtml(it.values[0])}</li>`
-        : `<li><strong>${esc(it.label)}:</strong><ul>${it.values.map(li).join('')}</ul></li>`,
-    ),
-    '</ul>',
-  ];
+  const parts = [...intro.map((l) => `<p>${esc(l)}</p>`), renderItemsHtml(items)];
   for (const sec of requirementSections(record, ahjs)) {
     parts.push(
       `<p><strong>${esc(sec.title)}:</strong></p>`,

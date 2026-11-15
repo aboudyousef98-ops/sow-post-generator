@@ -19,7 +19,16 @@ import type { Ahj, Level, PolishKey, PostRecord, Region, RewriteMode, Settings, 
 import InstallNotesCard from './InstallNotesCard';
 import NoteBox from './NoteBox';
 import OutputColumn from './OutputColumn';
+import SvtCard from './SvtCard';
 import WireCheckRow from './WireCheckRow';
+
+/**
+ * Which compose the form shows (Aboud 2026-11-15): the full SOW scope, or the
+ * SVT pre-design analysis. Both edit the SAME draft — shared fields appear in
+ * both tabs — so this is a per-device view preference, not record state.
+ */
+export type ComposeMode = 'sow' | 'svt';
+const KEY_COMPOSE_MODE = 'sowpost.composeMode.v1';
 
 interface Props {
   record: PostRecord;
@@ -62,6 +71,13 @@ export default function ComposeTab({
   boardLabels,
   onOpenBoard,
 }: Props) {
+  const [composeMode, setComposeMode] = useState<ComposeMode>(() =>
+    localStorage.getItem(KEY_COMPOSE_MODE) === 'svt' ? 'svt' : 'sow',
+  );
+  useEffect(() => {
+    localStorage.setItem(KEY_COMPOSE_MODE, composeMode);
+  }, [composeMode]);
+
   const [manualFields, setManualFields] = useState<Set<string>>(new Set());
   const [rawPairs, setRawPairs] = useState<Record<string, string> | null>(null);
   const [showRaw, setShowRaw] = useState(false);
@@ -367,6 +383,57 @@ export default function ComposeTab({
 
   const weekday = installWeekday(record.sf.installScheduledDate || undefined);
 
+  // One Polish/rewrite block, rendered in whichever compose tab is open —
+  // runAi always sends every non-empty box (SOW and SVT alike), so the
+  // buttons are the same action wherever they sit.
+  const aiActions = (
+    <>
+      <div className="ai-actions">
+        <button
+          type="button"
+          className="btn primary"
+          disabled={polishState.busy !== false || !aiAvailable}
+          onClick={() => void runAi('polish')}
+          title={aiAvailable ? 'Ctrl+Enter in any note field' : 'AI offline — manual flow still works'}
+        >
+          {polishState.busy === 'polish' ? (
+            <span>
+              <span className="spin">✨</span> Polishing…
+            </span>
+          ) : (
+            '✨ Polish with AI'
+          )}
+        </button>
+        <button
+          type="button"
+          className="btn secondary"
+          disabled={polishState.busy !== false || !aiAvailable}
+          onClick={() => void runAi('rewrite')}
+          title="Full rewrite — for rough notes. Keeps one bullet per line and every number, but rewrites the wording completely."
+        >
+          {polishState.busy === 'rewrite' ? (
+            <span>
+              <span className="spin">🦜</span> Rewriting…
+            </span>
+          ) : (
+            '🦜 هري ابو روي'
+          )}
+        </button>
+        {polishState.ms !== undefined && polishState.busy === false && (
+          <span className="muted">Polished ✓ {(polishState.ms / 1000).toFixed(1)}s</span>
+        )}
+      </div>
+      {polishState.error && (
+        <div className="error-inline">
+          {polishState.error}{' '}
+          <button type="button" className="btn link small" onClick={() => void runAi('polish')}>
+            Retry
+          </button>
+        </div>
+      )}
+    </>
+  );
+
   return (
     <>
       <div className="compose-head">
@@ -447,6 +514,29 @@ export default function ComposeTab({
 
       <div className="compose-grid">
         <div className="compose-form">
+      {/* Compose mode (Aboud 2026-11-15): SVT pre-design vs full SOW scope.
+          SVT first — it is the earlier pipeline stage. Both tabs edit the one
+          draft; shared fields appear in both, so nothing is retyped. */}
+      <div className="compose-mode-toggle" role="tablist" aria-label="Compose mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={composeMode === 'svt'}
+          className={`btn small ${composeMode === 'svt' ? 'primary' : 'secondary'}`}
+          onClick={() => setComposeMode('svt')}
+        >
+          SVT — Pre-design
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={composeMode === 'sow'}
+          className={`btn small ${composeMode === 'sow' ? 'primary' : 'secondary'}`}
+          onClick={() => setComposeMode('sow')}
+        >
+          SOW — Full scope
+        </button>
+      </div>
       <div className="card">
         <h3>Source</h3>
 
@@ -776,6 +866,31 @@ export default function ComposeTab({
         )}
       </div>
 
+      {/* SVT — Pre-design (Aboud 2026-11-15): the taskforce's early analysis.
+          The full-SOW cards stay mounted-off rather than hidden so each tab
+          renders only what it needs; the record underneath is the same. */}
+      {composeMode === 'svt' && (
+        <>
+          <SvtCard
+            record={record}
+            settings={settings}
+            update={update}
+            onKeyDown={noteKeyDown}
+            dropped={dropped}
+            drift={bulletDrift}
+            onToggle={togglePolished}
+            onClearDropped={clearDropped}
+            onClearDrift={clearDrift}
+          />
+          <div className="card">
+            <h3>AI polish</h3>
+            {aiActions}
+          </div>
+        </>
+      )}
+
+      {composeMode === 'sow' && (
+      <>
       <InstallNotesCard
         record={record}
         settings={settings}
@@ -814,49 +929,7 @@ export default function ComposeTab({
           />
         ))}
 
-        <div className="ai-actions">
-          <button
-            type="button"
-            className="btn primary"
-            disabled={polishState.busy !== false || !aiAvailable}
-            onClick={() => void runAi('polish')}
-            title={aiAvailable ? 'Ctrl+Enter in any note field' : 'AI offline — manual flow still works'}
-          >
-            {polishState.busy === 'polish' ? (
-              <span>
-                <span className="spin">✨</span> Polishing…
-              </span>
-            ) : (
-              '✨ Polish with AI'
-            )}
-          </button>
-          <button
-            type="button"
-            className="btn secondary"
-            disabled={polishState.busy !== false || !aiAvailable}
-            onClick={() => void runAi('rewrite')}
-            title="Full rewrite — for rough notes. Keeps one bullet per line and every number, but rewrites the wording completely."
-          >
-            {polishState.busy === 'rewrite' ? (
-              <span>
-                <span className="spin">🦜</span> Rewriting…
-              </span>
-            ) : (
-              '🦜 هري ابو روي'
-            )}
-          </button>
-          {polishState.ms !== undefined && polishState.busy === false && (
-            <span className="muted">Polished ✓ {(polishState.ms / 1000).toFixed(1)}s</span>
-          )}
-        </div>
-        {polishState.error && (
-          <div className="error-inline">
-            {polishState.error}{' '}
-            <button type="button" className="btn link small" onClick={() => void runAi('polish')}>
-              Retry
-            </button>
-          </div>
-        )}
+        {aiActions}
       </div>
 
       <div className="card">
@@ -932,6 +1005,8 @@ export default function ComposeTab({
           </label>
         </div>
       </div>
+      </>
+      )}
 
       {/* Internal notes — the coordinator's scratch pad. The team can read it
           (it rides the normal record sync) but it NEVER reaches the post and
@@ -963,6 +1038,7 @@ export default function ComposeTab({
           onNewPost={onNewPost}
           onSaveDraft={onSaveDraft}
           toast={toast}
+          mode={composeMode}
         />
       </div>
     </>

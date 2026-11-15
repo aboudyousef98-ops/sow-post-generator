@@ -64,12 +64,34 @@ export function seedLabels(): BoardLabel[] {
   //
   // Anyone can override this forever with the ↑/↓ in Edit labels: that bumps
   // updatedAt, and a deliberate choice always beats a re-seed.
+  // The Pre-Design seeds (Aboud 2026-11-15, the SVT collab taskforce) are NOT
+  // system labels: if the taskforce is ever retired the team must be able to
+  // archive them, and the merge keeps an archive forever (it bumps updatedAt,
+  // which beats the epoch-stamped re-seed).
+  const soft = (
+    id: string, columnKey: LabelColumnKey, name: string, color: string,
+    sortOrder: number, isDefault: boolean,
+  ): BoardLabel => ({
+    id, columnKey, name, color, sortOrder, isDefault, isDone: false,
+    isSystem: false, archived: false, updatedAt: SEED_STAMP,
+  });
   return [
     mk('status-working', 'status', 'Working on it', '#FDAB3D', 5, false, false),
     mk('status-done', 'status', 'Done', '#00C875', 90, false, true),
+    // Ranked 175, just before the live board's "Installation Review" (180) —
+    // deliberately INSIDE the team's 30–180 range: it is a pipeline stage of
+    // theirs, not a bracket. The section flag rides the name default
+    // (isPredesignLabel), so there is no boolean to migrate.
+    soft('status-predesign', 'status', 'Pre-Design', '#66CCFF', 175, false),
     mk('status-new', 'status', 'New project', '#579BFC', 999, true, false),
     mk('phase-design', 'phase', 'Design', '#A25DDC', 10, false, false),
     mk('phase-schedule', 'phase', 'Schedule', '#0086C0', 20, false, false),
+    // The Pre-Design sub-status column — the four states Aboud named, colored
+    // like their status-column namesakes where one exists.
+    soft('predesign-working', 'predesign', 'Working on it', '#FDAB3D', 10, true),
+    soft('predesign-done', 'predesign', 'Done', '#00C875', 20, false),
+    soft('predesign-pending-info', 'predesign', 'Pending Additional Information', '#784BD1', 30, false),
+    soft('predesign-pending-updates', 'predesign', 'Pending Updates', '#FF642E', 40, false),
   ];
 }
 
@@ -123,6 +145,26 @@ export function isReviewLabel(label: BoardLabel | undefined): boolean {
 /** Ids of every installation-review status label. */
 export function reviewStatusIds(labels: BoardLabel[]): Set<string> {
   return new Set(labels.filter(isReviewLabel).map((l) => l.id));
+}
+
+/**
+ * Status labels that mean "pre-design analysis in progress" (Aboud 2026-11-15,
+ * the SVT collab taskforce). Same shape as isReviewLabel: an explicit tick
+ * wins, and the name default makes the seeded "Pre-Design" status work with
+ * no migration. `isDone` beats it, same reasoning as the other two sections;
+ * splitSections puts review before this and this before out-of-scope.
+ */
+const PREDESIGN_DEFAULT_NAMES = new Set(['pre-design', 'predesign', 'pre design']);
+
+export function isPredesignLabel(label: BoardLabel | undefined): boolean {
+  if (!label || label.columnKey !== 'status' || label.isDone) return false;
+  if (typeof label.predesign === 'boolean') return label.predesign;
+  return PREDESIGN_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
+}
+
+/** Ids of every pre-design status label. */
+export function predesignStatusIds(labels: BoardLabel[]): Set<string> {
+  return new Set(labels.filter(isPredesignLabel).map((l) => l.id));
 }
 
 export function emptyBoard(): BoardState {
@@ -275,8 +317,8 @@ export function newProject(
 export type ProjectPatch = Partial<
   Pick<
     BoardProject,
-    | 'name' | 'coordinator' | 'reviewer' | 'statusId' | 'phaseId' | 'designedDate' | 'rating' | 'position'
-    | 'sfNotes' | 'sfNotesAt' | 'archivedAt' | 'deletedAt'
+    | 'name' | 'coordinator' | 'reviewer' | 'statusId' | 'phaseId' | 'preDesignStatusId' | 'designedDate'
+    | 'rating' | 'position' | 'sfNotes' | 'sfNotesAt' | 'archivedAt' | 'deletedAt'
   >
 >;
 
@@ -315,7 +357,8 @@ export function patchProject(
 /** Human-readable value of one field, for the activity log and side panel. */
 function displayValue(key: keyof ProjectPatch, value: unknown, labels: BoardLabel[]): string {
   if (value === null || value === undefined || value === '') return '—';
-  if (key === 'statusId' || key === 'phaseId') return labelById(labels, value as string)?.name ?? '—';
+  if (key === 'statusId' || key === 'phaseId' || key === 'preDesignStatusId')
+    return labelById(labels, value as string)?.name ?? '—';
   if (key === 'rating') return `${value} star${value === 1 ? '' : 's'}`;
   return String(value);
 }
@@ -326,6 +369,7 @@ const FIELD_LABELS: Record<string, string> = {
   reviewer: 'Reviewer',
   statusId: 'Status',
   phaseId: 'Design/Schedule',
+  preDesignStatusId: 'Pre-Design status',
   designedDate: 'Designed date',
   rating: 'Rating',
   sfNotes: 'Salesforce notes',

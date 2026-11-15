@@ -82,3 +82,33 @@ describe('hasContent — installNotes (carried fix, Phase 7 review)', () => {
     expect(hasContent(r)).toBe(false);
   });
 });
+
+// SVT pre-design fields (Aboud 2026-11-15) — the same data-loss class the
+// install-notes entries above exist to prevent: a draft holding ONLY
+// pre-design content must still autosave.
+describe('hasContent — svt pre-design fields', () => {
+  it('a record with ONLY a conduit-path tick counts as content', () => {
+    const r = makeRecord({ sf: blankSf, svt: { pathAttic: true } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY the HO-agrees answer counts as content', () => {
+    const r = makeRecord({ sf: blankSf, svt: { hoAgrees: false } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY the two-day tick counts as content', () => {
+    const r = makeRecord({ sf: blankSf, svt: { twoDay: true } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('a record with ONLY an SVT text box filled counts as content', () => {
+    const r = makeRecord({ sf: blankSf, svt: { hoReason: 'blocks the gas meter clearance' } });
+    expect(hasContent(r)).toBe(true);
+  });
+
+  it('an empty svt object is not content', () => {
+    const r = makeRecord({ sf: blankSf, svt: {} });
+    expect(hasContent(r)).toBe(false);
+  });
+});

@@ -354,6 +354,57 @@ describe('splitSections — Installation Review', () => {
   });
 });
 
+// ---- Pre-Design section (Aboud 2026-11-15) ----------------------------------
+// A fifth section for the SVT collab taskforce: SOW notes within hours of the
+// site survey, before design. Flag-driven exactly like Installation Review.
+
+describe('splitSections — Pre-Design', () => {
+  it('gives pre-design rows their own section, out of the active table', () => {
+    const rows = [
+      p({ id: 'a', statusId: 'status-working' }),
+      p({ id: 'b', statusId: 'status-predesign' }),
+      p({ id: 'c', statusId: 'status-done' }),
+    ];
+    const { active, preDesign, completed } = splitSections(rows, LABELS);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(preDesign.map((r) => r.id)).toEqual(['b']);
+    expect(completed.map((r) => r.id)).toEqual(['c']);
+  });
+
+  it('matches by name when no flag is stored, and an explicit flag works on any name', () => {
+    const named = { ...LABELS[0], id: 'pd2', name: 'Pre-design', isDefault: false };
+    const flagged = { ...LABELS[0], id: 'pd3', name: 'Survey analysis', isDefault: false, predesign: true };
+    const s = splitSections(
+      [p({ id: 'a', statusId: 'pd2' }), p({ id: 'b', statusId: 'pd3' })],
+      [...LABELS, named, flagged],
+    );
+    expect(s.active).toHaveLength(0);
+    expect(s.preDesign.map((r) => r.id).sort()).toEqual(['a', 'b']);
+  });
+
+  it('Done and Review win over Pre-Design; Pre-Design wins over out-of-scope', () => {
+    const done = { ...LABELS[0], id: 'x', name: 'Odd', isDefault: false, isDone: true, predesign: true };
+    const rev = { ...LABELS[0], id: 'y', name: 'Odd2', isDefault: false, review: true, predesign: true };
+    const scoped = { ...LABELS[0], id: 'z', name: 'Odd3', isDefault: false, predesign: true, outOfScope: true };
+    const s = splitSections(
+      [p({ id: 'a', statusId: 'x' }), p({ id: 'b', statusId: 'y' }), p({ id: 'c', statusId: 'z' })],
+      [...LABELS, done, rev, scoped],
+    );
+    expect(s.completed.map((r) => r.id)).toEqual(['a']);
+    expect(s.installReview.map((r) => r.id)).toEqual(['b']);
+    expect(s.preDesign.map((r) => r.id)).toEqual(['c']);
+    expect(s.outOfScope).toHaveLength(0);
+  });
+
+  it('newest-touched first, like the other pulled-out sections', () => {
+    const rows = [
+      p({ id: 'old', statusId: 'status-predesign', updatedAt: '2026-11-01T00:00:00.000Z' }),
+      p({ id: 'new', statusId: 'status-predesign', updatedAt: '2026-11-14T00:00:00.000Z' }),
+    ];
+    expect(splitSections(rows, LABELS).preDesign.map((r) => r.id)).toEqual(['new', 'old']);
+  });
+});
+
 describe('Group by reviewer', () => {
   it('is offered as a grouping option', () => {
     expect(GROUP_OPTIONS.map((g) => g.key)).toContain('reviewer');

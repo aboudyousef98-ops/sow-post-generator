@@ -220,6 +220,63 @@ export interface InstallNotes {
   other: string;
 }
 
+// ---- SVT pre-design analysis (Aboud 2026-11-15) ----------------------------
+// The #sow-svt-collab taskforce: SOW posts a pre-design analysis within hours
+// of the site survey — before design — so SVT/CLR can make an informed
+// scheduling decision. These fields feed the Compose "SVT — Pre-design" tab
+// and the SVT post output; everything the SOW post also needs (walls, stories,
+// services, roof, special cases, battery location) stays in InstallNotes so it
+// is typed ONCE and both outputs read it.
+
+/** The free-text boxes inside SvtNotes, i.e. the ones the AI may polish. */
+export type SvtTextField =
+  | 'hoLocation'
+  | 'hoReason'
+  | 'alt1Location'
+  | 'alt1Reason'
+  | 'alt2Location'
+  | 'alt2Reason'
+  | 'pathNotes';
+
+export interface SvtNotes {
+  /**
+   * Does the homeowner agree with the proposed battery location? Tri-state on
+   * purpose (same contract as batteryBaseNeedsWork): `undefined` is "not asked
+   * yet" and prints nothing; `false` prints the HO's preference and why it
+   * does not work.
+   */
+  hoAgrees?: boolean;
+  /** Where the HO wants the batteries, when hoAgrees === false. */
+  hoLocation?: string;
+  /** Why the HO's preference does not work / why SOW's location is preferred. */
+  hoReason?: string;
+  // Up to two alternative locations SOW can offer, each with its reason.
+  // Two FIXED slots rather than an array: polish keys are a closed enum on
+  // both the client and the server (rewriteSchema.ts), and two covers every
+  // real case Aboud described ("sometimes we can propose 2 locations").
+  alt1Location?: string;
+  alt1Reason?: string;
+  alt2Location?: string;
+  alt2Reason?: string;
+  // Most likely conduit path — ticks, each printing a fixed name in the SVT
+  // post (SVT_PATHS in svtPost.ts). Derived, never typed, like the services.
+  // Deliberately SEPARATE from installNotes.trench: these are a pre-design
+  // guess, the trench box is a confirmed scope statement with an NEC citation.
+  pathB2b?: boolean;
+  pathAttic?: boolean;
+  pathExternal?: boolean;
+  pathTrench?: boolean;
+  pathExisting?: boolean;
+  /** Anything about the path the ticks cannot say. */
+  pathNotes?: string;
+  /**
+   * Two-day job (Issam, #sow-svt-collab 2026-11-13): SOW marks the job and the
+   * CLR team books two consecutive GANTT slots with the right HO expectations.
+   * Prints TWO_DAY_LINE; derived, never typed.
+   */
+  twoDay?: boolean;
+}
+
 // ---- Wire material check (Aboud 2026-11-11) ------------------------------
 // Solrite rejects a project when the conductors in the install evidence are
 // not the ones on the submitted planset ("evidence (Al) … planset (Cu)"). The
@@ -248,6 +305,7 @@ export interface WireCheck {
  */
 export type PolishKey =
   | `install.${InstallTextField}`
+  | `svt.${SvtTextField}`
   | 'siteSurvey'
   | 'design'
   | 'homeowner';
@@ -277,6 +335,12 @@ export interface PostRecord {
    * reword the material. Pinned by wireMaterial.test.ts.
    */
   wire?: WireCheck;
+  /**
+   * SVT pre-design analysis (Aboud 2026-11-15). OPTIONAL — the same
+   * no-migration contract as wire/roofMaterial: records written before this
+   * date simply have no key, and render exactly as they did.
+   */
+  svt?: SvtNotes;
   /** AI results per box; an absent key means "not polished". */
   polished?: Partial<Record<PolishKey, string>>;
   /**

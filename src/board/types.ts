@@ -6,7 +6,14 @@
 
 import type { SfNotes } from '../lib/sfNotes';
 
-export type LabelColumnKey = 'status' | 'phase';
+/**
+ * 'predesign' added 2026-11-15: the per-project sub-status shown only in the
+ * Pre-Design section (the SVT collab taskforce) — Working on it / Done /
+ * Pending Additional Information / Pending Updates. Same label machinery as
+ * status and phase; readers written before this date simply never see the
+ * column, because no row they render carries a preDesignStatusId.
+ */
+export type LabelColumnKey = 'status' | 'phase' | 'predesign';
 
 /** A status / Design-Schedule option — data, not an enum (D6: custom labels). */
 export interface BoardLabel {
@@ -41,6 +48,17 @@ export interface BoardLabel {
    * "Installation Review" status work with no migration and no re-tick.
    */
   review?: boolean;
+  /**
+   * "Pre-design analysis in progress" meaning (status only) — the row leaves
+   * the active table for its own "Pre-Design" section, directly above
+   * Installation Review (Aboud 2026-11-15, the SVT collab taskforce).
+   *
+   * OPTIONAL, same contract as `review`: an explicit tick wins and
+   * `undefined` falls back to the by-name default in
+   * lib/board.isPredesignLabel, which is what makes the seeded "Pre-Design"
+   * status work with no migration and no re-tick.
+   */
+  predesign?: boolean;
   /**
    * "Moving a row to this status obliges an explanation" (status only) —
    * Aboud 2026-11-05: "the 'Pending Update' label, I want to force the user to
@@ -83,6 +101,13 @@ export interface BoardProject {
   reviewer?: string;
   statusId: string | null;
   phaseId: string | null;
+  /**
+   * Pre-Design sub-status (Aboud 2026-11-15) — a 'predesign'-column label id.
+   * OPTIONAL, same contract as `reviewer`: rows written before this date have
+   * no such field. Only meaningful while the row sits in the Pre-Design
+   * section; it keeps its last value when the row moves on, like `reviewer`.
+   */
+  preDesignStatusId?: string | null;
   designedDate: string | null; // 'YYYY-MM-DD' — parse with lib/dates only
   rating: 1 | 2 | 3 | 4 | 5 | null; // null = not rated
   /** Manual order key; defaults to creation epoch ms → newest on top. */

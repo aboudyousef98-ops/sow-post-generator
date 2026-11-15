@@ -1,7 +1,7 @@
 // Record factory + tag housekeeping.
 
 import type { PostRecord, Region, Settings } from '../types';
-import { emptyInstallNotes, INSTALL_TEXT_FIELDS, servicesOf } from './installNotes';
+import { emptyInstallNotes, INSTALL_TEXT_FIELDS, SVT_TEXT_FIELDS, servicesOf } from './installNotes';
 
 export function blankRecord(author: string, settings: Settings): PostRecord {
   const now = new Date().toISOString();
@@ -44,7 +44,7 @@ export function blankRecord(author: string, settings: Settings): PostRecord {
  * must not count as content.
  */
 export function hasContent(r: PostRecord): boolean {
-  const { sf, installNotes: n } = r;
+  const { sf, installNotes: n, svt: s } = r;
   const filled = [
     sf.customerName,
     sf.installScheduledDate,
@@ -55,6 +55,8 @@ export function hasContent(r: PostRecord): boolean {
     r.designerTag,
     ...Object.values(r.notes),
     ...INSTALL_TEXT_FIELDS.map((f) => n?.[f.field]),
+    // SVT pre-design boxes (Aboud 2026-11-15) — same data-loss class.
+    ...SVT_TEXT_FIELDS.map((f) => s?.[f.field]),
     n?.storiesOther,
     n?.roofMaterialOther,
     ...(n?.orientations ?? []),
@@ -73,6 +75,15 @@ export function hasContent(r: PostRecord): boolean {
     n?.batteryBaseNeedsWork !== undefined ||
     n?.wallEven !== undefined ||
     n?.batteryPushFromWall !== undefined ||
+    // SVT pre-design answers (Aboud 2026-11-15): hoAgrees is tri-state like
+    // the battery questions; the path/two-day ticks store undefined when off.
+    s?.hoAgrees !== undefined ||
+    s?.pathB2b !== undefined ||
+    s?.pathAttic !== undefined ||
+    s?.pathExternal !== undefined ||
+    s?.pathTrench !== undefined ||
+    s?.pathExisting !== undefined ||
+    s?.twoDay !== undefined ||
     (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }

@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
+import { buildSvtPostHtml, buildSvtPostText } from '../lib/svtPost';
 import { noteCheck } from '../lib/api';
 import { SHORT, wireStatus } from '../lib/wireMaterial';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
@@ -28,6 +29,12 @@ interface Props {
   onNewPost: () => void;
   onSaveDraft: () => void;
   toast: (text: string) => void;
+  /**
+   * Which compose tab is open (Aboud 2026-11-15). 'svt' swaps the output side
+   * for the SVT pre-design post — one preview, one copy button; the SF panel,
+   * the note check and Mark as posted are full-SOW concerns and stay away.
+   */
+  mode?: 'sow' | 'svt';
 }
 
 interface Check {
@@ -43,9 +50,11 @@ interface Check {
   tone?: 'advisory';
 }
 
-export default function OutputColumn({ record, settings, ahjs, boardProjects, update, onMarkPosted, toast }: Props) {
+export default function OutputColumn({ record, settings, ahjs, boardProjects, update, onMarkPosted, toast, mode = 'sow' }: Props) {
   const text = buildPostText(record, settings, ahjs);
   const html = buildPostHtml(record, settings, ahjs);
+  const svtText = buildSvtPostText(record);
+  const svtHtml = buildSvtPostHtml(record);
 
   // Hand-editing the post (Aboud, 2026-09-30). `draft` holds the text while it
   // is being typed; it is only written to the record on Save, so Cancel really
@@ -161,17 +170,38 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
     toast('Plain text copied.');
   }, [text, toast]);
 
-  // Ctrl+Shift+C = Copy for Slack (spec/01 UX rules).
+  /**
+   * Copy the SVT pre-design post (Aboud 2026-11-15). No note check: that gate
+   * exists for the design handoff; the pre-design post is written before any
+   * notes could contradict it. Same required-fields gate as everything else.
+   */
+  const copySvt = useCallback(async () => {
+    if (missingRequired(record).length) return;
+    try {
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          'text/html': new Blob([svtHtml], { type: 'text/html' }),
+          'text/plain': new Blob([svtText], { type: 'text/plain' }),
+        }),
+      ]);
+    } catch {
+      await navigator.clipboard.writeText(svtText);
+    }
+    toast('SVT post copied — paste it into #sow-svt-collab.');
+  }, [record, svtHtml, svtText, toast]);
+
+  // Ctrl+Shift+C = copy for Slack — the post of whichever tab is open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key.toLowerCase() === 'c' && e.ctrlKey && e.shiftKey) {
         e.preventDefault();
-        void copyForSlack();
+        if (mode === 'svt') void copySvt();
+        else void copyForSlack();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [copyForSlack]);
+  }, [copyForSlack, copySvt, mode]);
 
   // Narrowed to AHJ-kind boards: the store also holds Utility/Funding/General
   // boards since 2026-10-08, and a utility must not match a Jurisdiction.
@@ -240,6 +270,19 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
         </ul>
 
         <div className="readiness-actions">
+          {mode === 'svt' && (
+            <button
+              type="button"
+              className="btn primary"
+              disabled={!ready}
+              onClick={() => void copySvt()}
+              title="Ctrl+Shift+C"
+            >
+              Copy SVT post
+            </button>
+          )}
+          {mode === 'sow' && (
+          <>
           <button
             type="button"
             className="btn primary"
@@ -290,9 +333,27 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
               </div>
             )}
           </div>
+          </>
+          )}
         </div>
       </div>
 
+      {/* SVT pre-design preview (Aboud 2026-11-15): one generated post, no
+          manual edit — the pre-design note is short-lived and regenerating it
+          from the form is the point. */}
+      {mode === 'svt' && (
+        <div className="card preview-card">
+          <div className="preview-head">
+            <span className="section-label">SVT post preview</span>
+            <span className="muted">Updates as you type</span>
+          </div>
+          {/* buildSvtPostHtml escapes all user text — safe to render. */}
+          <div className="preview" dangerouslySetInnerHTML={{ __html: svtHtml }} />
+        </div>
+      )}
+
+      {mode === 'sow' && (
+      <>
       {titleBlockOpen && <TitleBlockCard record={record} boardProjects={boardProjects} toast={toast} />}
 
       <div className="output-view-toggle" role="tablist" aria-label="Output format">
@@ -417,6 +478,8 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </aside>
   );

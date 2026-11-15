@@ -46,8 +46,10 @@ import {
   activityForPatch,
   autoSortOn,
   cleanName,
+  defaultLabel,
   findDuplicate,
   isOutOfScopeLabel,
+  isPredesignLabel,
   isReviewLabel,
   labelById,
   linkedPosts,
@@ -131,26 +133,29 @@ const KEY_FILTERS = 'sowpost.board.filters.v1';
 const KEY_DONE_OPEN = 'sowpost.board.doneOpen.v1';
 const KEY_SCOPE_OPEN = 'sowpost.board.scopeOpen.v1';
 const KEY_REVIEW_OPEN = 'sowpost.board.reviewOpen.v1';
+const KEY_PREDESIGN_OPEN = 'sowpost.board.predesignOpen.v1';
 const KEY_GROUP_BY = 'sowpost.board.groupBy.v1';
 const KEY_ORDER = 'sowpost.board.colOrder.v1';
 
 // Filters / NO_FILTERS now live in lib/boardViews so the view presets can be
 // unit-tested without a DOM.
 
-/** Which of the board's four sections a status label puts a row in. */
-type Section = 'active' | 'review' | 'scope' | 'done';
+/** Which of the board's five sections a status label puts a row in. */
+type Section = 'active' | 'predesign' | 'review' | 'scope' | 'done';
 
 const SECTION_TITLE: Record<Section, string> = {
   active: 'the board',
+  predesign: 'Pre-Design',
   review: 'Installation Review',
   scope: 'Out of SOW scope',
   done: 'Completed projects',
 };
 
 function sectionOf(label: BoardLabel | undefined): Section {
-  // Same precedence as splitSections: done, then review, then out-of-scope.
+  // Same precedence as splitSections: done, review, pre-design, out-of-scope.
   if (label?.isDone) return 'done';
   if (isReviewLabel(label)) return 'review';
+  if (isPredesignLabel(label)) return 'predesign';
   if (isOutOfScopeLabel(label)) return 'scope';
   return 'active';
 }
@@ -648,7 +653,7 @@ function SectionCard({
   selectedIds,
 }: {
   /** Drives the accent colour only — see `.board-done` / `.board-scope`. */
-  variant: 'done' | 'scope' | 'review';
+  variant: 'done' | 'scope' | 'review' | 'predesign';
   title: string;
   emptyText: string;
   open: boolean;
@@ -779,6 +784,7 @@ export default function BoardTab({
   // Installation Review: unlike the other two this one is OPEN by default — it
   // is live work waiting on someone, not a parking space (Aboud 2026-11-03).
   const [reviewOpen, setReviewOpen] = useState(() => localStorage.getItem(KEY_REVIEW_OPEN) !== '0');
+  const [predesignOpen, setPredesignOpen] = useState(() => localStorage.getItem(KEY_PREDESIGN_OPEN) !== '0');
   const addRef = useRef<HTMLInputElement>(null);
   // Tier 1: group by, collapsed groups, and bulk selection.
   const [groupBy, setGroupBy] = useState<GroupKey>(
@@ -830,6 +836,9 @@ export default function BoardTab({
   useEffect(() => {
     localStorage.setItem(KEY_REVIEW_OPEN, reviewOpen ? '1' : '0');
   }, [reviewOpen]);
+  useEffect(() => {
+    localStorage.setItem(KEY_PREDESIGN_OPEN, predesignOpen ? '1' : '0');
+  }, [predesignOpen]);
   useEffect(() => {
     localStorage.setItem(KEY_GROUP_BY, groupBy);
   }, [groupBy]);
@@ -1226,7 +1235,8 @@ export default function BoardTab({
     const label = cur.labels.find((l) => l.id === labelId);
     if (!label || label.isSystem) return;
     const now = new Date().toISOString();
-    const field: 'statusId' | 'phaseId' = label.columnKey === 'status' ? 'statusId' : 'phaseId';
+    const field: 'statusId' | 'phaseId' | 'preDesignStatusId' =
+      label.columnKey === 'status' ? 'statusId' : label.columnKey === 'phase' ? 'phaseId' : 'preDesignStatusId';
     const moved = cur.projects.map((p) =>
       p[field] === labelId && !p.deletedAt ? patchProject(p, { [field]: moveToId }, me, now) : p,
     );
@@ -1445,6 +1455,7 @@ export default function BoardTab({
   const {
     active: activeUnsorted,
     installReview,
+    preDesign,
     outOfScope,
     completed,
   } = useMemo(() => splitSections(visible, board.labels), [visible, board.labels]);
@@ -1587,6 +1598,7 @@ export default function BoardTab({
     // written to.
     const base = [
       ...active,
+      ...(predesignOpen || searching ? preDesign : []),
       ...(reviewOpen || searching ? installReview : []),
       ...(scopeOpen || searching ? outOfScope : []),
       ...(doneOpen || searching ? completed : []),
@@ -1597,7 +1609,7 @@ export default function BoardTab({
       if (collapsed[g.key]) for (const p of g.rows) hidden.add(p.id);
     }
     return hidden.size ? base.filter((p) => !hidden.has(p.id)) : base;
-  }, [active, installReview, outOfScope, completed, reviewOpen, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
+  }, [active, installReview, preDesign, outOfScope, completed, predesignOpen, reviewOpen, scopeOpen, doneOpen, searching, groupBy, collapsed, board.labels]);
 
   /**
    * Rows a bulk action will touch. Resolved from every LIVE project, not from
@@ -1776,12 +1788,20 @@ export default function BoardTab({
             valueId={row.original.statusId}
             onPick={(statusId) => {
               const prev = row.original.statusId;
+              // Entering Pre-Design seeds the sub-status with its default
+              // ("Working on it") so the new column never starts blank; a row
+              // that already has one keeps it (Aboud 2026-11-15).
+              const picked = labelById(boardRef.current.labels, statusId);
+              const patch: ProjectPatch =
+                isPredesignLabel(picked) && !row.original.preDesignStatusId
+                  ? { statusId, preDesignStatusId: defaultLabel(boardRef.current.labels, 'predesign')?.id ?? null }
+                  : { statusId };
               // Everything goes through the guard: it is what applies the
               // "needs a note" gate (#6, and Pending Update since 2026-11-05)
               // AND the team's own automations. It returns false when a gate
               // is holding the change, in which case there is nothing to
               // announce yet — the modal is the announcement.
-              if (!guardedPatch(row.original, { statusId })) return;
+              if (!guardedPatch(row.original, patch)) return;
               // Crossing INTO a done or out-of-scope label hides the row from
               // the main board — announce where it went, with a way back.
               const from = sectionOf(labelById(boardRef.current.labels, prev));
@@ -1797,6 +1817,27 @@ export default function BoardTab({
               }
             }}
             onEditLabels={() => setEditLabels('status')}
+          />
+        ),
+      },
+      {
+        // Pre-Design sub-status (Aboud 2026-11-15) — the SVT collab
+        // taskforce's own state per project. Shown ONLY in the Pre-Design
+        // section, the same scoping contract as `reviewer`.
+        id: 'predesignStatus',
+        header: 'Pre-Design status',
+        size: 200,
+        minSize: 120,
+        maxSize: 800,
+        accessorFn: (p) => labelSortValue(board.labels, p.preDesignStatusId ?? null),
+        sortUndefined: 'last',
+        cell: ({ row }) => (
+          <LabelCell
+            labels={board.labels}
+            columnKey="predesign"
+            valueId={row.original.preDesignStatusId ?? null}
+            onPick={(preDesignStatusId) => applyPatch(row.original, { preDesignStatusId })}
+            onEditLabels={() => setEditLabels('predesign')}
           />
         ),
       },
@@ -1965,11 +2006,17 @@ export default function BoardTab({
    * place. Every other column still follows `columnVisibility`.
    */
   const visibilityNoReviewer = useMemo(
-    () => ({ ...columnVisibility, reviewer: false }),
+    () => ({ ...columnVisibility, reviewer: false, predesignStatus: false }),
     [columnVisibility],
   );
   const visibilityWithReviewer = useMemo(
-    () => ({ ...columnVisibility, reviewer: true }),
+    () => ({ ...columnVisibility, reviewer: true, predesignStatus: false }),
+    [columnVisibility],
+  );
+  // Pre-Design sub-status belongs to its section alone, same contract as the
+  // Reviewer column above (Aboud 2026-11-15).
+  const visibilityPredesign = useMemo(
+    () => ({ ...columnVisibility, reviewer: false, predesignStatus: true }),
     [columnVisibility],
   );
 
@@ -2009,6 +2056,19 @@ export default function BoardTab({
     data: installReview,
     columns,
     state: { sorting, columnSizing, columnVisibility: visibilityWithReviewer, columnOrder: resolvedOrder },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    enableColumnResizing: false,
+  });
+
+  // Pre-Design — identical contract to reviewTable: this is the one table that
+  // carries the Pre-Design sub-status column.
+  const predesignTable = useReactTable({
+    data: preDesign,
+    columns,
+    state: { sorting, columnSizing, columnVisibility: visibilityPredesign, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
     onColumnVisibilityChange: setColumnVisibility,
     getCoreRowModel: getCoreRowModel(),
@@ -2288,11 +2348,12 @@ export default function BoardTab({
             <div className="board-menu">
               {table
                 .getAllLeafColumns()
-                // `name` and `select` are pinned; `reviewer` is off the menu
-                // because it belongs to the Installation Review section alone
-                // (Aboud 2026-11-05) — offering a toggle that the section
-                // overrides either way would just be a lying checkbox.
-                .filter((c) => c.id !== 'name' && c.id !== 'select' && c.id !== 'reviewer')
+                // `name` and `select` are pinned; `reviewer` and
+                // `predesignStatus` are off the menu because each belongs to
+                // its own section alone (Aboud 2026-11-05 / 2026-11-15) —
+                // offering a toggle that the section overrides either way
+                // would just be a lying checkbox.
+                .filter((c) => c.id !== 'name' && c.id !== 'select' && c.id !== 'reviewer' && c.id !== 'predesignStatus')
                 .map((c) => (
                   <label key={c.id} className="board-menu-item">
                     <input type="checkbox" checked={c.getIsVisible()} onChange={c.getToggleVisibilityHandler()} />
@@ -2493,6 +2554,21 @@ export default function BoardTab({
       {/* Out of SOW scope sits BETWEEN active and Completed on purpose
           (Aboud 2026-10-19): these projects are not in the pipeline, but they
           are not finished either, and they still have to be findable. */}
+      {/* Pre-Design sits directly under the active table (Aboud 2026-11-15):
+          the SVT collab taskforce's survey-stage analyses, with their own
+          sub-status column, ahead of the Installation Review section. */}
+      <SectionCard
+        variant="predesign"
+        title="Pre-Design"
+        emptyText="Nothing here — a project lands here when its status is set to “Pre-Design” (or any status marked “pre-design” in Edit labels)."
+        open={predesignOpen || searching}
+        onToggle={() => setPredesignOpen((v) => !v)}
+        table={predesignTable}
+        highlightId={highlightId}
+        agingOf={agingFor}
+        selectedIds={selected}
+      />
+
       <SectionCard
         variant="review"
         title="Installation Review"

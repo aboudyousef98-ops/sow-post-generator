@@ -3147,6 +3147,16 @@ tr:hover .board-label-cell.empty {
   background: #c4314b;
 }
 
+/* Pre-Design — the SVT collab taskforce's survey-stage analyses, in the
+   seeded "Pre-Design" status label's own light blue (Aboud 2026-11-15). */
+.board-predesign .board-done-toggle {
+  color: #0073a8;
+}
+.board-predesign .board-done-count {
+  background: #66ccff;
+  color: #0b3a52;
+}
+
 /* Post column (board → Compose) */
 .board-post-cell {
   width: 100%;
@@ -7283,6 +7293,22 @@ tr:hover .board-label-cell.empty {
    One row per SF field, dense list (no box per row), copy button right. */
 .output-view-toggle {
   display: flex;
+  gap: 8px;
+}
+
+/* ---- Compose mode toggle (Aboud 2026-11-15) -------------------------------
+   SVT pre-design vs full SOW scope — same look as the output toggle. */
+.compose-mode-toggle {
+  display: flex;
+  gap: 8px;
+  margin-block-end: 2px;
+}
+
+/* SVT alternative-location blocks: subhead + remove link on one line. */
+.svt-alt-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
   gap: 8px;
 }
 .sf-submit-list {

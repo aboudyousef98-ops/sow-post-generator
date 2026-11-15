@@ -16,6 +16,7 @@ import type {
   RoofMaterial,
   RoofRating,
   ServiceWork,
+  SvtTextField,
 } from '../types';
 import { effectiveText, noteLines, punctuate, stripBullet, type PolishState } from './noteText';
 
@@ -146,12 +147,31 @@ export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; lab
   { key: 'install.other', field: 'other', label: 'Anything else' },
 ];
 
-/** All 11 polishable boxes. Order is the request order sent to /api/rewrite. */
+/**
+ * Every free-text box inside SvtNotes (Aboud 2026-11-15), with its polish key
+ * and post label — the SVT-tab counterpart of INSTALL_TEXT_FIELDS. Ticks
+ * (paths, two-day) and the HO-agrees answer are deliberately NOT here: they
+ * print fixed sentences the model must never reword.
+ */
+export const SVT_TEXT_FIELDS: { key: PolishKey; field: SvtTextField; label: string }[] = [
+  { key: 'svt.hoLocation', field: 'hoLocation', label: 'HO preferred location' },
+  { key: 'svt.hoReason', field: 'hoReason', label: 'Why it does not work' },
+  { key: 'svt.alt1Location', field: 'alt1Location', label: 'Alternative location' },
+  { key: 'svt.alt1Reason', field: 'alt1Reason', label: 'Reason' },
+  { key: 'svt.alt2Location', field: 'alt2Location', label: 'Alternative location 2' },
+  { key: 'svt.alt2Reason', field: 'alt2Reason', label: 'Reason' },
+  { key: 'svt.pathNotes', field: 'pathNotes', label: 'Path notes' },
+];
+
+/** Every polishable box. Order is the request order sent to /api/rewrite.
+ * MUST stay in sync with POLISH_KEYS in netlify/functions/lib/rewriteSchema.ts
+ * — the sync test there fails loudly if the two drift apart. */
 export const POLISH_KEYS: PolishKey[] = [
   ...INSTALL_TEXT_FIELDS.map((f) => f.key),
   'siteSurvey',
   'design',
   'homeowner',
+  ...SVT_TEXT_FIELDS.map((f) => f.key),
 ];
 
 /** A fully-blank Installation Notes block — every box empty, no dropdown chosen. */
@@ -171,9 +191,11 @@ export function emptyInstallNotes(): InstallNotes {
   };
 }
 
-/** The raw (un-polished) text behind any polish key, from either half of the record. */
+/** The raw (un-polished) text behind any polish key, from any part of the record. */
 export function rawTextFor(r: PostRecord, key: PolishKey): string {
   if (key === 'siteSurvey' || key === 'design' || key === 'homeowner') return r.notes[key];
+  const s = SVT_TEXT_FIELDS.find((x) => x.key === key);
+  if (s) return r.svt?.[s.field] ?? '';
   const f = INSTALL_TEXT_FIELDS.find((x) => x.key === key);
   // `?? ''` — optional fields (concretePad) are absent on pre-2026-10-22 records.
   return f && r.installNotes ? (r.installNotes[f.field] ?? '') : '';
@@ -189,7 +211,7 @@ function clause(s: string): string {
  * the box is empty. The shared primitive behind `labelled`, `leadSentence` and
  * the battery-base branches — each of which then wraps it differently.
  */
-function clauses(raw: string, key: PolishKey, p: PolishState): string {
+export function clauses(raw: string, key: PolishKey, p: PolishState): string {
   return effectiveText(raw, key, p).split('\n').map(stripBullet).map(clause).filter(Boolean).join('; ');
 }
 
@@ -198,7 +220,7 @@ function clauses(raw: string, key: PolishKey, p: PolishState): string {
  * clauses are joined with "; " under one label, and the result gets a period.
  * Empty -> no line at all.
  */
-function labelled(label: string, raw: string, key: PolishKey, p: PolishState): string[] {
+export function labelled(label: string, raw: string, key: PolishKey, p: PolishState): string[] {
   const parts = effectiveText(raw, key, p).split('\n').map(stripBullet).map(clause).filter(Boolean);
   return parts.length ? [`${label}: ${parts.join('; ')}.`] : [];
 }

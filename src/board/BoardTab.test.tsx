@@ -458,19 +458,22 @@ describe('BoardTab — Tier 1', () => {
   it('the section sits between the active table and Completed projects', () => {
     render(<Harness initial={withHold()} />);
     const cards = Array.from(document.querySelectorAll('.list-card'));
-    // SectionCard puts `board-done` on ALL THREE sections (it carries the
+    // SectionCard puts `board-done` on ALL FOUR sections (it carries the
     // shared layout; `board-${variant}` carries the accent). So Completed is
     // the one with no variant class of its own — matching on `board-done`
-    // alone finds Installation Review first and lies about the order.
+    // alone finds Pre-Design first and lies about the order.
+    const predesign = cards.findIndex((c) => c.classList.contains('board-predesign'));
     const review = cards.findIndex((c) => c.classList.contains('board-review'));
     const scope = cards.findIndex((c) => c.classList.contains('board-scope'));
     const done = cards.findIndex(
       (c) =>
         c.classList.contains('board-done') &&
         !c.classList.contains('board-scope') &&
-        !c.classList.contains('board-review'),
+        !c.classList.contains('board-review') &&
+        !c.classList.contains('board-predesign'),
     );
-    expect(review).toBeGreaterThan(0); // the main table card comes first
+    expect(predesign).toBeGreaterThan(0); // the main table card comes first
+    expect(review).toBeGreaterThan(predesign); // Pre-Design directly under active (2026-11-15)
     expect(scope).toBeGreaterThan(review);
     expect(done).toBeGreaterThan(scope);
   });

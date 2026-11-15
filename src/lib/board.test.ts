@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { BoardProject, BoardState } from '../board/types';
+import type { BoardLabel, BoardProject, BoardState } from '../board/types';
 import {
   activityForPatch,
   autoSortOn,
@@ -7,6 +7,7 @@ import {
   defaultLabel,
   emptyBoard,
   findDuplicate,
+  isPredesignLabel,
   labelTextColor,
   labelsFor,
   linkedPosts,
@@ -17,6 +18,7 @@ import {
   nextPrefs,
   patchProject,
   positionForMove,
+  predesignStatusIds,
   seedLabels,
 } from './board';
 
@@ -41,16 +43,38 @@ describe('labelTextColor', () => {
 });
 
 describe('seed labels', () => {
-  it('seeds 3 status + 2 phase, New project is the default', () => {
+  it('seeds 4 status + 2 phase + 4 pre-design, New project is the default', () => {
     const labels = seedLabels();
     // Status order is the PIPELINE RANK the always-ordered board sorts by, so
     // work in progress leads and untouched work trails (Aboud 2026-11-05).
-    expect(labelsFor(labels, 'status').map((l) => l.name)).toEqual(['Working on it', 'Done', 'New project']);
+    // Pre-Design joined 2026-11-15 (the SVT collab taskforce), ranked just
+    // before the live board's "Installation Review" (180).
+    expect(labelsFor(labels, 'status').map((l) => l.name)).toEqual([
+      'Working on it',
+      'Done',
+      'Pre-Design',
+      'New project',
+    ]);
     expect(labelsFor(labels, 'phase').map((l) => l.name)).toEqual(['Design', 'Schedule']);
+    // The Pre-Design sub-status column (Aboud 2026-11-15): the four states he
+    // named, Working on it first and the default.
+    expect(labelsFor(labels, 'predesign').map((l) => l.name)).toEqual([
+      'Working on it',
+      'Done',
+      'Pending Additional Information',
+      'Pending Updates',
+    ]);
+    expect(defaultLabel(labels, 'predesign')?.name).toBe('Working on it');
     // Last in the order, still the label a new row gets — the two are
     // independent, which is the whole point of "new project at last".
     expect(defaultLabel(labels, 'status')?.name).toBe('New project');
     expect(labels.find((l) => l.name === 'Done')?.isDone).toBe(true);
+  });
+
+  it('the Pre-Design seeds can be archived if the team retires them (not system labels)', () => {
+    for (const l of seedLabels().filter((l) => l.id.startsWith('predesign-') || l.id === 'status-predesign')) {
+      expect(l.isSystem).toBe(false);
+    }
   });
 
   it('the seed ranks bracket the team\'s own labels rather than colliding with them', () => {
@@ -70,7 +94,7 @@ describe('seed labels', () => {
     );
     const merged = mergeBoard({ ...base, labels: renamed }, emptyBoard());
     expect(merged.labels.find((l) => l.id === 'status-done')?.name).toBe('Shipped');
-    expect(merged.labels.filter((l) => l.columnKey === 'status')).toHaveLength(3);
+    expect(merged.labels.filter((l) => l.columnKey === 'status')).toHaveLength(4);
   });
 });
 
@@ -220,7 +244,50 @@ describe('BoardState shape', () => {
     const b: BoardState = emptyBoard();
     expect(b.projects).toEqual([]);
     expect(b.activity).toEqual([]);
-    expect(b.labels.length).toBe(5);
+    // 4 status + 2 phase + 4 pre-design sub-status (2026-11-15).
+    expect(b.labels.length).toBe(10);
+  });
+});
+
+// ---- Pre-Design section flag (Aboud 2026-11-15) -----------------------------
+// Same contract as isReviewLabel: an explicit tick wins, the name default makes
+// the seeded "Pre-Design" status work with no migration, and isDone beats it.
+describe('isPredesignLabel / predesignStatusIds', () => {
+  const label = (over: Partial<BoardLabel>): BoardLabel => ({
+    id: 'x',
+    columnKey: 'status',
+    name: 'Pre-Design',
+    color: '#66CCFF',
+    sortOrder: 175,
+    isDefault: false,
+    isDone: false,
+    isSystem: false,
+    archived: false,
+    updatedAt: T0,
+    ...over,
+  });
+
+  it('matches the name by default, case-insensitively, with or without the dash', () => {
+    expect(isPredesignLabel(label({}))).toBe(true);
+    expect(isPredesignLabel(label({ name: 'pre-design' }))).toBe(true);
+    expect(isPredesignLabel(label({ name: 'Predesign' }))).toBe(true);
+    expect(isPredesignLabel(label({ name: 'Working on it' }))).toBe(false);
+  });
+
+  it('an explicit flag wins over the name default', () => {
+    expect(isPredesignLabel(label({ name: 'Survey analysis', predesign: true }))).toBe(true);
+    expect(isPredesignLabel(label({ predesign: false }))).toBe(false);
+  });
+
+  it('isDone wins, and non-status columns never match', () => {
+    expect(isPredesignLabel(label({ isDone: true }))).toBe(false);
+    expect(isPredesignLabel(label({ columnKey: 'predesign' }))).toBe(false);
+    expect(isPredesignLabel(undefined)).toBe(false);
+  });
+
+  it('predesignStatusIds collects every flagged status label', () => {
+    const ids = predesignStatusIds([label({ id: 'a' }), label({ id: 'b', name: 'Hold' })]);
+    expect(ids).toEqual(new Set(['a']));
   });
 });
 

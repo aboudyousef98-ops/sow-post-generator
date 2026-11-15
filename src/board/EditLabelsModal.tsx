@@ -4,7 +4,7 @@
 // rows still use the label). System labels can be renamed/recolored only.
 
 import { useMemo, useState } from 'react';
-import { LABEL_PALETTE, isOutOfScopeLabel, isReviewLabel, labelsFor } from '../lib/board';
+import { LABEL_PALETTE, isOutOfScopeLabel, isPredesignLabel, isReviewLabel, labelsFor } from '../lib/board';
 import { labelRequiresNote } from '../lib/updates';
 import type { BoardLabel, BoardProject, LabelColumnKey } from './types';
 import Popover from './Popover';
@@ -62,7 +62,8 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
   const [reassign, setReassign] = useState<{ label: BoardLabel; count: number; moveTo: string } | null>(null);
 
   const usage = useMemo(() => {
-    const field = columnKey === 'status' ? 'statusId' : 'phaseId';
+    const field =
+      columnKey === 'status' ? 'statusId' : columnKey === 'phase' ? 'phaseId' : ('preDesignStatusId' as const);
     const counts = new Map<string, number>();
     for (const p of projects) {
       if (p.deletedAt) continue;
@@ -105,7 +106,12 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
     const used = new Set(options.map((l) => l.color));
     const color = LABEL_PALETTE.find((c) => !used.has(c)) ?? LABEL_PALETTE[options.length % LABEL_PALETTE.length];
     // After the working labels, before the parked and finished ones.
-    const maxOrder = Math.max(0, ...options.filter((l) => !l.isDone && !isOutOfScopeLabel(l) && !isReviewLabel(l)).map((l) => l.sortOrder));
+    const maxOrder = Math.max(
+      0,
+      ...options
+        .filter((l) => !l.isDone && !isOutOfScopeLabel(l) && !isReviewLabel(l) && !isPredesignLabel(l))
+        .map((l) => l.sortOrder),
+    );
     onUpdate([
       {
         id: crypto.randomUUID(),
@@ -137,7 +143,10 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <h3>Edit {columnKey === 'status' ? 'Status' : 'Design/Schedule'} labels</h3>
+        <h3>
+          Edit {columnKey === 'status' ? 'Status' : columnKey === 'phase' ? 'Design/Schedule' : 'Pre-Design status'}{' '}
+          labels
+        </h3>
 
         {reassign ? (
           <>
@@ -210,6 +219,7 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                                 ...l,
                                 isDone: e.target.checked,
                                 review: e.target.checked ? false : l.review,
+                                predesign: e.target.checked ? false : l.predesign,
                                 outOfScope: e.target.checked ? false : l.outOfScope,
                               },
                             ])
@@ -230,12 +240,34 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                                 ...l,
                                 review: e.target.checked,
                                 isDone: e.target.checked ? false : l.isDone,
+                                predesign: e.target.checked ? false : l.predesign,
                                 outOfScope: e.target.checked ? false : l.outOfScope,
                               },
                             ])
                           }
                         />
                         installation review
+                      </label>
+                      <label
+                        className="board-label-flag"
+                        title="Pre-design analysis in progress — these rows move to the “Pre-Design” section with its own sub-status column"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isPredesignLabel(l)}
+                          onChange={(e) =>
+                            onUpdate([
+                              {
+                                ...l,
+                                predesign: e.target.checked,
+                                isDone: e.target.checked ? false : l.isDone,
+                                review: e.target.checked ? false : l.review,
+                                outOfScope: e.target.checked ? false : l.outOfScope,
+                              },
+                            ])
+                          }
+                        />
+                        pre-design
                       </label>
                       <label
                         className="board-label-flag"
@@ -251,6 +283,7 @@ export default function EditLabelsModal({ columnKey, labels, projects, onUpdate,
                                 outOfScope: e.target.checked,
                                 isDone: e.target.checked ? false : l.isDone,
                                 review: e.target.checked ? false : l.review,
+                                predesign: e.target.checked ? false : l.predesign,
                               },
                             ])
                           }

@@ -3,7 +3,15 @@
 // state, this file owns the rules so they can be tested without a DOM.
 
 import type { BoardLabel, BoardProject } from '../board/types';
-import { labelById, labelsFor, outOfScopeStatusIds, positionForMove, reviewStatusIds, type LinkedPosts } from './board';
+import {
+  labelById,
+  labelsFor,
+  outOfScopeStatusIds,
+  positionForMove,
+  predesignStatusIds,
+  reviewStatusIds,
+  type LinkedPosts,
+} from './board';
 
 // ---- filters ----------------------------------------------------------------
 // Lives here (not in BoardTab) so the presets below can be unit-tested.
@@ -103,6 +111,12 @@ export interface BoardSections {
    * (Aboud 2026-11-03).
    */
   installReview: BoardProject[];
+  /**
+   * Pre-design analysis in progress (Aboud 2026-11-15, the SVT collab
+   * taskforce) — its own section between the active table and Installation
+   * Review, carrying the per-project sub-status column.
+   */
+  preDesign: BoardProject[];
   /** Status counts as done. */
   completed: BoardProject[];
 }
@@ -119,15 +133,19 @@ export function splitSections(projects: BoardProject[], labels: BoardLabel[]): B
   const doneIds = new Set(labels.filter((l) => l.isDone).map((l) => l.id));
   const scopeIds = outOfScopeStatusIds(labels);
   const reviewIds = reviewStatusIds(labels);
+  const predesignIds = predesignStatusIds(labels);
   const active: BoardProject[] = [];
   const outOfScope: BoardProject[] = [];
   const installReview: BoardProject[] = [];
+  const preDesign: BoardProject[] = [];
   const completed: BoardProject[] = [];
   for (const p of projects) {
     // Done is checked first — see isOutOfScopeLabel for why it wins. Review
-    // then beats out-of-scope: it is the more specific statement about a row.
+    // then beats pre-design, and both beat out-of-scope: each is the more
+    // specific statement about a row.
     if (p.statusId && doneIds.has(p.statusId)) completed.push(p);
     else if (p.statusId && reviewIds.has(p.statusId)) installReview.push(p);
+    else if (p.statusId && predesignIds.has(p.statusId)) preDesign.push(p);
     else if (p.statusId && scopeIds.has(p.statusId)) outOfScope.push(p);
     else active.push(p);
   }
@@ -135,7 +153,8 @@ export function splitSections(projects: BoardProject[], labels: BoardLabel[]): B
   completed.sort(recentFirst);
   outOfScope.sort(recentFirst);
   installReview.sort(recentFirst);
-  return { active, installReview, outOfScope, completed };
+  preDesign.sort(recentFirst);
+  return { active, installReview, preDesign, outOfScope, completed };
 }
 
 // ---- always-ordered board ---------------------------------------------------

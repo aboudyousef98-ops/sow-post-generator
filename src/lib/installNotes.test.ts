@@ -7,6 +7,7 @@ import {
   emptyInstallNotes,
   installNoteLines,
   needsRoofConduitRework,
+  POLISH_KEYS,
   rawTextFor,
   TRENCH_LINE,
 } from './installNotes';
@@ -404,6 +405,30 @@ describe('rawTextFor', () => {
 
   it('returns empty string when the record has no installNotes yet', () => {
     expect(rawTextFor(makeRecord({ installNotes: undefined }), 'install.loadRun')).toBe('');
+  });
+
+  // SVT pre-design boxes (Aboud 2026-11-15) share the one key space so the
+  // polish round-trip and the stale-polish invalidation work unchanged.
+  it('reads SVT pre-design boxes, and tolerates a record with no svt yet', () => {
+    const r = makeRecord({ svt: { hoReason: 'blocks the gas meter' } });
+    expect(rawTextFor(r, 'svt.hoReason')).toBe('blocks the gas meter');
+    expect(rawTextFor(r, 'svt.pathNotes')).toBe('');
+    expect(rawTextFor(makeRecord(), 'svt.hoLocation')).toBe('');
+  });
+});
+
+describe('POLISH_KEYS — SVT pre-design boxes (Aboud 2026-11-15)', () => {
+  it('includes every svt free-text box, appended after the feedback notes', () => {
+    expect(POLISH_KEYS).toEqual([
+      ...POLISH_KEYS.filter((k) => !k.startsWith('svt.')),
+      'svt.hoLocation',
+      'svt.hoReason',
+      'svt.alt1Location',
+      'svt.alt1Reason',
+      'svt.alt2Location',
+      'svt.alt2Reason',
+      'svt.pathNotes',
+    ]);
   });
 });
 

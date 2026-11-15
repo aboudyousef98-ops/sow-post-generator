@@ -133,6 +133,76 @@ tests**. `tsc --noEmit` and `eslint --max-warnings 0` clean.
 
 ---
 
+## 4. Pre-Design board section + SVT pre-design compose tab (2026-11-15) ✅ done, tested — PENDING
+
+**Ask (Aboud 2026-11-15, after the #sow-svt-collab taskforce kickoff):** SOW
+posts a pre-design analysis within hours of the site survey, before design,
+so SVT/CLR can make scheduling decisions. Board: a "Pre-Design" group between
+the active table and Installation Review, with its own per-project sub-status
+(Working on it / Done / Pending Additional Information / Pending Updates).
+Compose: a second tab "SVT — Pre-design" (battery-location HO agreement +
+alternatives, likely conduit path, upgrades, shared site facts, two-day flag)
+producing a formatted SVT post. Research base: `_STUDY_predesign_svt.md`
+(Slack reading + 402 records mined for the path vocabulary).
+
+**Board.** 5th section `preDesign` in `splitSections` (flag `predesign?` on
+BoardLabel, by-name default `pre-design`/`predesign` — the isReviewLabel
+recipe). New label column `columnKey:'predesign'` + `BoardProject.
+preDesignStatusId`; the column renders ONLY in the Pre-Design section (the
+Reviewer scoping contract). Seeds (NOT system labels, archivable): status
+`Pre-Design` (#66CCFF, rank 175 — just before Installation Review) + the 4
+sub-status labels, `Working on it` default. The seed-merge machinery delivers
+them to the live board on first load after deploy — no migration. Setting a
+row's status to Pre-Design auto-seeds the sub-status to Working on it.
+EditLabelsModal: a `pre-design` flag on status labels (mutually exclusive
+with done/review/out-of-scope) + full label editing for the new column.
+
+**Compose.** Form mode toggle `SVT — Pre-design | SOW — Full scope`
+(per-device, `sowpost.composeMode.v1`); both tabs edit the SAME draft, so
+shared fields (battery location, walls, stories, services, roof material,
+disconnect duration, special cases) are typed once — pre-design work
+pre-fills the full SOW compose, no sync layer. New `svt?: SvtNotes` on
+PostRecord (no-migration contract): HO-agrees tri-state + location/reason,
+2 fixed alternative slots (location+reason each), 5 path ticks
+(Back-to-back / Attic run / External run / Trench (underground) / Existing
+solar tie-in), path notes, two-day flag. 7 new PolishKeys (`svt.*`) on client
+AND server schema (sync test green); ticks and derived sentences are not
+polishable. hasContent extended so an svt-only draft autosaves.
+
+**Output.** `src/lib/svtPost.ts` — the SVT post builder. Header
+`*Pre-Design Analysis — <name>*` + `kW | jurisdiction | utility`, bullets:
+Battery Location (the SAME "Batteries will be installed…" sentence the SF
+field prints, then the HO answer, then alternatives) → Most Likely Conduit
+Path → Installation Notes (the SOW post's own `installNoteLines`, battery
+location and "anything else" omitted) → Scheduling (`TWO_DAY_LINE`, Issam's
+CLR GANTT flag). Rendered by the SOW post's own renderers
+(`renderItemsText/Html`, extracted from template.ts — formats can never
+drift). OutputColumn `mode` prop: SVT mode = readiness card + one
+"Copy SVT post" button (dual-format clipboard, same 4 required fields,
+Ctrl+Shift+C) + live preview; no SF panel, no note check, no Mark as posted.
+
+**Files:** new `src/lib/svtPost.ts` (+test), `src/components/SvtCard.tsx`,
+`src/components/OutputColumn.svt.test.tsx`; touched `src/types.ts`,
+`src/lib/{installNotes,record,template,board,boardViews}.ts` (+tests),
+`src/board/{types.ts,BoardTab.tsx,EditLabelsModal.tsx}` (+BoardTab test),
+`src/components/{ComposeTab,OutputColumn}.tsx`, `src/theme.css`,
+`netlify/functions/lib/rewriteSchema.ts`.
+
+Full gate green: `vitest run --no-file-parallelism` → **71 files, 1290
+tests** (+32 new). `tsc --noEmit` and `eslint --max-warnings 0` clean.
+Driven end-to-end in the real app on `localhost:8888`: status → Pre-Design
+section with auto-seeded sub-status, all 4 sub-status picks, SVT tab fill
+(HO disagreement, alternative, path ticks, two-day), live preview, copy
+toast, SOW tab unchanged with the shared battery location flowing into the
+SF field. Demo data left on the LOCAL blobs (Chad Trader in Pre-Design;
+Jasmine Fowler draft carries a filled SVT block) for Aboud's own click-through.
+
+**Open (awaiting Aboud):** SVT post wording/section review; whether the
+pre-design "Trench (underground)" tick should also pre-tick the SOW trench
+box; mobile board shows no Pre-Design section (same as Installation Review).
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
