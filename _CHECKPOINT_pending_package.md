@@ -357,6 +357,40 @@ driven on localhost.
 
 ---
 
+## 8. Monday-style project side panel + threaded replies (2026-11-15) ✅ done, tested — PENDING
+
+**Ask:** "when i click on the update icon i want the updates to open on the
+side panel with the name of the posting it with replies under each post for
+us to comment on his update, like monday.com". Design approved in chat
+(bounded path).
+
+**Panel.** `UpdatesPanel` (replaces `UpdatesModal`, which is deleted along
+with `RequestsViewerModal`): a right-side panel (`.upd-panel`, 560px,
+slide-in with reduced-motion respect, z-index 40 so gate modals stay above).
+NON-MODAL — the board stays live; clicking another row's pill switches the
+panel to that project; Escape/✕ closes; switching projects clears any
+half-typed draft/reply. Content top-to-bottom: project name → Slack
+requests (resolve + direct paste, as before) → composer → thread.
+
+**Replies.** `ProjectUpdate.parentId?` — optional, no migration; a reply IS
+an update, so merge, search corpus, "Ask the board", and the pill count all
+work untouched. One level deep (Monday's model). `lib/updates`:
+`newReply()`, `threadRoots()` (posts newest-first, replies oldest-first; a
+deleted post with live replies rides along flagged so the panel renders an
+"(update deleted)" stub). Edit/delete rules identical for replies. The
+soft popup at "Working on it" now opens this panel instead of its own modal.
+
+**Known gaps:** mobile still renders the flat list (a reply shows as a plain
+update there — readable, unthreaded); the panel overlaps the table's right
+columns rather than squeezing them (overlay by design).
+
+Gate: **73 files / 1329 tests** green (the recurring `App.integration`
+machine-load flake re-verified green in isolation), tsc + eslint + build +
+nosecrets clean; driven live (reply posted under Glenda's update, panel
+switch, Escape).
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
