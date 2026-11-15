@@ -248,6 +248,52 @@ real AI pass after deploy, same as every AI feature.**
 
 ---
 
+## 6. Pre-deploy audit pass (2026-11-15) ✅ done — commit `6bf15a5`
+
+Aboud: "please make full review and audit before we deploy, and make sure
+UI/UX is perfect". Two adversarial reviews (correctness/data-safety, UX/a11y)
+over the whole `f6fdd95^..HEAD` range + a hands-on browser pass.
+
+**Verdict: NO BLOCKERS.** Confirmed clean (evidence, not hope): the 5 new
+seed labels collide with nothing on the live board (checked against the v39
+backup by id, name, and sortOrder — 175 lands in the free 170/180 gap) and
+can never resurrect an archive or beat a user edit; old clients merge the new
+labels/fields untouched and simply show Pre-Design rows in the active table
+until they refresh; every new record/board field honors the no-migration
+contract; client/server polish keys match in content AND order; Slack text,
+Slack HTML, and the SF blob are byte-identical for any record without the new
+fields (renderer refactor verified verbatim); an svt-only draft autosaves.
+
+**Fixed from the audit** (all in `6bf15a5`, each pinned by a test where it
+can be): the SVT post leaked the "Anything else" box (missing omit check);
+sub-status seeding was cell-pick-only → now central `withPredesignDefault()`
+(bulk, gate, automations, mobile); reminders could pop for the WRONG record
+after a draft switch mid-AI-round-trip → id guards; reminders modal gained
+dialog role/autofocus/Escape; mobile board gained the Pre-Design section;
+Edit-labels status rows overflowed (6 flags squeezed the rename input to
+zero width) → flags on their own line + `.modal.board-labels`; SVT-mode
+readiness card now describes the SVT post (3 advisories) instead of
+SOW-stage rows with a dead wire advisory; include-requirements checkboxes
+say "…in the full SOW post (not this SVT post)" in SVT mode; mode cards
+navy-on-orange (5.04:1 AA — white was 2.33:1), aria-pressed group semantics,
+focus ring, narrow-width stack, boot-skeleton bones; chips restored on
+shared boxes in the SVT tab; copy nits (Pre-Design casing, Homeowner,
+"Gantt chart").
+
+**Accepted, not fixed (known + reasoned):** renaming the "Pre-Design" status
+label drops the by-name section match unless the `pre-design` flag is ticked
+(identical contract to Installation Review); Installation Review rows remain
+unlisted on mobile (pre-existing gap, now one section lonelier); users with
+a saved column order get the new column appended last until they drag it;
+old-build clients show raw `preDesignStatusId` in activity entries during
+the rollout window; whole-record merge can drop concurrent svt edits from a
+stale client (the store's long-standing semantics, not new).
+
+Final gate: **72 files / 1302 tests green**, `tsc`, `eslint
+--max-warnings 0`, `npm run build`, `check:nosecrets` all clean.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
