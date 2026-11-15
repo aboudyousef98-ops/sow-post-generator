@@ -468,7 +468,7 @@ describe('BoardTab — Tier 1', () => {
     expect((screen.getByLabelText('Attach to project') as HTMLInputElement).value).toBe('Martha Thompson');
     fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    const chip = screen.getByTitle(/Open Slack requests/);
+    const chip = screen.getByTitle(/open Slack request/);
     expect(chip.textContent).toContain('1');
   });
 
@@ -483,7 +483,7 @@ describe('BoardTab — Tier 1', () => {
     fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
     expect(screen.getByText(/Inbox — waiting for their rows \(1\)/)).toBeTruthy();
     // No chip anywhere: the request has no row yet.
-    expect(screen.queryByTitle(/Open Slack requests/)).toBeNull();
+    expect(screen.queryByTitle(/open Slack request/)).toBeNull();
   });
 
   it('the project panel captures a Slack message directly — no matching needed', () => {
@@ -496,8 +496,23 @@ describe('BoardTab — Tier 1', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add request' }));
     expect(screen.getByText('special order Cu SER wires for this one')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    const chip = within(screen.getByText('Martha Thompson').closest('tr')!).getByTitle(/Open Slack requests/);
+    const chip = within(screen.getByText('Martha Thompson').closest('tr')!).getByTitle(/open Slack request/);
     expect(chip.textContent).toContain('1');
+  });
+
+  it('ONE merged chip carries both signals (Aboud 2026-11-15: "merge them")', () => {
+    const board = withRows();
+    const T = '2026-11-15T10:00:00.000Z';
+    board.requests = [
+      { id: 'rq-1', projectId: 'pj-1', text: 'order the wires please', addedBy: 'Hamzah', addedAt: T, updatedAt: T },
+    ];
+    board.updates = [{ id: 'u-1', projectId: 'pj-1', text: 'waiting on AHJ', by: 'Aboud Yousef', at: T, kind: 'note', updatedAt: T }];
+    render(<Harness initial={board} />);
+    const row = screen.getByText('Martha Thompson').closest('tr')!;
+    const chips = row.querySelectorAll('.board-upd-chip');
+    expect(chips).toHaveLength(1); // not two chips — merged
+    expect(chips[0].textContent).toContain('💬 1');
+    expect(chips[0].textContent).toContain('● 1');
   });
 
   it('the picker searches by name from the first letters (Aboud 2026-11-15)', () => {
@@ -515,7 +530,7 @@ describe('BoardTab — Tier 1', () => {
     expect(picker.value).toBe('Carla Nunez');
     fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-    const chip = screen.getByTitle(/Open Slack requests/);
+    const chip = screen.getByTitle(/open Slack request/);
     expect(chip.closest('tr')!.textContent).toContain('Carla Nunez');
   });
 

@@ -3236,8 +3236,17 @@ tr:hover .board-label-cell.empty {
   color: var(--dyn-navy);
   font-weight: 700;
 }
+/* Open designer requests — the louder state wins the merged pill. */
+.board-upd-chip.req {
+  background: var(--dyn-warn-bg);
+  color: var(--dyn-warn-ink);
+  font-weight: 700;
+}
 .board-upd-chip:hover {
   background: var(--dyn-teal-line);
+}
+.board-upd-chip.req:hover {
+  background: var(--dyn-yellow);
 }
 
 /* Slack requests inside the Updates panel. */

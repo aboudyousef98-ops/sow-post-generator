@@ -1784,35 +1784,34 @@ export default function BoardTab({
         cell: ({ row }) => (
           <div className="board-name-wrap">
             <NameCell project={row.original} onRename={(name) => applyPatch(row.original, { name: cleanName(name) })} />
-            {/* The Updates thread, as a chip beside the name — Aboud 2026-11-15
-                moved it out of its own column ("like the one indicated with
-                the arrow"). Same affordance and titles the column had. */}
+            {/* ONE chip beside the name for the whole project panel (Aboud
+                2026-11-15: the Updates column moved here, then the separate
+                requests chip merged in — "their feature is the same"). Quiet
+                💬 + with nothing, teal 💬 n with updates, AMBER with ● n the
+                moment designers' requests are open: the louder state wins
+                the pill. Titles keep the column's old wording so the
+                affordance reads the same. */}
             {(() => {
-              const n = updateCountById.get(row.original.id) ?? 0;
+              const u = updateCountById.get(row.original.id) ?? 0;
+              const r = openReqCountById.get(row.original.id) ?? 0;
+              const title = r
+                ? `${r} open Slack request${r === 1 ? '' : 's'} from the designers${
+                    u ? ` · ${u} update${u === 1 ? '' : 's'}` : ''
+                  } — resolve before Done`
+                : u
+                  ? `${u} update${u === 1 ? '' : 's'} — open the thread`
+                  : 'Post the first update';
               return (
                 <button
                   type="button"
-                  className={`board-upd-chip${n ? ' has' : ''}`}
-                  title={n ? `${n} update${n === 1 ? '' : 's'} — open the thread` : 'Post the first update'}
+                  className={`board-upd-chip${r ? ' req' : u ? ' has' : ''}`}
+                  title={title}
                   onClick={() => setUpdatesFor(row.original)}
                 >
-                  💬 {n || '+'}
+                  {r ? (u ? `💬 ${u} · ● ${r}` : `● ${r}`) : `💬 ${u || '+'}`}
                 </button>
               );
             })()}
-            {/* Open Slack requests — the amber chip (Aboud 2026-11-06 design,
-                2026-11-15). Opens the same per-project panel, where the
-                requests live beside the thread. */}
-            {(openReqCountById.get(row.original.id) ?? 0) > 0 && (
-              <button
-                type="button"
-                className="board-req-chip"
-                title="Open Slack requests from the designers — read before working, resolve before Done"
-                onClick={() => setUpdatesFor(row.original)}
-              >
-                ● {openReqCountById.get(row.original.id)}
-              </button>
-            )}
             <RowMenu
               project={row.original}
               isAdmin={isAdmin}
