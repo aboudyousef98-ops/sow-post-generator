@@ -408,7 +408,21 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
           <div className="card preview-card">
             <div className="preview-head">
               <span className="section-label">{svtView === 'sf' ? 'Salesforce — plain text' : 'SVT post preview'}</span>
-              <span className="muted">Updates as you type</span>
+              <span className="preview-head-actions">
+                <span className="muted">Updates as you type</span>
+                {/* The copy lives ON the card too (Aboud 2026-11-15: "how
+                    about copy button?") — the readiness button is a scroll
+                    away from the text being read. View-aware, same action. */}
+                <button
+                  type="button"
+                  className="btn small primary"
+                  disabled={!ready}
+                  onClick={() => void copySvt()}
+                  title={svtView === 'sf' ? 'Copy the plain text for Salesforce' : 'Copy for Slack · Ctrl+Shift+C'}
+                >
+                  Copy
+                </button>
+              </span>
             </div>
             {svtView === 'sf' ? (
               <div className="preview svt-sf-pre">{svtSfText}</div>

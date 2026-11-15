@@ -77,10 +77,13 @@ describe('OutputColumn — SVT pre-design mode', () => {
     expect(pre.textContent).toContain('Pre-Design Analysis — Norca Garcia');
     // The characters ARE the formatting: dashed underline under the section.
     expect(pre.textContent).toContain('Installation Notes\n------------------');
-    // The main button follows the view.
+    // The main button follows the view…
     expect(screen.getByRole('button', { name: 'Copy for Salesforce' })).toBeTruthy();
+    // …and the card carries its own Copy beside the text being read.
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Slack post' }));
     expect(screen.getByRole('button', { name: 'Copy SVT post' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeTruthy();
   });
 
   it('omitting the mode renders the full SOW column exactly as before', () => {
