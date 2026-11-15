@@ -12,6 +12,17 @@ backup rule in `CLAUDE.md` §"Deploy rule".
 > stay below as the record of that package. **Item 3 onward is the NEW
 > pending package.**
 
+> **2026-11-15: items 3–11 SHIPPED** in deploy `6afa1986` (his "yalla
+> deployyyy", 23:45). Backups `_versions/v40-live-backup-2026-11-15-predeploy/`
+> and `v41-…-postdeploy/` — **all 5 stores byte-identical**. Verified on prod:
+> new client served (mode cards, Active Projects collapse, 💬 chips, Trench
+> checkbox, Permissions); `columnPerms` round-tripped through the new server
+> PutSchema (set → stored in blob → reverted); seeded Pre-Design labels
+> landed and coexist with the team's own manual "Pending Additional
+> Information" status label; **AI reminders fired live** (Polish on a
+> throwaway draft matched a real SOW Note about exterior conduit — dialog
+> rendered, draft deleted after). The package list stays below as the record.
+
 ---
 
 ## 1. Board width — wide page cap (2026-11-06) ✅ done, tested
