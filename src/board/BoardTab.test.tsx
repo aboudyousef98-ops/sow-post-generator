@@ -464,8 +464,8 @@ describe('BoardTab — Tier 1', () => {
       target: { value: 'for Martha Thompson please special order the Cu SER wires' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Match messages' }));
-    // The fuzzy guess pre-fills the picker — a human still confirms.
-    expect((screen.getByLabelText('Attach to project') as HTMLSelectElement).value).toBe('pj-1');
+    // The fuzzy guess pre-fills the search picker — a human still confirms.
+    expect((screen.getByLabelText('Attach to project') as HTMLInputElement).value).toBe('Martha Thompson');
     fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Close' }));
     const chip = screen.getByTitle(/Open Slack requests/);
@@ -479,11 +479,44 @@ describe('BoardTab — Tier 1', () => {
       target: { value: 'please call me before starting the Maria M Acevedo job' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Match messages' }));
-    expect((screen.getByLabelText('Attach to project') as HTMLSelectElement).value).toBe('');
+    expect((screen.getByLabelText('Attach to project') as HTMLInputElement).value).toBe('');
     fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
     expect(screen.getByText(/Inbox — waiting for their rows \(1\)/)).toBeTruthy();
     // No chip anywhere: the request has no row yet.
     expect(screen.queryByTitle(/Open Slack requests/)).toBeNull();
+  });
+
+  it('the project panel captures a Slack message directly — no matching needed', () => {
+    render(<Harness initial={withRows()} />);
+    const martha = screen.getByText('Martha Thompson').closest('tr')!;
+    fireEvent.click(within(martha).getByTitle('Post the first update'));
+    fireEvent.change(screen.getByLabelText('Paste a Slack message for this project'), {
+      target: { value: 'special order Cu SER wires for this one' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Add request' }));
+    expect(screen.getByText('special order Cu SER wires for this one')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const chip = within(screen.getByText('Martha Thompson').closest('tr')!).getByTitle(/Open Slack requests/);
+    expect(chip.textContent).toContain('1');
+  });
+
+  it('the picker searches by name from the first letters (Aboud 2026-11-15)', () => {
+    render(<Harness initial={withRows()} />);
+    fireEvent.click(screen.getByRole('button', { name: /Paste from Slack/ }));
+    fireEvent.change(screen.getByLabelText('Pasted Slack messages'), {
+      target: { value: 'please order the extra mounting rails for this one' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Match messages' }));
+    const picker = screen.getByLabelText('Attach to project') as HTMLInputElement;
+    expect(picker.value).toBe(''); // nothing named in the message — no guess
+    fireEvent.change(picker, { target: { value: 'car' } });
+    // Typing searches: names starting with the letters list first.
+    fireEvent.click(screen.getByRole('option', { name: 'Carla Nunez' }));
+    expect(picker.value).toBe('Carla Nunez');
+    fireEvent.click(screen.getByRole('button', { name: /Add 1 request/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    const chip = screen.getByTitle(/Open Slack requests/);
+    expect(chip.closest('tr')!.textContent).toContain('Carla Nunez');
   });
 
   it('an open request hard-gates Done and resolving in the modal releases it', () => {
@@ -1404,8 +1437,8 @@ describe('keyboard-modified selection, and bulk removal', () => {
   const selectedNames = () =>
     [...document.querySelectorAll('.board-table-main tbody tr[data-project-id]')]
       .filter((tr) => (tr.querySelector('input[type="checkbox"]') as HTMLInputElement)?.checked)
-      // Strip the row-menu glyph that shares the name cell.
-      .map((tr) => tr.querySelector('td:nth-child(2)')?.textContent?.replace('⋯', '').trim());
+      // The name button alone — the 💬/● chips and the ⋯ menu share the cell.
+      .map((tr) => tr.querySelector('.board-name')?.textContent?.trim());
 
   it('Ctrl-click selects a row without opening its cell editor', () => {
     render(<Harness initial={fiveRows()} />);

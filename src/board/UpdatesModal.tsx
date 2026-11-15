@@ -10,8 +10,9 @@ import { useRef, useState } from 'react';
 import FormatToolbar, { continueList, formatHotkey } from '../components/FormatToolbar';
 import RichText from '../components/RichText';
 import { relativeTime } from '../lib/dates';
+import { newRequest, parseSlackPaste, resolveRequest } from '../lib/requests';
 import { deleteUpdate, editUpdate, newUpdate, updatesFor } from '../lib/updates';
-import type { BoardProject, ProjectUpdate, UpdateKind } from './types';
+import type { BoardProject, ProjectRequest, ProjectUpdate, UpdateKind } from './types';
 
 const KIND_BADGE: Partial<Record<UpdateKind, string>> = {
   rating: 'Rating reason',
@@ -31,26 +32,47 @@ const initials = (n: string) =>
 export default function UpdatesModal({
   project,
   updates,
+  requests,
   me,
   isAdmin,
   onPut,
+  onPutRequests,
   onClose,
 }: {
   project: BoardProject;
   updates: ProjectUpdate[];
+  /** Slack-captured requests — the ones for THIS project render here
+   * (Aboud 2026-11-15: "put the paste from slack inside this"). */
+  requests: ProjectRequest[];
   me: string;
   isAdmin: boolean;
   /** Upsert one update — the board owns the write. */
   onPut: (u: ProjectUpdate) => void;
+  /** Upsert requests in one board write. */
+  onPutRequests: (items: ProjectRequest[]) => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState('');
+  const [reqDraft, setReqDraft] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
 
   const thread = updatesFor(updates, project.id);
+  const myRequests = requests.filter((r) => r.projectId === project.id && !r.deleted);
+  const openReqs = myRequests.filter((r) => !r.resolvedAt);
+  const resolvedReqs = myRequests.filter((r) => r.resolvedAt);
+
+  /** The project is already known, so a paste here needs no matching at all —
+   * every pasted message becomes a request on THIS row. */
+  const addRequests = () => {
+    const chunks = parseSlackPaste(reqDraft);
+    const texts = chunks.length ? chunks : reqDraft.trim() ? [reqDraft.trim()] : [];
+    if (!texts.length) return;
+    onPutRequests(texts.map((t) => newRequest(t, project.id, me)));
+    setReqDraft('');
+  };
 
   const post = () => {
     const text = draft.trim();
@@ -109,6 +131,47 @@ export default function UpdatesModal({
             </button>
           </div>
         </div>
+
+          {/* Slack requests — the designers' asks for THIS project, pasted
+              right here (Aboud 2026-11-15). Resolving is what releases the
+              "Ready to submit"/"Done" gate. */}
+          <div className="upd-req-block">
+            <div className="upd-head">
+              <h4>
+                Slack requests
+                {openReqs.length > 0 && <span className="board-req-chip upd-req-count">● {openReqs.length} open</span>}
+              </h4>
+            </div>
+            {openReqs.map((r) => (
+              <div key={r.id} className="req-confirm">
+                <div className="req-text">{r.text}</div>
+                <div className="req-meta">
+                  added by {r.addedBy} ·{' '}
+                  <button type="button" className="btn small secondary" onClick={() => onPutRequests([resolveRequest(r, me)])}>
+                    Mark resolved
+                  </button>
+                </div>
+              </div>
+            ))}
+            {resolvedReqs.map((r) => (
+              <div key={r.id} className="req-confirm req-done">
+                <div className="req-text">{r.text}</div>
+                <div className="req-meta">✓ resolved by {r.resolvedBy}</div>
+              </div>
+            ))}
+            <div className="upd-req-add">
+              <textarea
+                rows={2}
+                aria-label="Paste a Slack message for this project"
+                placeholder="Paste a designer’s Slack message for this project…"
+                value={reqDraft}
+                onChange={(e) => setReqDraft(e.target.value)}
+              />
+              <button type="button" className="btn small primary" disabled={!reqDraft.trim()} onClick={addRequests}>
+                Add request
+              </button>
+            </div>
+          </div>
 
           <div className="upd-head">
             <h4>

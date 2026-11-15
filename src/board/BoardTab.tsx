@@ -1784,14 +1784,31 @@ export default function BoardTab({
         cell: ({ row }) => (
           <div className="board-name-wrap">
             <NameCell project={row.original} onRename={(name) => applyPatch(row.original, { name: cleanName(name) })} />
+            {/* The Updates thread, as a chip beside the name — Aboud 2026-11-15
+                moved it out of its own column ("like the one indicated with
+                the arrow"). Same affordance and titles the column had. */}
+            {(() => {
+              const n = updateCountById.get(row.original.id) ?? 0;
+              return (
+                <button
+                  type="button"
+                  className={`board-upd-chip${n ? ' has' : ''}`}
+                  title={n ? `${n} update${n === 1 ? '' : 's'} — open the thread` : 'Post the first update'}
+                  onClick={() => setUpdatesFor(row.original)}
+                >
+                  💬 {n || '+'}
+                </button>
+              );
+            })()}
             {/* Open Slack requests — the amber chip (Aboud 2026-11-06 design,
-                2026-11-15). No column of its own: the chip IS the column. */}
+                2026-11-15). Opens the same per-project panel, where the
+                requests live beside the thread. */}
             {(openReqCountById.get(row.original.id) ?? 0) > 0 && (
               <button
                 type="button"
                 className="board-req-chip"
                 title="Open Slack requests from the designers — read before working, resolve before Done"
-                onClick={() => setReqView({ project: row.original })}
+                onClick={() => setUpdatesFor(row.original)}
               >
                 ● {openReqCountById.get(row.original.id)}
               </button>
@@ -1994,29 +2011,9 @@ export default function BoardTab({
           <RatingCell value={row.original.rating} onPick={(rating) => guardedPatch(row.original, { rating })} />
         ),
       },
-      {
-        // The Monday-style thread (#2). Count doubles as the affordance —
-        // a row with nothing on it shows a quiet "+", not a zero.
-        id: 'updates',
-        header: 'Updates',
-        size: 110,
-        minSize: 80,
-        maxSize: 400,
-        accessorFn: (p) => updateCountById.get(p.id) ?? 0,
-        cell: ({ row }) => {
-          const n = updateCountById.get(row.original.id) ?? 0;
-          return (
-            <button
-              type="button"
-              className={`board-upd-cell${n ? ' has' : ''}`}
-              title={n ? `${n} update${n === 1 ? '' : 's'} — open the thread` : 'Post the first update'}
-              onClick={() => setUpdatesFor(row.original)}
-            >
-              💬 {n || '+'}
-            </button>
-          );
-        },
-      },
+      // The Updates COLUMN was retired 2026-11-15 (Aboud: "move it from
+      // column to be like the one indicated with the arrow") — the thread now
+      // opens from the 💬 chip beside the project name.
       {
         id: 'post',
         header: 'Post',
@@ -2959,9 +2956,11 @@ export default function BoardTab({
         <UpdatesModal
           project={updatesFor}
           updates={board.updates ?? []}
+          requests={board.requests ?? []}
           me={me}
           isAdmin={isAdmin}
           onPut={putUpdateOnBoard}
+          onPutRequests={putRequests}
           onClose={() => setUpdatesFor(null)}
         />
       )}

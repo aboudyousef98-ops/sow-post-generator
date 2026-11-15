@@ -7,9 +7,9 @@
 //   3. RequestsGateModal — the hard gate at "Ready to submit"/"Done": every
 //      open request must be marked resolved before the status change lands.
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { BoardProject, ProjectRequest } from '../board/types';
-import { liveProjects } from '../lib/board';
+import { liveProjects, nameKey } from '../lib/board';
 import {
   attachRequest,
   deleteRequest,
@@ -27,24 +27,102 @@ interface Draft {
   projectId: string;
 }
 
-function ProjectPicker({
+/**
+ * Type-ahead project search (Aboud 2026-11-15: "a search engine to find the
+ * project by its name, start searching by the first letter") — a 400-row
+ * board outgrows a <select>. Names STARTING with the typed letters list
+ * first, then names merely containing them; a cleared box = no match (the
+ * request keeps waiting in the inbox).
+ */
+function ProjectSearchPicker({
   projects,
   value,
   onChange,
 }: {
   projects: BoardProject[];
+  /** Selected project id, '' = none. */
   value: string;
   onChange: (id: string) => void;
 }) {
+  const selected = projects.find((p) => p.id === value) ?? null;
+  const [text, setText] = useState(selected?.name ?? '');
+  const [open, setOpen] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
+
+  // External changes (the fuzzy pre-fill, an attach elsewhere) refresh the box.
+  useEffect(() => {
+    setText(selected?.name ?? '');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  // Click anywhere else closes the list and restores the selected name.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (!wrapRef.current?.contains(e.target as Node)) {
+        setOpen(false);
+        setText(selected?.name ?? '');
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open, selected]);
+
+  const q = nameKey(text);
+  const results = useMemo(() => {
+    if (!q) return [];
+    const starts: BoardProject[] = [];
+    const contains: BoardProject[] = [];
+    for (const p of projects) {
+      const key = nameKey(p.name);
+      if (key.startsWith(q)) starts.push(p);
+      else if (key.includes(q)) contains.push(p);
+    }
+    return [...starts, ...contains].slice(0, 8);
+  }, [q, projects]);
+
+  const pick = (p: BoardProject) => {
+    onChange(p.id);
+    setText(p.name);
+    setOpen(false);
+  };
+
   return (
-    <select aria-label="Attach to project" value={value} onChange={(e) => onChange(e.target.value)}>
-      <option value="">— no match yet (keep in the inbox)</option>
-      {projects.map((p) => (
-        <option key={p.id} value={p.id}>
-          {p.name}
-        </option>
-      ))}
-    </select>
+    <div className="req-picker" ref={wrapRef}>
+      <input
+        type="text"
+        aria-label="Attach to project"
+        placeholder="Type the project name…"
+        value={text}
+        onFocus={() => setOpen(true)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setOpen(true);
+          // Emptying the box un-attaches: back to "no match yet".
+          if (!e.target.value.trim() && value) onChange('');
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' && results.length) {
+            e.preventDefault();
+            pick(results[0]);
+          }
+          if (e.key === 'Escape') {
+            setOpen(false);
+            setText(selected?.name ?? '');
+          }
+        }}
+      />
+      {!value && !text && <span className="req-picker-hint">— no match yet (keep in the inbox)</span>}
+      {open && results.length > 0 && (
+        <div className="req-picker-list" role="listbox" aria-label="Matching projects">
+          {results.map((p) => (
+            <button type="button" key={p.id} role="option" aria-selected={p.id === value} onClick={() => pick(p)}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -125,7 +203,7 @@ export function PasteFromSlackModal({
               {drafts.map((d, i) => (
                 <div key={i} className="req-confirm">
                   <div className="req-text">{d.text}</div>
-                  <ProjectPicker
+                  <ProjectSearchPicker
                     projects={rows}
                     value={d.projectId}
                     onChange={(projectId) => setDrafts((ds) => ds!.map((x, j) => (j === i ? { ...x, projectId } : x)))}
@@ -152,7 +230,7 @@ export function PasteFromSlackModal({
                 <div key={r.id} className="req-confirm">
                   <div className="req-text">{r.text}</div>
                   <div className="req-inbox-actions">
-                    <ProjectPicker
+                    <ProjectSearchPicker
                       projects={rows}
                       value={suggestProject(r.text, rows)?.id ?? ''}
                       onChange={(projectId) => {

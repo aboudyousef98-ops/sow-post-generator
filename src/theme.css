@@ -3218,6 +3218,92 @@ tr:hover .board-label-cell.empty {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The 💬 updates chip beside the project name — the retired Updates column's
+   affordance, relocated (Aboud 2026-11-15). */
+.board-upd-chip {
+  border: 0;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: none;
+  color: var(--dyn-muted);
+  white-space: nowrap;
+}
+.board-upd-chip.has {
+  background: var(--dyn-teal-soft);
+  color: var(--dyn-navy);
+  font-weight: 700;
+}
+.board-upd-chip:hover {
+  background: var(--dyn-teal-line);
+}
+
+/* Slack requests inside the Updates panel. */
+.upd-req-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-block-start: 10px;
+  padding-block-end: 10px;
+  border-block-end: 1px solid var(--dyn-line);
+}
+.upd-req-count {
+  margin-inline-start: 8px;
+}
+.upd-req-add {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+.upd-req-add textarea {
+  flex: 1;
+  margin: 0;
+}
+
+/* Type-ahead project search (replaces the <select> — 400 rows outgrew it). */
+.req-picker {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.req-picker input {
+  font: inherit;
+  padding: 6px 10px;
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+}
+.req-picker-hint {
+  font-size: 12px;
+  color: var(--dyn-muted);
+}
+.req-picker-list {
+  position: absolute;
+  inset-block-start: calc(100% + 4px);
+  inset-inline: 0;
+  z-index: 30;
+  background: var(--dyn-surface);
+  border: 1px solid var(--dyn-border-strong);
+  border-radius: var(--radius-input);
+  box-shadow: 0 10px 28px rgba(4, 61, 79, 0.16);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.req-picker-list button {
+  font: inherit;
+  text-align: start;
+  padding: 7px 10px;
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.req-picker-list button:hover,
+.req-picker-list button:focus-visible {
+  background: var(--dyn-teal-soft);
+}
 
 /* Active Projects — the main table's own collapse toggle (Aboud 2026-11-15:
    "make it collapse like other groups"). House navy, teal count chip with
