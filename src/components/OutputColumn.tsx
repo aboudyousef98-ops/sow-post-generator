@@ -9,7 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
-import { buildSvtPostHtml, buildSvtPostText, SVT_PATHS } from '../lib/svtPost';
+import { buildSvtPostHtml, buildSvtPostText, buildSvtSfText, SVT_PATHS } from '../lib/svtPost';
 import { noteCheck } from '../lib/api';
 import { SHORT, wireStatus } from '../lib/wireMaterial';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
@@ -55,6 +55,10 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
   const html = buildPostHtml(record, settings, ahjs);
   const svtText = buildSvtPostText(record);
   const svtHtml = buildSvtPostHtml(record);
+  const svtSfText = buildSvtSfText(record);
+  // Slack post vs the Salesforce plain-text version (Aboud 2026-11-15 —
+  // "salesforce does not have formatting so we need to create ours").
+  const [svtView, setSvtView] = useState<'slack' | 'sf'>('slack');
 
   // Hand-editing the post (Aboud, 2026-09-30). `draft` holds the text while it
   // is being typed; it is only written to the record on Save, so Cancel really
@@ -177,6 +181,12 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
    */
   const copySvt = useCallback(async () => {
     if (missingRequired(record).length) return;
+    if (svtView === 'sf') {
+      // Salesforce strips rich formatting — plain text IS the format.
+      await navigator.clipboard.writeText(svtSfText);
+      toast('Salesforce text copied — paste it into the SOW field.');
+      return;
+    }
     try {
       await navigator.clipboard.write([
         new ClipboardItem({
@@ -188,7 +198,7 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
       await navigator.clipboard.writeText(svtText);
     }
     toast('SVT post copied — paste it into #sow-svt-collab.');
-  }, [record, svtHtml, svtText, toast]);
+  }, [record, svtView, svtSfText, svtHtml, svtText, toast]);
 
   // Ctrl+Shift+C = copy for Slack — the post of whichever tab is open.
   useEffect(() => {
@@ -309,7 +319,7 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
               onClick={() => void copySvt()}
               title="Ctrl+Shift+C"
             >
-              Copy SVT post
+              {svtView === 'sf' ? 'Copy for Salesforce' : 'Copy SVT post'}
             </button>
           )}
           {mode === 'sow' && (
@@ -371,16 +381,43 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
 
       {/* SVT pre-design preview (Aboud 2026-11-15): one generated post, no
           manual edit — the pre-design note is short-lived and regenerating it
-          from the form is the point. */}
+          from the form is the point. Two formats of the SAME bullets: the
+          Slack post, and the Salesforce plain-text version. */}
       {mode === 'svt' && (
-        <div className="card preview-card">
-          <div className="preview-head">
-            <span className="section-label">SVT post preview</span>
-            <span className="muted">Updates as you type</span>
+        <>
+          <div className="output-view-toggle" role="tablist" aria-label="Output format">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={svtView === 'slack'}
+              className={`btn small ${svtView === 'slack' ? 'primary' : 'secondary'}`}
+              onClick={() => setSvtView('slack')}
+            >
+              Slack post
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={svtView === 'sf'}
+              className={`btn small ${svtView === 'sf' ? 'primary' : 'secondary'}`}
+              onClick={() => setSvtView('sf')}
+            >
+              Salesforce
+            </button>
           </div>
-          {/* buildSvtPostHtml escapes all user text — safe to render. */}
-          <div className="preview" dangerouslySetInnerHTML={{ __html: svtHtml }} />
-        </div>
+          <div className="card preview-card">
+            <div className="preview-head">
+              <span className="section-label">{svtView === 'sf' ? 'Salesforce — plain text' : 'SVT post preview'}</span>
+              <span className="muted">Updates as you type</span>
+            </div>
+            {svtView === 'sf' ? (
+              <div className="preview svt-sf-pre">{svtSfText}</div>
+            ) : (
+              /* buildSvtPostHtml escapes all user text — safe to render. */
+              <div className="preview" dangerouslySetInnerHTML={{ __html: svtHtml }} />
+            )}
+          </div>
+        </>
       )}
 
       {mode === 'sow' && (

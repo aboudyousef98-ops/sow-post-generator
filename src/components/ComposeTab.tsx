@@ -27,10 +27,11 @@ import WireCheckRow from './WireCheckRow';
 /**
  * Which compose the form shows (Aboud 2026-11-15): the full SOW scope, or the
  * SVT pre-design analysis. Both edit the SAME draft — shared fields appear in
- * both tabs — so this is a per-device view preference, not record state.
+ * both tabs. SOW is ALWAYS the mode Compose opens in (his call, same day):
+ * deliberately NOT persisted, so a teammate who left the tab on SVT never
+ * strands the next session there.
  */
 export type ComposeMode = 'sow' | 'svt';
-const KEY_COMPOSE_MODE = 'sowpost.composeMode.v1';
 
 interface Props {
   record: PostRecord;
@@ -73,12 +74,7 @@ export default function ComposeTab({
   boardLabels,
   onOpenBoard,
 }: Props) {
-  const [composeMode, setComposeMode] = useState<ComposeMode>(() =>
-    localStorage.getItem(KEY_COMPOSE_MODE) === 'svt' ? 'svt' : 'sow',
-  );
-  useEffect(() => {
-    localStorage.setItem(KEY_COMPOSE_MODE, composeMode);
-  }, [composeMode]);
+  const [composeMode, setComposeMode] = useState<ComposeMode>('sow');
 
   const [manualFields, setManualFields] = useState<Set<string>>(new Set());
   const [rawPairs, setRawPairs] = useState<Record<string, string> | null>(null);
@@ -503,17 +499,9 @@ export default function ComposeTab({
           stage. Both edit the one draft; shared fields appear in both. */}
       {/* Toggle buttons, not ARIA tabs: tab semantics without arrow-key
           roving would announce "tab" and then not behave like one (audit
-          2026-11-15), and aria-pressed is exactly what a two-state button is. */}
+          2026-11-15), and aria-pressed is exactly what a two-state button is.
+          SOW first and default — his call, same day. */}
       <div className="compose-mode-switch" role="group" aria-label="Compose mode">
-        <button
-          type="button"
-          aria-pressed={composeMode === 'svt'}
-          className={`mode-card${composeMode === 'svt' ? ' active' : ''}`}
-          onClick={() => setComposeMode('svt')}
-        >
-          <span className="mode-card-title">SVT — Pre-Design</span>
-          <span className="mode-card-sub">Survey analysis for the SVT team</span>
-        </button>
         <button
           type="button"
           aria-pressed={composeMode === 'sow'}
@@ -522,6 +510,15 @@ export default function ComposeTab({
         >
           <span className="mode-card-title">SOW — Full scope</span>
           <span className="mode-card-sub">Scope post for the design handoff</span>
+        </button>
+        <button
+          type="button"
+          aria-pressed={composeMode === 'svt'}
+          className={`mode-card${composeMode === 'svt' ? ' active' : ''}`}
+          onClick={() => setComposeMode('svt')}
+        >
+          <span className="mode-card-title">SVT — Pre-Design</span>
+          <span className="mode-card-sub">Survey analysis for the SVT team</span>
         </button>
       </div>
 

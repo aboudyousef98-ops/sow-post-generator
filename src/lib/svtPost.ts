@@ -13,6 +13,7 @@
 
 import type { PostItem } from './template';
 import { escapeHtml, renderItemsHtml, renderItemsText } from './template';
+import { runLines, underline } from './sfSubmission';
 import { clauses, installNoteLines, labelled, leadSentence } from './installNotes';
 import { effectiveText, noteLines } from './noteText';
 import type { PostRecord, SvtNotes } from '../types';
@@ -140,6 +141,23 @@ export function buildSvtPostText(record: PostRecord): string {
   if (meta) lines.push(meta);
   lines.push(...renderItemsText(buildSvtLines(record)));
   return lines.join('\n');
+}
+
+/**
+ * The Salesforce version (Aboud 2026-11-15: "salesforce does not have
+ * formatting so we need to create ours like the SOW"). The SAME bullets as
+ * the Slack post — buildSvtLines is the one source — rendered with the SF
+ * plain-text conventions sfSubmission.ts established: dashed underlines for
+ * section titles, "- " lines, two-space nested indents.
+ */
+export function buildSvtSfText(record: PostRecord): string {
+  const header = `Pre-Design Analysis — ${record.sf.customerName.trim() || '—'}`;
+  const meta = metaLine(record);
+  const parts = [meta ? `${header}\n${meta}` : header];
+  for (const it of buildSvtLines(record)) {
+    parts.push(`${underline(it.label)}\n${it.values.flatMap(runLines).join('\n')}`);
+  }
+  return parts.join('\n\n');
 }
 
 /** Rich-clipboard version — same renderer as the SOW post's HTML. */

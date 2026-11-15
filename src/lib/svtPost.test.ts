@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
 import { makeRecord } from './__fixtures__/makeRecord';
 import { emptyInstallNotes } from './installNotes';
-import { buildSvtPostHtml, buildSvtPostText, ONE_DAY_LINE, TWO_DAY_LINE } from './svtPost';
+import { buildSvtPostHtml, buildSvtPostText, buildSvtSfText, ONE_DAY_LINE, TWO_DAY_LINE } from './svtPost';
 
 // The SVT pre-design post (Aboud 2026-11-15, #sow-svt-collab taskforce):
 // scope-of-work notes within hours of the site survey, BEFORE design, so
@@ -172,5 +172,68 @@ describe('buildSvtPostHtml', () => {
   it('renders the bullets as nested lists with bold labels', () => {
     const rec = svtRecord({ svt: { pathB2b: true } });
     expect(buildSvtPostHtml(rec)).toContain('<li><strong>Most Likely Conduit Path:</strong> Back-to-back.</li>');
+  });
+});
+
+// ---- Salesforce version (Aboud 2026-11-15: "salesforce does not have
+// formatting so we need to create ours like the SOW") — the same bullets,
+// rendered with the SF plain-text conventions sfSubmission.ts established:
+// dashed underlines for sections, "- " lines, two-space nested indents.
+
+describe('buildSvtSfText', () => {
+  it('renders the canonical example in SF plain text, one source with the Slack post', () => {
+    const rec = svtRecord({
+      installNotes: {
+        ...emptyInstallNotes(),
+        walls: 2,
+        orientations: ['East', 'West'],
+        stories: 1,
+        batteryLocation: 'on the north wall',
+      },
+      svt: {
+        hoAgrees: false,
+        hoLocation: 'inside the garage',
+        pathAttic: true,
+        pathExternal: true,
+        crewDays: 2,
+      },
+    });
+    expect(buildSvtSfText(rec)).toBe(`Pre-Design Analysis — Norca Garcia
+8.2 kW | Pasadena | Oncor
+
+Battery Location
+----------------
+- Batteries will be installed on the north wall.
+- The homeowner prefers a different location: inside the garage.
+
+Most Likely Conduit Path
+------------------------
+- Attic run, External run.
+
+Installation Notes
+------------------
+- Installation on two walls (East, West).
+- 1-story house.
+- Expected power disconnect duration: 1–2 hours.
+
+Scheduling
+----------
+- ${TWO_DAY_LINE}`);
+  });
+
+  it('a nested value indents under its dash, SF-style', () => {
+    // Special cases joins into Installation Notes via installNoteLines; a
+    // multi-line conduit note is the nested PostValue shape — exercised via
+    // the SOW trench path is out of scope here, so pin the simple case: every
+    // line is "- " prefixed and sections are underlined to their title length.
+    const text = buildSvtSfText(svtRecord({ svt: { pathB2b: true } }));
+    expect(text).toContain('Most Likely Conduit Path\n------------------------\n- Back-to-back.');
+  });
+
+  it('empty bullets drop here too', () => {
+    const text = buildSvtSfText(makeRecord());
+    expect(text).not.toContain('Battery Location');
+    expect(text).not.toContain('Scheduling');
+    expect(text).toContain('Installation Notes');
   });
 });

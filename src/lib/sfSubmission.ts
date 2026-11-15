@@ -54,7 +54,8 @@ export interface SfSubmissionField {
 // must survive as characters: dashed underlines for sections, "- " bullets for
 // lines, two-space indents for nested points.
 
-const underline = (title: string) => `${title}\n${'-'.repeat(title.length)}`;
+/** Exported for svtPost.ts — ONE set of SF plain-text conventions. */
+export const underline = (title: string) => `${title}\n${'-'.repeat(title.length)}`;
 const dashed = (lines: string[]) => lines.map((l) => `- ${l}`).join('\n');
 /** Several lines read as a dashed list; a single line stays a bare sentence. */
 const listy = (lines: string[]) => (lines.length > 1 ? dashed(lines) : (lines[0] ?? ''));
@@ -67,8 +68,9 @@ const LEVEL_DAYS: Record<1 | 2 | 3 | 4, string> = { 1: '1', 2: '1.5', 3: '2', 4:
 
 const CLEARANCE_LINE = 'All required clearance requirements have been met.';
 
-/** A conduit-run PostValue as dashed lines — nested points indent under their run. */
-function runLines(v: PostValue): string[] {
+/** A PostValue as dashed lines — nested points indent under their line.
+ * Exported for svtPost.ts, same reason as `underline`. */
+export function runLines(v: PostValue): string[] {
   if (typeof v === 'string') return [`- ${v}`];
   if (v.text) return [`- ${v.label ? `${v.label}: ${v.text}` : v.text}`];
   return [`- ${v.label}:`, ...v.sub.map((s) => `  - ${s}`)];

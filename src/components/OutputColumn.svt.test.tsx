@@ -5,7 +5,7 @@
 // and Mark as posted are full-SOW concerns and must not appear — and the
 // default ('sow') mode must render exactly as it always did.
 
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { makeRecord } from '../lib/__fixtures__/makeRecord';
 import { defaultSettings } from '../lib/storage';
@@ -68,6 +68,19 @@ describe('OutputColumn — SVT pre-design mode', () => {
     record.sf = { ...record.sf, siteAddress: '' };
     renderColumn('svt', record);
     expect((screen.getByRole('button', { name: /Copy SVT post/i }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('offers a Salesforce view — our own plain-text structure (Aboud 2026-11-15)', () => {
+    renderColumn('svt');
+    fireEvent.click(screen.getByRole('tab', { name: 'Salesforce' }));
+    const pre = document.querySelector('.svt-sf-pre')!;
+    expect(pre.textContent).toContain('Pre-Design Analysis — Norca Garcia');
+    // The characters ARE the formatting: dashed underline under the section.
+    expect(pre.textContent).toContain('Installation Notes\n------------------');
+    // The main button follows the view.
+    expect(screen.getByRole('button', { name: 'Copy for Salesforce' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('tab', { name: 'Slack post' }));
+    expect(screen.getByRole('button', { name: 'Copy SVT post' })).toBeTruthy();
   });
 
   it('omitting the mode renders the full SOW column exactly as before', () => {

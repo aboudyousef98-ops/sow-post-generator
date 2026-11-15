@@ -3218,6 +3218,14 @@ tr:hover .board-label-cell.empty {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* The SVT post's Salesforce plain-text preview — the characters ARE the
+   formatting, so line breaks must survive verbatim. */
+.svt-sf-pre {
+  white-space: pre-wrap;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 /* The 💬 updates chip beside the project name — the retired Updates column's
    affordance, relocated (Aboud 2026-11-15). */
 .board-upd-chip {
