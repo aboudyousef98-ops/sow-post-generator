@@ -203,6 +203,51 @@ box; mobile board shows no Pre-Design section (same as Installation Review).
 
 ---
 
+## 5. Compose UX round + include-fix + polish reminders (2026-11-15) ✅ done, tested — PENDING
+
+**Asks (Aboud 2026-11-15, screenshot review of item 4 on localhost):**
+
+1. **Bigger mode buttons.** The SVT/SOW toggle chips became two large mode
+   cards at the very top of the Compose page (`.compose-mode-switch` /
+   `.mode-card` in theme.css): bold title + subtitle, active card filled
+   orange. Moved OUT of the form column to page level.
+2. **Aluminum banner removed.** "remove the warning that is popped in yellow,
+   it presents in each compose and it is not relatable" — the 2026-10-20
+   aluminum-wiring banner fired for every jurisdiction on Othman's 509-row
+   list with the same generic sentence. Banner deleted from ComposeTab; the
+   list/matcher stay in `lib/aluminumWiring.ts` (own tests untouched);
+   `ComposeTab.aluminum.test.tsx` now pins the REMOVAL.
+3. **Include checkboxes now reach the SF panel.** They appended requirement
+   sections to the Slack post only — `buildSfSubmission` never read them,
+   which read as "the checkbox is not working" once SF per-field became the
+   submission path. Fix: `buildSfSubmission(record, settings, ahjs?)` appends
+   `requirementSections()` (the Slack post's own source) after the clearance
+   line of the "Installation Window and Planning" blob, underlined + dashed
+   like the other sections; multi-line requirements indent under their dash.
+   Readiness card already said "appended" — now the blob agrees.
+4. **Polish-time AI reminders.** Clicking Polish now also runs the pre-post
+   note check (same `noteCheck` endpoint + `eligibleNotes` +
+   `triggerIsGrounded` evidence verification) against the post AS POLISHED —
+   the SVT post when the SVT tab is open, the SOW post otherwise — and pops a
+   NON-BLOCKING "Reminders — N requirement notes may apply" dialog ("Got it"
+   dismisses). No keyword fallback, silent on AI failure: reminders are
+   advisory, never an error, and nothing is gated.
+
+**Files:** `src/components/ComposeTab.tsx` (+`ComposeTab.reminders.test.tsx`
+new, `ComposeTab.aluminum.test.tsx` rewritten), `src/lib/sfSubmission.ts`
+(+test), `src/components/SfSubmissionCard.tsx`,
+`src/components/OutputColumn.tsx`, `src/theme.css`.
+
+Full gate green: `vitest run --no-file-parallelism` → **72 files, 1296
+tests**. `tsc --noEmit` and `eslint --max-warnings 0` clean. Verified on
+`localhost:8888`: mode cards render, banner gone, ticking Include appends
+"AHJ Requirements (Harris County)" to the window blob. **The live reminders
+dialog could NOT be exercised locally (no OpenAI key in the local env —
+Polish is disabled); the mocked component test pins the wiring. Verify the
+real AI pass after deploy, same as every AI feature.**
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify

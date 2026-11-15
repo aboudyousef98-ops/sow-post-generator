@@ -7296,12 +7296,50 @@ tr:hover .board-label-cell.empty {
   gap: 8px;
 }
 
-/* ---- Compose mode toggle (Aboud 2026-11-15) -------------------------------
-   SVT pre-design vs full SOW scope — same look as the output toggle. */
-.compose-mode-toggle {
+/* ---- Compose mode switch (Aboud 2026-11-15, enlarged same day) ------------
+   SVT pre-design vs full SOW scope. Two big mode cards at the top of the
+   page — he asked for "bigger visible buttons" after the first chip-sized
+   version shipped to localhost. */
+.compose-mode-switch {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  max-inline-size: 620px;
+  margin-block-end: 16px;
+}
+.mode-card {
   display: flex;
-  gap: 8px;
-  margin-block-end: 2px;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 12px 20px;
+  border: 2px solid var(--dyn-border-strong);
+  border-radius: 14px;
+  background: var(--dyn-surface);
+  cursor: pointer;
+  font: inherit;
+  transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+}
+.mode-card:hover {
+  border-color: var(--dyn-orange);
+}
+.mode-card .mode-card-title {
+  font-weight: 800;
+  font-size: 16px;
+  color: var(--dyn-ink);
+}
+.mode-card .mode-card-sub {
+  font-size: 12px;
+  color: var(--dyn-muted);
+}
+.mode-card.active {
+  border-color: var(--dyn-orange);
+  background: var(--dyn-orange);
+  box-shadow: 0 2px 10px rgba(249, 143, 48, 0.35);
+}
+.mode-card.active .mode-card-title,
+.mode-card.active .mode-card-sub {
+  color: #fff;
 }
 
 /* SVT alternative-location blocks: subhead + remove link on one line. */

@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { extract, MAX_NOTE_CHARS, regionLookup, rewrite } from '../lib/api';
+import { extract, MAX_NOTE_CHARS, noteCheck, regionLookup, rewrite } from '../lib/api';
+import { eligibleNotes, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
+import { buildPostText } from '../lib/template';
+import { buildSvtPostText } from '../lib/svtPost';
 import { LEVEL_INFO, LEVEL_NAMES } from '../lib/classify';
 import { todayIso } from '../lib/dates';
 import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { titleCaseName } from '../lib/nameCase';
 import { boardsOfKind, livePosts, matchAhj } from '../lib/ahj';
-import { matchAluminum } from '../lib/aluminumWiring';
 import { sfNotesSections } from '../lib/sfNotes';
 import { APPROVAL_FIELD, matchedBoard } from '../lib/template';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
@@ -90,6 +92,10 @@ export default function ComposeTab({
   const [dropped, setDropped] = useState<Partial<Record<PolishKey, string[]>>>({});
   // Set when the AI returned a different number of bullets than we sent it.
   const [bulletDrift, setBulletDrift] = useState<Partial<Record<PolishKey, { from: number; to: number }>>>({});
+  // Polish-time reminders (Aboud 2026-11-15): after a successful polish, the
+  // same AI note check that guards Copy for Slack runs against the current
+  // post, and grounded hits pop a NON-BLOCKING dialog. null = nothing to say.
+  const [reminders, setReminders] = useState<NoteHit[] | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   // The record as it is RIGHT NOW, for code that resumes after an await and
   // must not act on the version it closed over (see runAi).
@@ -103,6 +109,7 @@ export default function ComposeTab({
   useEffect(() => {
     setDropped({});
     setBulletDrift({});
+    setReminders(null);
     setRawPairs(null);
     setShowRaw(false);
     setManualFields(new Set());
@@ -237,9 +244,6 @@ export default function ComposeTab({
   // Utility / Funding / General boards, and a utility named "Harris" must not
   // match a Jurisdiction of "Harris".
   const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
-  // Aluminum wiring stance from Othman's static list — independent of the
-  // (hand-maintained) AHJ boards above, read-only, matched the same way.
-  const aluMatch = matchAluminum(record.sf.jurisdiction);
   // Salesforce notes (Scheduling Alerts! + AHJ/utility requirements) from the
   // board row this customer matches — mirrored there by Import from Salesforce.
   // Display-only, never posted (Aboud 2026-10-21: "for us to read").
@@ -301,6 +305,40 @@ export default function ComposeTab({
   const clearDropped = (key: PolishKey) => setDropped((d) => ({ ...d, [key]: undefined }));
   const clearDrift = (key: PolishKey) => setBulletDrift((d) => ({ ...d, [key]: undefined }));
 
+  /**
+   * Polish-time reminders (Aboud 2026-11-15): compare the post as it now
+   * reads against the project's eligible requirement notes (AHJ / Utility /
+   * Funding / SOW general), AI-matched with the model's evidence verified by
+   * triggerIsGrounded — the exact engine behind the Copy-for-Slack check.
+   * Advisory only: no keyword fallback, and any failure stays silent.
+   */
+  const checkReminders = useCallback(
+    async (polishedRecord: PostRecord) => {
+      const notes = eligibleNotes(polishedRecord, ahjs);
+      if (!notes.length) return;
+      const text =
+        composeMode === 'svt' ? buildSvtPostText(polishedRecord) : buildPostText(polishedRecord, settings, ahjs);
+      try {
+        const res = await noteCheck(
+          text,
+          notes.map((n) => ({ lineId: n.lineId, text: n.text })),
+        );
+        const byId = new Map(notes.map((n) => [n.lineId, n]));
+        const hits = res.hits
+          .filter((h) => triggerIsGrounded(text, h.trigger))
+          .map((h) => {
+            const n = byId.get(h.lineId);
+            return n ? { ...n, why: h.why } : null;
+          })
+          .filter((h): h is NoteHit => h !== null);
+        if (hits.length) setReminders(hits);
+      } catch {
+        // Reminders are advisory — the AI being unavailable is not an error.
+      }
+    },
+    [ahjs, settings, composeMode],
+  );
+
   const runAi = useCallback(
     async (mode: RewriteMode) => {
       if (polishState.busy) return;
@@ -353,11 +391,20 @@ export default function ComposeTab({
           polishMode: { ...r.polishMode, ...modes },
         }));
         setPolishState({ busy: false, ms: res.ms });
+        // Reminders read the record AS POLISHED — built locally rather than
+        // waiting on the state update, which has not re-rendered yet.
+        const cur = recordRef.current;
+        void checkReminders({
+          ...cur,
+          polished: { ...cur.polished, ...polished },
+          usePolished: { ...cur.usePolished, ...use },
+          polishMode: { ...cur.polishMode, ...modes },
+        });
       } catch (err) {
         setPolishState({ busy: false, error: (err as { message?: string })?.message || 'Request failed.' });
       }
     },
-    [record, polishState.busy, update, toast],
+    [record, polishState.busy, update, toast, checkReminders],
   );
 
   const togglePolished = (key: PolishKey, usePolished: boolean) => {
@@ -436,6 +483,33 @@ export default function ComposeTab({
 
   return (
     <>
+      {/* Compose mode (Aboud 2026-11-15, enlarged same day: "bigger visible
+          buttons"): SVT pre-design vs full SOW scope, as two prominent mode
+          cards at the top of the page. SVT first — the earlier pipeline
+          stage. Both edit the one draft; shared fields appear in both. */}
+      <div className="compose-mode-switch" role="tablist" aria-label="Compose mode">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={composeMode === 'svt'}
+          className={`mode-card${composeMode === 'svt' ? ' active' : ''}`}
+          onClick={() => setComposeMode('svt')}
+        >
+          <span className="mode-card-title">SVT — Pre-design</span>
+          <span className="mode-card-sub">Survey analysis for the SVT team</span>
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={composeMode === 'sow'}
+          className={`mode-card${composeMode === 'sow' ? ' active' : ''}`}
+          onClick={() => setComposeMode('sow')}
+        >
+          <span className="mode-card-title">SOW — Full scope</span>
+          <span className="mode-card-sub">Full scope-of-work post</span>
+        </button>
+      </div>
+
       <div className="compose-head">
         <h1>{record.sf.customerName.trim() || 'New post'}</h1>
         {/* The design replaces the Save button with this line. Aboud kept both
@@ -514,29 +588,6 @@ export default function ComposeTab({
 
       <div className="compose-grid">
         <div className="compose-form">
-      {/* Compose mode (Aboud 2026-11-15): SVT pre-design vs full SOW scope.
-          SVT first — it is the earlier pipeline stage. Both tabs edit the one
-          draft; shared fields appear in both, so nothing is retyped. */}
-      <div className="compose-mode-toggle" role="tablist" aria-label="Compose mode">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={composeMode === 'svt'}
-          className={`btn small ${composeMode === 'svt' ? 'primary' : 'secondary'}`}
-          onClick={() => setComposeMode('svt')}
-        >
-          SVT — Pre-design
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={composeMode === 'sow'}
-          className={`btn small ${composeMode === 'sow' ? 'primary' : 'secondary'}`}
-          onClick={() => setComposeMode('sow')}
-        >
-          SOW — Full scope
-        </button>
-      </div>
       <div className="card">
         <h3>Source</h3>
 
@@ -652,13 +703,12 @@ export default function ComposeTab({
               onChange={(e) => setSf({ jurisdiction: e.target.value }, 'jurisdiction')}
             />
           </label>
-          {/* Aluminum wiring stance (Aboud 2026-10-20): shows for EVERY listed
-              jurisdiction — his call — and is display-only, never posted. */}
-          {aluMatch && (
-            <div className="alu-banner">
-              <strong>⚠ Aluminum wiring — {aluMatch.name}:</strong> {aluMatch.requirement}
-            </div>
-          )}
+          {/* Aluminum wiring banner REMOVED (Aboud 2026-11-15: "remove the
+              warning that is popped in yellow, it presents in each compose and
+              it is not relatable"). It fired for every listed jurisdiction
+              with the same generic sentence, so it read as noise. The list and
+              matcher stay in lib/aluminumWiring.ts in case a quieter surface
+              is ever wanted. Pinned by ComposeTab.aluminum.test.tsx. */}
           {/* Utility. Until now this was filled ONLY by the Salesforce
               extractor, with no way to set it by hand. It already drives the
               automatic disconnect duration — a TNMP utility means 4–6 h
@@ -1041,6 +1091,39 @@ export default function ComposeTab({
           mode={composeMode}
         />
       </div>
+
+      {/* Polish-time reminders — same look as the pre-post note check, but
+          NON-BLOCKING: nothing is being copied or gated, so the only action
+          is acknowledging it. Appears only when something grounded matched. */}
+      {reminders && (
+        <div className="modal-overlay" onClick={() => setReminders(null)}>
+          <div className="modal note-check-modal" onClick={(e) => e.stopPropagation()}>
+            <h3>
+              Reminders — {reminders.length} requirement note{reminders.length === 1 ? '' : 's'} may apply
+            </h3>
+            <p className="muted" style={{ marginTop: -4 }}>
+              Checked by AI against the AHJ / Utility / Funding notes for this project. Nothing is blocked —
+              just make sure the post already covers these.
+            </p>
+            <ul className="note-check-list">
+              {reminders.map((h) => (
+                <li key={h.lineId}>
+                  <div className="note-check-top">
+                    <span className="note-check-text">{h.text}</span>
+                    <span className="note-check-board">{h.board}</span>
+                  </div>
+                  <div className="note-check-why">{h.why}</div>
+                </li>
+              ))}
+            </ul>
+            <div className="modal-actions">
+              <button type="button" className="btn primary" onClick={() => setReminders(null)}>
+                Got it
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

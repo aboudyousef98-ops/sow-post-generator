@@ -6,16 +6,18 @@
 
 import { useEffect, useState } from 'react';
 import { buildSfSubmission } from '../lib/sfSubmission';
-import type { PostRecord, Settings } from '../types';
+import type { Ahj, PostRecord, Settings } from '../types';
 
 interface Props {
   record: PostRecord;
   settings: Settings;
+  /** For the approved-requirements sections in the window blob (2026-11-15). */
+  ahjs?: Ahj[];
   toast: (text: string) => void;
 }
 
-export default function SfSubmissionCard({ record, settings, toast }: Props) {
-  const fields = buildSfSubmission(record, settings);
+export default function SfSubmissionCard({ record, settings, ahjs, toast }: Props) {
+  const fields = buildSfSubmission(record, settings, ahjs);
   // The tick remembers WHAT was copied, not just that a copy happened — if the
   // form changes a value after it was copied, its tick must drop so a stale
   // paste is never mistaken for done.

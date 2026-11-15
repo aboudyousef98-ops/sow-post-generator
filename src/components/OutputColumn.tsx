@@ -377,7 +377,7 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
         </button>
       </div>
 
-      {view === 'sf' && <SfSubmissionCard record={record} settings={settings} toast={toast} />}
+      {view === 'sf' && <SfSubmissionCard record={record} settings={settings} ahjs={ahjs} toast={toast} />}
 
       <div className="card preview-card" style={view === 'sf' ? { display: 'none' } : undefined}>
         <div className="preview-head">

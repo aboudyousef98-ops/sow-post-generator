@@ -351,3 +351,91 @@ describe('wire material verdict in the SF Design Feedback field', () => {
     }
   });
 });
+
+// ---- Approved requirements reach the SF window blob (Aboud 2026-11-15) ------
+// The "Include AHJ/Utility/Funding requirements" checkboxes appended sections
+// to the SLACK post only; the SF fields panel ignored them — which read as
+// "the checkbox is not working" once SF per-field became the submission path.
+// Same single source as the Slack post: requirementSections().
+
+import type { Ahj } from '../types';
+
+const reqAhj: Ahj = {
+  id: 'cc',
+  name: 'Corpus Christi',
+  aliases: [],
+  posts: [
+    {
+      id: 'p1',
+      text: 'Use Square D for the AC Disconnect.\nIt is physically big — plan enclosure space.',
+      by: 'Aboud Yousef',
+      at: '2026-09-18T00:00:00.000Z',
+      history: [],
+      pinned: false,
+      updatedAt: '2026-09-18T00:00:00.000Z',
+    },
+  ],
+  updatedAt: '2026-09-18T00:00:00.000Z',
+  schemaVersion: 1,
+};
+
+const reqFund: Ahj = {
+  id: 'f1',
+  name: 'Solrite',
+  aliases: [],
+  kind: 'funding',
+  posts: [
+    {
+      id: 'fp1',
+      text: 'Upload signed NTP before scheduling.',
+      by: 'Aboud Yousef',
+      at: '2026-10-08T00:00:00.000Z',
+      history: [],
+      pinned: false,
+      updatedAt: '2026-10-08T00:00:00.000Z',
+    },
+  ],
+  updatedAt: '2026-10-08T00:00:00.000Z',
+  schemaVersion: 1,
+};
+
+function windowWith(r: PostRecord, ahjs: Ahj[]): string {
+  const f = buildSfSubmission(r, defaultSettings(), ahjs).find((x) => x.id === 'window');
+  if (!f) throw new Error('no window field');
+  return f.value;
+}
+
+describe('buildSfSubmission — approved requirements in the window blob', () => {
+  it('appends the approved AHJ section after the clearance line, dashed like the other sections', () => {
+    const r = rec({ ahjApprovedId: 'cc' });
+    r.sf.jurisdiction = 'Corpus Christi';
+    const v = windowWith(r, [reqAhj]);
+    const clearance = v.indexOf('All required clearance requirements have been met.');
+    const section = v.indexOf('AHJ Requirements (Corpus Christi)');
+    expect(section).toBeGreaterThan(clearance);
+    // Multi-line post: first line dashed, continuation indented under it.
+    expect(v).toContain('- Use Square D for the AC Disconnect.\n  It is physically big — plan enclosure space.');
+  });
+
+  it('is absent without the approval, even when the AHJ matches', () => {
+    const r = rec();
+    r.sf.jurisdiction = 'Corpus Christi';
+    expect(windowWith(r, [reqAhj])).not.toContain('AHJ Requirements');
+  });
+
+  it('funding approval appends its own section; un-approved kinds stay out', () => {
+    const r = rec({ fundingApprovedId: 'f1' });
+    r.sf.jurisdiction = 'Corpus Christi'; // matches reqAhj, but NOT approved
+    const v = windowWith(r, [reqAhj, reqFund]);
+    expect(v).toContain('Funding Requirements (Solrite)');
+    expect(v).toContain('- Upload signed NTP before scheduling.');
+    expect(v).not.toContain('AHJ Requirements');
+  });
+
+  it('without the ahjs argument the blob is exactly as before', () => {
+    const r = rec({ ahjApprovedId: 'cc' });
+    r.sf.jurisdiction = 'Corpus Christi';
+    expect(fieldValue(r, 'window')).not.toContain('AHJ Requirements');
+    expect(fieldValue(r, 'window')).toContain('All required clearance requirements have been met.');
+  });
+});

@@ -19,7 +19,7 @@
 // - Wiring Route and Site Modification Notes are deliberately NOT generated
 //   (filled by hand in SF; the concrete pad box was retired 2026-11-03).
 
-import type { PostRecord, PostValue, Settings } from '../types';
+import type { Ahj, PostRecord, PostValue, Settings } from '../types';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import {
   batteryAnalysisLines,
@@ -30,7 +30,7 @@ import {
   wallsSentence,
 } from './installNotes';
 import { punctuate } from './noteText';
-import { effectiveNoteLines } from './template';
+import { effectiveNoteLines, requirementSections } from './template';
 
 export interface SfSubmissionField {
   /** Stable key for React and the per-field "copied" tick. */
@@ -74,7 +74,7 @@ function runLines(v: PostValue): string[] {
   return [`- ${v.label}:`, ...v.sub.map((s) => `  - ${s}`)];
 }
 
-export function buildSfSubmission(record: PostRecord, settings: Settings): SfSubmissionField[] {
+export function buildSfSubmission(record: PostRecord, settings: Settings, ahjs?: Ahj[]): SfSubmissionField[] {
   const n = record.installNotes;
 
   // Classification + the install-note sentences (special cases and concrete
@@ -107,6 +107,23 @@ export function buildSfSubmission(record: PostRecord, settings: Settings): SfSub
   const runs = conduitRunLines(n, record).flatMap(runLines).filter((l) => !clearanceRe.test(l));
   if (runs.length) windowParts.push(`${underline('Conduit Raceway')}\n${runs.join('\n')}`);
   windowParts.push(CLEARANCE_LINE);
+  // Approved AHJ/Utility/Funding requirements (Aboud 2026-11-15): the include
+  // checkboxes used to feed the Slack post alone, which read as "not working"
+  // once SF per-field became the submission path. Same single source as the
+  // Slack post — requirementSections() — appended after the clearance line.
+  // A multi-line requirement keeps its continuation lines indented under its
+  // dash, so it reads as one item.
+  for (const sec of requirementSections(record, ahjs)) {
+    const items = sec.posts.map((p) =>
+      p
+        .split('\n')
+        .map((l) => l.trim())
+        .filter(Boolean)
+        .map((l, i) => (i === 0 ? `- ${l}` : `  ${l}`))
+        .join('\n'),
+    );
+    windowParts.push(`${underline(sec.title)}\n${items.join('\n')}`);
+  }
 
   const stories =
     n?.stories === 'other' ? n.storiesOther.trim() : n?.stories !== undefined ? String(n.stories) : '';
