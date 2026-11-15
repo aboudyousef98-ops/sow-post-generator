@@ -333,6 +333,22 @@ chip, gate hold+release, scheduling bullet). Demo data on LOCAL blobs:
 Glenda Hodge carries an open wire request; Maria M Acevedo waits in the
 inbox.
 
+**Same-day UX round (commit `ac2e147`), his calls:**
+- **Updates column RETIRED** — its exact affordance (💬 n / 💬 +, same
+  tooltips) moved beside the project name, next to the amber requests chip;
+  both chips open the ONE per-project panel.
+- **UpdatesModal is now that panel**: the project's Slack requests render
+  above the thread (Mark resolved there releases the gate) plus a paste box
+  that captures a designer's message for THIS project with no matching step.
+  The toolbar "Paste from Slack" stays for batch + the inbox (he chose
+  keeping both over a panel-only design).
+- **Type-ahead project picker** in the batch modal ("start searching by the
+  first letter"): prefix matches first, then contains, Enter picks the top
+  hit, clearing the box parks the message in the inbox. Replaced the
+  <select> — 400 rows outgrew it.
+Gate after the round: **73 files / 1322 tests** green, full gate clean,
+driven on localhost.
+
 ---
 
 ## Blocking the deploy
