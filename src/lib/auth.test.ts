@@ -10,7 +10,9 @@ import {
   isLastAdmin,
   loadCachedUsers,
   loadSession,
+  looksLikeEmail,
   makeUser,
+  normalizeEmail,
   mergeUsers,
   newSalt,
   reconcileSession,
@@ -275,5 +277,31 @@ describe('the normalised session is written back, not just re-derived', () => {
     localStorage.setItem('sowpost.session', good);
     loadSession();
     expect(localStorage.getItem('sowpost.session')).toBe(good);
+  });
+});
+
+
+// ---- Account email (Aboud 2026-11-15 — contact info only) -------------------
+
+describe('account email', () => {
+  it('makeUser stores a normalised email when given one, and none otherwise', async () => {
+    const withEmail = await makeUser('khaled', 'Khaled Mattar', 'member', 'pw1234', '  KMattar@Dynamicecohome.com ');
+    expect(withEmail.email).toBe('kmattar@dynamicecohome.com');
+    const without = await makeUser('khaled2', 'Khaled Mattar', 'member', 'pw1234');
+    expect(without.email).toBeUndefined();
+    const blank = await makeUser('khaled3', 'Khaled Mattar', 'member', 'pw1234', '   ');
+    expect(blank.email).toBeUndefined();
+  });
+
+  it('normalizeEmail trims, lowercases, and drops empties', () => {
+    expect(normalizeEmail(' A@B.co ')).toBe('a@b.co');
+    expect(normalizeEmail('')).toBeUndefined();
+    expect(normalizeEmail(undefined)).toBeUndefined();
+  });
+
+  it('looksLikeEmail is a light sanity check, not an RFC parser', () => {
+    expect(looksLikeEmail('kmattar@dynamicecohome.com')).toBe(true);
+    expect(looksLikeEmail('not-an-email')).toBe(false);
+    expect(looksLikeEmail('a@b')).toBe(false);
   });
 });

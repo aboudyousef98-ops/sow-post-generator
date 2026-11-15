@@ -26,17 +26,30 @@ export async function verifyPassword(user: TeamUser, password: string): Promise<
   return (await hashPassword(password, user.salt)) === user.passHash;
 }
 
+/** Trimmed + lowercased, or undefined — an email never stores half-cleaned. */
+export function normalizeEmail(raw: string | undefined): string | undefined {
+  const clean = (raw ?? '').trim().toLowerCase();
+  return clean || undefined;
+}
+
+/** A light sanity check (something@something.tld) — contact info, not RFC. */
+export function looksLikeEmail(raw: string): boolean {
+  return /^\S+@\S+\.\S+$/.test(raw.trim());
+}
+
 export async function makeUser(
   username: string,
   displayName: string,
   role: UserRole,
   password: string,
+  email?: string,
 ): Promise<TeamUser> {
   const salt = newSalt();
   const now = new Date().toISOString();
   return {
     username: username.trim().toLowerCase(),
     displayName: displayName.trim(),
+    ...(normalizeEmail(email) ? { email: normalizeEmail(email) } : {}),
     role,
     salt,
     passHash: await hashPassword(password, salt),

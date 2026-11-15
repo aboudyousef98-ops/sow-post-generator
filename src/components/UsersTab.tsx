@@ -10,8 +10,10 @@ import {
   findUser,
   hashPassword,
   isLastAdmin,
+  looksLikeEmail,
   makeUser,
   newSalt,
+  normalizeEmail,
   saveCachedUsers,
   verifyPassword,
 } from '../lib/auth';
@@ -33,6 +35,12 @@ export default function UsersTab({ session, toast }: Props) {
   const [newDisplay, setNewDisplay] = useState('');
   const [newRole, setNewRole] = useState<UserRole>('member');
   const [newPassword, setNewPassword] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+
+  // Inline account editing (Aboud 2026-11-15): display name + email.
+  const [editFor, setEditFor] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editEmail, setEditEmail] = useState('');
 
   // Per-row inline actions: which row has its reset box open, and the value.
   const [resetFor, setResetFor] = useState<string | null>(null);
@@ -76,17 +84,48 @@ export default function UsersTab({ session, toast }: Props) {
       toast('Password must be at least 4 characters.');
       return;
     }
+    if (newEmail.trim() && !looksLikeEmail(newEmail)) {
+      toast('That email does not look right — name@company.com, or leave it empty.');
+      return;
+    }
     if (findUser(roster, handle)) {
       toast(`"${handle}" is already taken.`);
       return;
     }
-    const user = await makeUser(handle, newDisplay, newRole, newPassword);
+    const user = await makeUser(handle, newDisplay, newRole, newPassword, newEmail);
     push([...roster.filter((u) => u.username !== handle), user]);
     setNewUsername('');
     setNewDisplay('');
     setNewPassword('');
+    setNewEmail('');
     setNewRole('member');
     toast(`Added ${user.displayName}.`);
+  };
+
+  /** Save an inline account edit: display name + email (Aboud 2026-11-15). */
+  const saveEdit = (username: string) => {
+    if (!editName.trim()) {
+      toast('The display name cannot be empty.');
+      return;
+    }
+    if (editEmail.trim() && !looksLikeEmail(editEmail)) {
+      toast('That email does not look right — name@company.com, or leave it empty.');
+      return;
+    }
+    const email = normalizeEmail(editEmail);
+    const now = new Date().toISOString();
+    push(
+      roster.map((u) => {
+        if (u.username !== username) return u;
+        const next = { ...u, displayName: editName.trim(), updatedAt: now };
+        // A cleared box REMOVES the email — undefined keys drop on save.
+        if (email) next.email = email;
+        else delete next.email;
+        return next;
+      }),
+    );
+    setEditFor(null);
+    toast('Account updated.');
   };
 
   const resetPassword = async (username: string) => {
@@ -167,6 +206,7 @@ export default function UsersTab({ session, toast }: Props) {
                 <tr>
                   <th>Username</th>
                   <th>Name</th>
+                  <th>Email</th>
                   <th>Role</th>
                   <th aria-label="actions" />
                 </tr>
@@ -179,6 +219,9 @@ export default function UsersTab({ session, toast }: Props) {
                     </td>
                     <td>
                       <Bone style={{ width: 120 }} />
+                    </td>
+                    <td>
+                      <Bone style={{ width: 150 }} />
                     </td>
                     <td>
                       <Bone style={{ width: 52 }} />
@@ -199,6 +242,7 @@ export default function UsersTab({ session, toast }: Props) {
               <tr>
                 <th>Username</th>
                 <th>Name</th>
+                <th>Email</th>
                 <th>Role</th>
                 <th aria-label="actions" />
               </tr>
@@ -207,7 +251,36 @@ export default function UsersTab({ session, toast }: Props) {
               {team.map((u) => (
                 <tr key={u.username}>
                   <td>{u.username}</td>
-                  <td>{u.displayName}</td>
+                  <td>
+                    {editFor === u.username ? (
+                      <>
+                        <input
+                          type="text"
+                          aria-label="Display name"
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                        <span className="field-hint">
+                          Old posts and board rows keep the previous name.
+                        </span>
+                      </>
+                    ) : (
+                      u.displayName
+                    )}
+                  </td>
+                  <td>
+                    {editFor === u.username ? (
+                      <input
+                        type="email"
+                        aria-label="Email"
+                        placeholder="name@company.com"
+                        value={editEmail}
+                        onChange={(e) => setEditEmail(e.target.value)}
+                      />
+                    ) : (
+                      u.email ?? '—'
+                    )}
+                  </td>
                   <td>
                     <button
                       className="btn link small"
@@ -218,7 +291,16 @@ export default function UsersTab({ session, toast }: Props) {
                     </button>
                   </td>
                   <td className="users-actions">
-                    {resetFor === u.username ? (
+                    {editFor === u.username ? (
+                      <>
+                        <button className="btn small primary" onClick={() => saveEdit(u.username)}>
+                          Save
+                        </button>
+                        <button className="btn small secondary" onClick={() => setEditFor(null)}>
+                          Cancel
+                        </button>
+                      </>
+                    ) : resetFor === u.username ? (
                       <>
                         <input
                           type="password"
@@ -251,6 +333,16 @@ export default function UsersTab({ session, toast }: Props) {
                       </>
                     ) : (
                       <>
+                        <button
+                          className="btn small secondary"
+                          onClick={() => {
+                            setEditFor(u.username);
+                            setEditName(u.displayName);
+                            setEditEmail(u.email ?? '');
+                          }}
+                        >
+                          Edit
+                        </button>
                         <button className="btn small secondary" onClick={() => setResetFor(u.username)}>
                           Reset password
                         </button>
@@ -277,6 +369,15 @@ export default function UsersTab({ session, toast }: Props) {
           <label>
             Display name (appears on posts)
             <input type="text" value={newDisplay} onChange={(e) => setNewDisplay(e.target.value)} />
+          </label>
+          <label>
+            Email (optional)
+            <input
+              type="email"
+              placeholder="name@company.com"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
           </label>
           <label>
             Role

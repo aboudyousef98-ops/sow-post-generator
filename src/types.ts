@@ -509,6 +509,13 @@ export interface TeamUser {
   username: string;
   /** What appears as the post author. */
   displayName: string;
+  /**
+   * CONTACT INFO ONLY (Aboud 2026-11-15) — shown on the Admin roster so an
+   * admin knows how to reach each person. Not a login, not a notification
+   * channel. OPTIONAL, the no-migration contract: accounts created before
+   * this date have no such key. Normalised lowercase.
+   */
+  email?: string;
   role: UserRole;
   salt: string;
   /** hex sha256(`${salt}:${password}`) — see auth.ts. */
