@@ -66,6 +66,7 @@ export default function MobileApp(props: Props) {
           setBoard={props.setBoard}
           records={props.records}
           me={session.displayName}
+          meUsername={session.username}
           isAdmin={isAdmin}
           authors={props.settings.authors}
           toast={props.toast}

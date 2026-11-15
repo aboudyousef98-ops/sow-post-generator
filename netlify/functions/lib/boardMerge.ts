@@ -52,6 +52,8 @@ export const PutSchema = z
     // exact strict-schema reason documented on `updates` above — a key the
     // client sends and the server does not declare 400s EVERY board save.
     requests: z.array(Stamped).max(5000).optional().default([]),
+    // Per-column permissions, added 2026-11-15. Same strict-schema contract.
+    columnPerms: z.array(Stamped).max(200).optional().default([]),
   })
   .strict();
 
@@ -67,6 +69,7 @@ export interface BoardBlob {
   prefs?: Prefs;
   automations?: Stamped[];
   requests?: Stamped[];
+  columnPerms?: Stamped[];
 }
 
 export function mergeStamped(current: Stamped[], incoming: Stamped[]): Stamped[] {
@@ -105,6 +108,8 @@ export function mergeBoard(current: BoardBlob | null, incoming: BoardBlob): Boar
     // src/lib/board.ts mergeBoard, or a client and the server converge on
     // different boards.
     requests: mergeStamped(cur.requests ?? [], incoming.requests ?? []),
+    // Per-column permissions (2026-11-15) — same contract again.
+    columnPerms: mergeStamped(cur.columnPerms ?? [], incoming.columnPerms ?? []),
   };
 }
 

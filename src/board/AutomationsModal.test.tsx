@@ -28,6 +28,8 @@ function Harness({ initial, isAdmin = true }: { initial?: BoardState; isAdmin?: 
       board={board}
       setBoard={setBoard}
       me="Aboud Yousef"
+      meUsername="aboudyousef"
+      members={[]}
       isAdmin={isAdmin}
       authors={ROSTER}
       toast={(text, action) => toasts.push({ text, action })}

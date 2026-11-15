@@ -26,6 +26,7 @@ function Harness({
   records = [],
   authors = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai'],
   isAdmin = true,
+  meUsername = 'aboudyousef',
 }: {
   initial?: BoardState;
   records?: PostRecord[];
@@ -33,6 +34,8 @@ function Harness({
   authors?: string[];
   /** Override for the admin-only controls (the shared auto-sort switch). */
   isAdmin?: boolean;
+  /** Override for the column-permissions tests. */
+  meUsername?: string;
 }) {
   const [board, setBoard] = useState<BoardState>(initial ?? emptyBoard());
   return (
@@ -40,8 +43,10 @@ function Harness({
       board={board}
       setBoard={setBoard}
       me="Aboud Yousef"
+      meUsername={meUsername}
       isAdmin={isAdmin}
       authors={authors}
+      members={[]}
       toast={(text, action) => toasts.push({ text, action })}
       records={records}
       onOpenCompose={(p) => opened.push(p)}
@@ -58,6 +63,7 @@ function Harness({
  */
 const STABLE_AUTHORS = ['Aboud Yousef', 'Omar Rajab', 'Mohammad Refai'];
 const STABLE_RECORDS: PostRecord[] = [];
+const STABLE_MEMBERS: never[] = [];
 
 function StableHarness({ initial }: { initial?: BoardState }) {
   const [board, setBoard] = useState<BoardState>(initial ?? emptyBoard());
@@ -66,8 +72,10 @@ function StableHarness({ initial }: { initial?: BoardState }) {
       board={board}
       setBoard={setBoard}
       me="Aboud Yousef"
+      meUsername="aboudyousef"
       isAdmin
       authors={STABLE_AUTHORS}
+      members={STABLE_MEMBERS}
       toast={(text, action) => toasts.push({ text, action })}
       records={STABLE_RECORDS}
       onOpenCompose={(p) => opened.push(p)}
@@ -453,6 +461,60 @@ describe('BoardTab — Tier 1', () => {
 
     fireEvent.click(toggle);
     expect(screen.getByText('Karan Staggers')).toBeTruthy();
+  });
+
+  // ---- Column permissions (Aboud 2026-11-15) --------------------------------
+
+  const withRatingLock = () => {
+    const b = withRows();
+    b.columnPerms = [
+      {
+        id: 'rating',
+        columnKey: 'rating',
+        editors: ['mrefai'],
+        updatedAt: '2026-11-15T10:00:00.000Z',
+        updatedBy: 'aboudyousef',
+      },
+    ];
+    return b;
+  };
+
+  it('a restricted column is view-only for everyone not named, with a toast', () => {
+    render(<Harness initial={withRatingLock()} isAdmin={false} meUsername="khaled" />);
+    const martha = screen.getByText('Martha Thompson').closest('tr')!;
+    fireEvent.click(within(martha).getByRole('button', { name: '3 stars' }));
+    expect(toasts.some((t) => t.text.includes('View only'))).toBe(true);
+    // Nothing changed — no rating gate modal, no stars applied.
+    expect(within(martha).getByRole('slider', { name: 'Rating' }).getAttribute('aria-valuenow')).toBe('0');
+  });
+
+  it('the named editor and admins still edit the locked column', () => {
+    render(<Harness initial={withRatingLock()} isAdmin={false} meUsername="mrefai" />);
+    const martha = screen.getByText('Martha Thompson').closest('tr')!;
+    fireEvent.click(within(martha).getByRole('button', { name: '3 stars' }));
+    expect(within(martha).getByRole('slider', { name: 'Rating' }).getAttribute('aria-valuenow')).toBe('3');
+    expect(toasts.some((t) => t.text.includes('View only'))).toBe(false);
+  });
+
+  it('a hidden column disappears for the named user — table and Columns menu', () => {
+    const b = withRows();
+    b.columnPerms = [
+      {
+        id: 'rating',
+        columnKey: 'rating',
+        hiddenFor: ['khaled'],
+        updatedAt: '2026-11-15T10:00:00.000Z',
+        updatedBy: 'aboudyousef',
+      },
+    ];
+    render(<Harness initial={b} isAdmin={false} meUsername="khaled" />);
+    expect(screen.queryByText('Rating')).toBeNull(); // header gone
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    expect(screen.queryByText('Rating')).toBeNull(); // not re-enableable
+    // The admin still sees it.
+    cleanup();
+    render(<Harness initial={b} isAdmin meUsername="aboudyousef" />);
+    expect(screen.getAllByText('Rating').length).toBeGreaterThan(0);
   });
 
   // ---- Slack requests (Aboud 2026-11-06 design, built 2026-11-15) -----------

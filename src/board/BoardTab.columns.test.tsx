@@ -62,6 +62,8 @@ function renderBoard() {
       board={BOARD}
       setBoard={vi.fn()}
       me="Aboud Yousef"
+      meUsername="aboudyousef"
+      members={[]}
       isAdmin
       authors={['Aboud Yousef', 'Omar Rajab', 'Anas Yaghmour']}
       toast={vi.fn()}
@@ -232,6 +234,8 @@ describe('the Reviewer column belongs to Installation Review alone', () => {
         board={SECTIONS}
         setBoard={vi.fn()}
         me="Aboud Yousef"
+      meUsername="aboudyousef"
+      members={[]}
         isAdmin
         authors={['Aboud Yousef', 'Omar Rajab', 'Anas Yaghmour']}
         toast={vi.fn()}

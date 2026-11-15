@@ -124,6 +124,8 @@ import UpdatesPanel from './UpdatesPanel';
 import UpdateSearchModal from './UpdateSearchModal';
 import RequireNoteModal, { type NoteGate } from './RequireNoteModal';
 import { PasteFromSlackModal, RequestsGateModal } from './RequestsModal';
+import PermissionsModal, { type TeamMember } from './PermissionsModal';
+import { canEditColumn, HIDEABLE_COLUMNS, isColumnHidden, MANAGEABLE_COLUMNS, setPerm } from '../lib/columnPerms';
 import { isReadyOrDoneLabel, isWorkingLabel, openRequestsFor } from '../lib/requests';
 import EditLabelsModal from './EditLabelsModal';
 import ImportModal, { type ImportRequest } from './ImportModal';
@@ -177,6 +179,18 @@ function matchesBelow(scope: number, done: number): string {
   return `${parts.join(' and ')} ${total === 1 ? 'one does' : 'ones do'}`;
 }
 
+/** Patch field → the board column it belongs to, for the permissions guard. */
+const PATCH_COLUMN: [string, string][] = [
+  ['name', 'name'],
+  ['coordinator', 'coordinator'],
+  ['reviewer', 'reviewer'],
+  ['statusId', 'status'],
+  ['phaseId', 'phase'],
+  ['preDesignStatusId', 'predesignStatus'],
+  ['designedDate', 'designedDate'],
+  ['rating', 'rating'],
+];
+
 function readJson<T>(key: string, fallback: T): T {
   try {
     const raw = localStorage.getItem(key);
@@ -191,8 +205,12 @@ interface Props {
   setBoard: (next: BoardState) => void;
   /** Signed-in display name — actor for every edit, Q4 default coordinator. */
   me: string;
+  /** Signed-in USERNAME — what column permissions key on (renames can't flip access). */
+  meUsername: string;
   isAdmin: boolean;
   authors: string[];
+  /** The team roster for the permissions pickers. */
+  members: TeamMember[];
   toast: (text: string, action?: Toast['action']) => void;
   /** Team records — READ ONLY here, to render the Post column. */
   records: PostRecord[];
@@ -728,8 +746,10 @@ export default function BoardTab({
   board,
   setBoard,
   me,
+  meUsername,
   isAdmin,
   authors,
+  members,
   toast,
   records,
   onOpenCompose,
@@ -751,6 +771,8 @@ export default function BoardTab({
   const [updatesFor, setUpdatesFor] = useState<BoardProject | null>(null);
   // Slack-captured requests (Aboud 2026-11-06 design, built 2026-11-15).
   const [slackOpen, setSlackOpen] = useState(false);
+  // Column permissions (Aboud 2026-11-15).
+  const [permsOpen, setPermsOpen] = useState(false);
   const [reqGate, setReqGate] = useState<{
     project: BoardProject;
     patch: ProjectPatch;
@@ -946,6 +968,33 @@ export default function BoardTab({
   const agingFor = (p: BoardProject): AgingState =>
     agingState(p, installByProject.get(p.id) ?? null, today);
 
+  // ---- column permissions (Aboud 2026-11-15) --------------------------------
+
+  /** The column a blocked patch field belongs to, or null when all allowed.
+   * Checked on the RAW patch, so the auto-seeded Pre-Design sub-status never
+   * false-blocks a permitted status change. */
+  const blockedColumn = (patch: ProjectPatch): string | null => {
+    for (const [field, col] of PATCH_COLUMN) {
+      if (field in patch && !canEditColumn(boardRef.current.columnPerms, col, meUsername, isAdmin)) {
+        return MANAGEABLE_COLUMNS.find((c) => c.key === col)?.label ?? col;
+      }
+    }
+    return null;
+  };
+
+  const refuseIfBlocked = (patch: ProjectPatch): boolean => {
+    const blocked = blockedColumn(patch);
+    if (!blocked) return false;
+    toast(`View only — the ${blocked} column is restricted to specific editors. Ask an admin.`);
+    return true;
+  };
+
+  /** Write one column's permission rule — admin-only UI reaches this. */
+  const setColumnPerm = (columnKey: string, patch: Parameters<typeof setPerm>[2]) => {
+    const cur = boardRef.current;
+    setBoard({ ...cur, columnPerms: setPerm(cur.columnPerms, columnKey, patch, meUsername || me) });
+  };
+
   // ---- writes ---------------------------------------------------------------
 
   /** One-field optimistic write + activity entry. Single source of mutation. */
@@ -958,6 +1007,7 @@ export default function BoardTab({
     /** A second entry logged alongside the field change (e.g. the gate post). */
     alsoLog?: BoardActivity,
   ) => {
+    if (refuseIfBlocked(rawPatch)) return;
     const cur = boardRef.current;
     // Entering Pre-Design seeds the sub-status default — here, at the single
     // source of mutation, so every entry route gets it (audit 2026-11-15).
@@ -987,6 +1037,7 @@ export default function BoardTab({
    * followUpPatch for why that is the loop guard rather than a limitation.
    */
   const applyWithAutomations = (project: BoardProject, patch: ProjectPatch) => {
+    if (refuseIfBlocked(patch)) return;
     const matched = matchingRules(boardRef.current.automations, project, patch);
     if (matched.length === 0) {
       applyPatch(project, patch);
@@ -1159,6 +1210,7 @@ export default function BoardTab({
     withUpdates?: ProjectUpdate[],
   ) => {
     if (rows.length === 0) return;
+    if (refuseIfBlocked(patch)) return;
     const cur = boardRef.current;
     const now = new Date().toISOString();
     const ids = new Set(rows.map((r) => r.id));
@@ -2080,19 +2132,34 @@ export default function BoardTab({
    * of the "Columns ▾" menu below, so it cannot be switched on in the wrong
    * place. Every other column still follows `columnVisibility`.
    */
+  /** Columns hidden FROM THIS USER by the permissions rules (2026-11-15).
+   * Spread LAST so it wins even over the sections' forced columns. */
+  const hiddenCols = useMemo(
+    () =>
+      new Set(
+        HIDEABLE_COLUMNS.filter((c) => isColumnHidden(board.columnPerms, c.key, meUsername, isAdmin)).map(
+          (c) => c.key,
+        ),
+      ),
+    [board.columnPerms, meUsername, isAdmin],
+  );
+  const hiddenOverride = useMemo(
+    () => Object.fromEntries([...hiddenCols].map((k) => [k, false])),
+    [hiddenCols],
+  );
   const visibilityNoReviewer = useMemo(
-    () => ({ ...columnVisibility, reviewer: false, predesignStatus: false }),
-    [columnVisibility],
+    () => ({ ...columnVisibility, reviewer: false, predesignStatus: false, ...hiddenOverride }),
+    [columnVisibility, hiddenOverride],
   );
   const visibilityWithReviewer = useMemo(
-    () => ({ ...columnVisibility, reviewer: true, predesignStatus: false }),
-    [columnVisibility],
+    () => ({ ...columnVisibility, reviewer: true, predesignStatus: false, ...hiddenOverride }),
+    [columnVisibility, hiddenOverride],
   );
   // Pre-Design sub-status belongs to its section alone, same contract as the
   // Reviewer column above (Aboud 2026-11-15).
   const visibilityPredesign = useMemo(
-    () => ({ ...columnVisibility, reviewer: false, predesignStatus: true }),
-    [columnVisibility],
+    () => ({ ...columnVisibility, reviewer: false, predesignStatus: true, ...hiddenOverride }),
+    [columnVisibility, hiddenOverride],
   );
 
   const table = useReactTable({
@@ -2403,6 +2470,16 @@ export default function BoardTab({
           >
             ⚡ Automations
           </button>
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn small secondary"
+              onClick={() => setPermsOpen(true)}
+              title="Who may edit each column, and who it is hidden from"
+            >
+              🔒 Permissions
+            </button>
+          )}
           <button
             type="button"
             className="btn small secondary"
@@ -2436,7 +2513,15 @@ export default function BoardTab({
                 // its own section alone (Aboud 2026-11-05 / 2026-11-15) —
                 // offering a toggle that the section overrides either way
                 // would just be a lying checkbox.
-                .filter((c) => c.id !== 'name' && c.id !== 'select' && c.id !== 'reviewer' && c.id !== 'predesignStatus')
+                .filter(
+                  (c) =>
+                    c.id !== 'name' &&
+                    c.id !== 'select' &&
+                    c.id !== 'reviewer' &&
+                    c.id !== 'predesignStatus' &&
+                    // A permissions-hidden column must not be re-enableable.
+                    !hiddenCols.has(c.id),
+                )
                 .map((c) => (
                   <label key={c.id} className="board-menu-item">
                     <input type="checkbox" checked={c.getIsVisible()} onChange={c.getToggleVisibilityHandler()} />
@@ -2880,6 +2965,14 @@ export default function BoardTab({
         />
       )}
 
+      {permsOpen && (
+        <PermissionsModal
+          perms={board.columnPerms ?? []}
+          members={members}
+          onSet={setColumnPerm}
+          onClose={() => setPermsOpen(false)}
+        />
+      )}
       {slackOpen && (
         <PasteFromSlackModal
           projects={board.projects}

@@ -290,6 +290,30 @@ export interface AutomationRule {
 }
 
 /**
+ * Per-column board permissions (Aboud 2026-11-15: "refai to edit the stars
+ * column but khaled mattar view only … hide columns from some users").
+ *
+ * Keyed by USERNAME (the login handle — display names rename). Absent rule,
+ * absent `editors`, or a tombstone all mean today's behavior (everyone
+ * edits, nobody loses a column) — the no-migration contract. Admins always
+ * edit and always see everything. Enforcement is client-side, the same
+ * honest-team threat model as the Phase 9 login itself.
+ */
+export interface ColumnPerm {
+  /** === columnKey — doubles as the merge key (id/updatedAt contract). */
+  id: string;
+  columnKey: string;
+  /** Usernames allowed to edit; ABSENT = everyone. */
+  editors?: string[];
+  /** Usernames the column is hidden from; absent = nobody. */
+  hiddenFor?: string[];
+  updatedAt: string;
+  updatedBy: string;
+  /** Tombstone — the rule is reset to the defaults. */
+  deletedAt?: string;
+}
+
+/**
  * Team-wide view rules — shared, not per-browser.
  *
  * Aboud 2026-11-05, on the always-ordered board: "yess auto-sort, but when it
@@ -339,4 +363,9 @@ export interface BoardState {
    * winning (tombstones included), read through lib/requests.liveRequests.
    */
   requests?: ProjectRequest[];
+  /**
+   * Per-column permissions, added 2026-11-15. Same contract again; read
+   * through lib/columnPerms (absent = everyone edits, nothing hidden).
+   */
+  columnPerms?: ColumnPerm[];
 }

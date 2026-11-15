@@ -24,6 +24,7 @@ import {
   type ProjectPatch,
 } from '../lib/board';
 import { sortByStatus, splitSections } from '../lib/boardViews';
+import { canEditColumn, MANAGEABLE_COLUMNS } from '../lib/columnPerms';
 import { isReadyOrDoneLabel, openRequestsFor } from '../lib/requests';
 import { isoToUs, relativeTime } from '../lib/dates';
 import {
@@ -46,6 +47,8 @@ interface Props {
   setBoard: (b: BoardState) => void;
   records: PostRecord[];
   me: string;
+  /** Signed-in USERNAME — what column permissions key on. */
+  meUsername: string;
   isAdmin: boolean;
   authors: string[];
   toast: (text: string, action?: { label: string; fn: () => void }) => void;
@@ -79,7 +82,7 @@ function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('');
 }
 
-export default function MobileBoard({ board, setBoard, records, me, isAdmin, authors, toast, onOpenDraft }: Props) {
+export default function MobileBoard({ board, setBoard, records, me, meUsername, isAdmin, authors, toast, onOpenDraft }: Props) {
   const [search, setSearch] = useState('');
   const [mine, setMine] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -109,8 +112,28 @@ export default function MobileBoard({ board, setBoard, records, me, isAdmin, aut
   const statusLabels = labelsFor(board.labels, 'status');
   const phaseLabels = labelsFor(board.labels, 'phase');
 
+  /** The column-permissions guard holds on a phone too (2026-11-15). */
+  const PATCH_COLUMN: [string, string][] = [
+    ['name', 'name'],
+    ['coordinator', 'coordinator'],
+    ['statusId', 'status'],
+    ['phaseId', 'phase'],
+    ['rating', 'rating'],
+  ];
+  const refuseIfBlocked = (patch: ProjectPatch): boolean => {
+    for (const [field, col] of PATCH_COLUMN) {
+      if (field in patch && !canEditColumn(board.columnPerms, col, meUsername, isAdmin)) {
+        const label = MANAGEABLE_COLUMNS.find((c) => c.key === col)?.label ?? col;
+        toast(`View only — the ${label} column is restricted to specific editors. Ask an admin.`);
+        return true;
+      }
+    }
+    return false;
+  };
+
   // Same mutation funnel as BoardTab.applyPatch — one row, one activity entry.
   const applyPatch = (project: BoardProject, rawPatch: ProjectPatch, withUpdate?: ProjectUpdate) => {
+    if (refuseIfBlocked(rawPatch)) return;
     // Entering Pre-Design seeds the sub-status default here too (2026-11-15).
     const patch = withPredesignDefault(project, rawPatch, board.labels);
     const patched = patchProject(project, patch, me);

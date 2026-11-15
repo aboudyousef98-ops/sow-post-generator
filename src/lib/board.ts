@@ -261,6 +261,8 @@ export function mergeBoard(rawCurrent: BoardState, rawIncoming: Partial<BoardSta
     // Slack-captured requests (2026-11-15) — same contract again; a
     // resolution or delete tombstone carries a newer updatedAt and wins.
     requests: mergeById(current.requests ?? [], incoming.requests ?? []),
+    // Per-column permissions (2026-11-15) — merged by columnKey (the id).
+    columnPerms: mergeById(current.columnPerms ?? [], incoming.columnPerms ?? []),
   };
 }
 

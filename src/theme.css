@@ -3218,6 +3218,27 @@ tr:hover .board-label-cell.empty {
   gap: 8px;
   flex-wrap: wrap;
 }
+/* Column permissions — one dense row per column (Aboud 2026-11-15). */
+.perm-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 380px;
+  overflow: auto;
+}
+.perm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.perm-col {
+  flex: 0 0 180px;
+  font-weight: 600;
+  color: var(--dyn-ink);
+  font-size: 13.5px;
+}
+
 /* The SVT post's Salesforce plain-text preview — the characters ARE the
    formatting, so line breaks must survive verbatim. */
 .svt-sf-pre {

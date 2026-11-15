@@ -12,7 +12,7 @@ import SettingsTab from './components/SettingsTab';
 import SowNotesTab from './components/SowNotesTab';
 import UsersTab from './components/UsersTab';
 import { Toasts, type Toast } from './components/Toast';
-import { extraWorkRoster, reconcileSession, saveCachedUsers } from './lib/auth';
+import { activeUsers, extraWorkRoster, loadCachedUsers, reconcileSession, saveCachedUsers } from './lib/auth';
 import {
   fetchSharedAhjs,
   fetchSharedBoard,
@@ -178,6 +178,17 @@ export default function App({ session, onLogout, onSessionChange }: AppProps = {
     () => extraWorkRoster(session?.displayName, settings.authors),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [session?.displayName, settings.authors, usersStamp],
+  );
+
+  /** username + display name + role, for the column-permissions pickers
+   * (2026-11-15) — rules key on USERNAME so renames can't flip access. */
+  const teamMembers = useMemo(
+    () =>
+      activeUsers(loadCachedUsers())
+        .map((u) => ({ username: u.username, displayName: u.displayName, role: u.role }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [usersStamp],
   );
 
   // Refresh the shared roster on mount and whenever the tab regains focus.
@@ -948,8 +959,10 @@ export default function App({ session, onLogout, onSessionChange }: AppProps = {
             board={boardState}
             setBoard={setBoard}
             me={session?.displayName ?? settings.lastAuthor ?? settings.authors[0] ?? ''}
+            meUsername={session?.username ?? ''}
             isAdmin={!session || session.role === 'admin'}
             authors={accountRoster}
+            members={teamMembers}
             toast={toast}
             records={records}
             onOpenCompose={openFromBoard}
