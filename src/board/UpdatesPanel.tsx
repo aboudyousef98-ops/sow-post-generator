@@ -248,9 +248,15 @@ export default function UpdatesPanel({
               value={reqDraft}
               onChange={(e) => setReqDraft(e.target.value)}
             />
-            <button type="button" className="btn small primary" disabled={!reqDraft.trim()} onClick={addRequests}>
-              Add request
-            </button>
+            {/* Same rhythm as the update composer below: box, then its
+                action on a right-aligned footer line (audit of his
+                screenshot, 2026-11-15 — the side-floating button read as
+                misaligned). */}
+            <div className="upd-req-add-foot">
+              <button type="button" className="btn small primary" disabled={!reqDraft.trim()} onClick={addRequests}>
+                Add request
+              </button>
+            </div>
           </div>
         </div>
 
@@ -348,13 +354,13 @@ export default function UpdatesPanel({
               {replyTo !== root.id && (
                 <button
                   type="button"
-                  className="upd-action upd-reply-link"
+                  className="upd-reply-btn"
                   onClick={() => {
                     setReplyTo(root.id);
                     setReplyDraft('');
                   }}
                 >
-                  Reply
+                  <span aria-hidden="true">↩</span> Reply
                 </button>
               )}
             </article>
