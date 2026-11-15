@@ -23,7 +23,15 @@ interface Props {
 type RosterKey = 'authors' | 'fixedTags' | 'designers' | 'clrAgents' | 'projectManagers' | 'utilities';
 
 const ROSTERS: [RosterKey, string, string][] = [
-  ['authors', 'Authors (Posting as)', 'Everyone who can sign in and post. Also the SOW coordinator list on the Board.'],
+  // The coordinator claim was removed 2026-11-15 (Aboud added Khaled Mattar
+  // here and could not find him on the Board): since Phase 9 the coordinator
+  // and Posting-as rosters come from Admin → Users (extraWorkRoster reads the
+  // shared users store; this list is only its empty-store fallback).
+  [
+    'authors',
+    'Authors (Posting as)',
+    'Fallback roster only — the Posting-as and SOW coordinator lists come from Admin → Users. Add teammates THERE.',
+  ],
   ['fixedTags', 'Fixed tags', 'Tagged on every post, before the region lead.'],
   ['designers', 'Designers / installers', 'The Designer / Installer dropdown in Compose.'],
   ['clrAgents', 'CLR agents', 'The CLR Agent dropdown in Compose.'],
