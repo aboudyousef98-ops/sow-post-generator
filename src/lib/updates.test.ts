@@ -4,10 +4,12 @@ import {
   editUpdate,
   isPendingInfoLabel,
   needsRatingReason,
+  newReply,
   newUpdate,
   putUpdate,
   restoreUpdate,
   searchUpdates,
+  threadRoots,
   updateCounts,
   updatesCorpus,
   updatesFor,
@@ -233,5 +235,59 @@ describe('AI corpus', () => {
     expect(c).toHaveLength(10);
     expect(c[0].at.startsWith('2026-10-50'.slice(0, 7))).toBe(true);
     expect(c[0].at > c[9].at).toBe(true); // newest first
+  });
+});
+
+// ---- Threaded replies (Aboud 2026-11-15 — "like monday.com") ----------------
+
+describe('threaded replies', () => {
+  const T0 = '2026-11-15T10:00:00.000Z';
+  const T1 = '2026-11-15T11:00:00.000Z';
+  const T2 = '2026-11-15T12:00:00.000Z';
+  const T3 = '2026-11-15T13:00:00.000Z';
+
+  it('a reply is an ordinary update carrying its parent id and project', () => {
+    const root = newUpdate('p1', 'waiting on the AHJ', 'Aboud Yousef', 'note', {}, T0);
+    const reply = newReply(root, 'they answered this morning', 'Omar Rajab', T1);
+    expect(reply.projectId).toBe('p1');
+    expect(reply.parentId).toBe(root.id);
+    expect(reply.by).toBe('Omar Rajab');
+    expect(reply.kind).toBe('note');
+  });
+
+  it('threadRoots: posts newest-first, replies oldest-first under their post', () => {
+    const a = newUpdate('p1', 'first post', 'A', 'note', {}, T0);
+    const b = newUpdate('p1', 'second post', 'A', 'note', {}, T2);
+    const r1 = newReply(a, 'first reply', 'B', T1);
+    const r2 = newReply(a, 'second reply', 'C', T3);
+    const thread = threadRoots([r2, a, b, r1], 'p1');
+    expect(thread.map((t) => t.root.text)).toEqual(['second post', 'first post']);
+    expect(thread[1].replies.map((r) => r.text)).toEqual(['first reply', 'second reply']);
+    expect(thread[0].replies).toEqual([]);
+  });
+
+  it('a deleted reply drops; a deleted post with live replies stays as a stub', () => {
+    const a = newUpdate('p1', 'root', 'A', 'note', {}, T0);
+    const r1 = newReply(a, 'kept', 'B', T1);
+    const r2 = deleteUpdate(newReply(a, 'gone', 'C', T1), 'C', T2);
+    const deadRoot = deleteUpdate(newUpdate('p1', 'lonely', 'A', 'note', {}, T0), 'A', T2);
+    const thread = threadRoots([a, r1, r2, deadRoot], 'p1');
+    // The lonely deleted root vanishes outright…
+    expect(thread).toHaveLength(1);
+    // …a deleted reply just drops…
+    expect(thread[0].replies.map((r) => r.text)).toEqual(['kept']);
+    // …and when the ROOT dies but replies live, the root rides along flagged
+    // deleted so the component can render the "(update deleted)" stub.
+    const gone = deleteUpdate(a, 'A', T3);
+    const stubbed = threadRoots([gone, r1], 'p1');
+    expect(stubbed).toHaveLength(1);
+    expect(stubbed[0].root.deleted).toBeTruthy();
+    expect(stubbed[0].replies.map((r) => r.text)).toEqual(['kept']);
+  });
+
+  it('replies count toward the pill (conversation size)', () => {
+    const a = newUpdate('p1', 'root', 'A', 'note', {}, T0);
+    const r = newReply(a, 'reply', 'B', T1);
+    expect(updateCounts([a, r]).get('p1')).toBe(2);
   });
 });

@@ -259,68 +259,6 @@ export function PasteFromSlackModal({
   );
 }
 
-/** The amber chip's list, also the soft popup at "Working on it". */
-export function RequestsViewerModal({
-  project,
-  requests,
-  me,
-  soft,
-  onPut,
-  onClose,
-}: {
-  project: BoardProject;
-  requests: ProjectRequest[];
-  me: string;
-  /** True when this opened on its own because work just started. */
-  soft?: boolean;
-  onPut: (items: ProjectRequest[]) => void;
-  onClose: () => void;
-}) {
-  const mine = requests.filter((r) => r.projectId === project.id && !r.deleted);
-  const open = mine.filter((r) => !r.resolvedAt);
-  const resolved = mine.filter((r) => r.resolvedAt);
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" role="dialog" aria-modal="true" aria-label="Slack requests" onClick={(e) => e.stopPropagation()}>
-        <h3>
-          Slack requests — {project.name}
-        </h3>
-        {soft && (
-          <p className="muted" style={{ marginTop: -8 }}>
-            Work is starting — the designers asked for these. They must be resolved before
-            “Ready to submit” / “Done”.
-          </p>
-        )}
-        <div className="req-confirm-list">
-          {open.map((r) => (
-            <div key={r.id} className="req-confirm">
-              <div className="req-text">{r.text}</div>
-              <div className="req-meta">
-                added by {r.addedBy} ·{' '}
-                <button type="button" className="btn small secondary" onClick={() => onPut([resolveRequest(r, me)])}>
-                  Mark resolved
-                </button>
-              </div>
-            </div>
-          ))}
-          {resolved.map((r) => (
-            <div key={r.id} className="req-confirm req-done">
-              <div className="req-text">{r.text}</div>
-              <div className="req-meta">✓ resolved by {r.resolvedBy}</div>
-            </div>
-          ))}
-          {mine.length === 0 && <p className="muted">Nothing here.</p>}
-        </div>
-        <div className="modal-actions">
-          <button type="button" className="btn primary" onClick={onClose}>
-            {soft ? 'Got it' : 'Close'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /** The hard gate: the status change is HELD until every open request is
  * marked resolved. Cancel leaves everything exactly as it was. */
 export function RequestsGateModal({

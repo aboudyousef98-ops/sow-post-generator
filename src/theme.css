@@ -7046,6 +7046,91 @@ tr:hover .board-label-cell.empty {
 }
 
 /* header + composer / scrolling thread / footer */
+/* The project panel — a Monday-style side panel (Aboud 2026-11-15). Non-modal:
+   no overlay, the board stays live; clicking another row's chip switches it. */
+.upd-panel {
+  position: fixed;
+  inset-block: 0;
+  inset-inline-end: 0;
+  inline-size: min(560px, 100vw);
+  z-index: 40; /* above the sticky table chrome, below .modal-overlay (50) so gates stay on top */
+  background: var(--dyn-surface);
+  border-inline-start: 1px solid var(--dyn-border-strong);
+  box-shadow: -18px 0 44px rgba(4, 61, 79, 0.18);
+  display: flex;
+  flex-direction: column;
+  animation: upd-panel-in 0.18s ease-out;
+}
+@keyframes upd-panel-in {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .upd-panel {
+    animation: none;
+  }
+}
+.upd-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px 10px;
+  border-block-end: 1px solid var(--dyn-line);
+  flex: 0 0 auto;
+}
+.upd-panel-head h3 {
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.upd-panel-x {
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 16px;
+  color: var(--dyn-muted);
+  padding: 4px 8px;
+  border-radius: 8px;
+}
+.upd-panel-x:hover {
+  background: var(--dyn-bg);
+  color: var(--dyn-ink);
+}
+.upd-panel-scroll {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: 12px 18px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+/* Replies — one level, indented under their post (Monday's model). */
+.upd-replies {
+  margin-block-start: 8px;
+  margin-inline-start: 18px;
+  padding-inline-start: 12px;
+  border-inline-start: 2px solid var(--dyn-line);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.upd-reply-link {
+  margin-block-start: 4px;
+}
+.upd-deleted-stub {
+  font-style: italic;
+  margin: 0;
+}
+
 .upd-modal {
   display: flex;
   flex-direction: column;

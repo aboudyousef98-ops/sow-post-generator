@@ -120,10 +120,10 @@ import {
 } from '../lib/automations';
 import ActivityModal from './ActivityModal';
 import AutomationsModal from './AutomationsModal';
-import UpdatesModal from './UpdatesModal';
+import UpdatesPanel from './UpdatesPanel';
 import UpdateSearchModal from './UpdateSearchModal';
 import RequireNoteModal, { type NoteGate } from './RequireNoteModal';
-import { PasteFromSlackModal, RequestsGateModal, RequestsViewerModal } from './RequestsModal';
+import { PasteFromSlackModal, RequestsGateModal } from './RequestsModal';
 import { isReadyOrDoneLabel, isWorkingLabel, openRequestsFor } from '../lib/requests';
 import EditLabelsModal from './EditLabelsModal';
 import ImportModal, { type ImportRequest } from './ImportModal';
@@ -751,7 +751,6 @@ export default function BoardTab({
   const [updatesFor, setUpdatesFor] = useState<BoardProject | null>(null);
   // Slack-captured requests (Aboud 2026-11-06 design, built 2026-11-15).
   const [slackOpen, setSlackOpen] = useState(false);
-  const [reqView, setReqView] = useState<{ project: BoardProject; soft?: boolean } | null>(null);
   const [reqGate, setReqGate] = useState<{
     project: BoardProject;
     patch: ProjectPatch;
@@ -1891,11 +1890,12 @@ export default function BoardTab({
               // is holding the change, in which case there is nothing to
               // announce yet — the modal is the announcement.
               if (!guardedPatch(row.original, { statusId })) return;
-              // Work starts → show the designers' open requests once
-              // (soft popup, Aboud 2026-11-06; nothing blocked).
+              // Work starts → the project panel opens itself with the
+              // designers' open requests on top (soft, Aboud 2026-11-06;
+              // nothing blocked — consolidated into the side panel 2026-11-15).
               const landed = labelById(boardRef.current.labels, statusId);
               if (isWorkingLabel(landed) && (openReqCountById.get(row.original.id) ?? 0) > 0) {
-                setReqView({ project: row.original, soft: true });
+                setUpdatesFor(row.original);
               }
               // Crossing INTO a done or out-of-scope label hides the row from
               // the main board — announce where it went, with a way back.
@@ -2890,16 +2890,6 @@ export default function BoardTab({
           onClose={() => setSlackOpen(false)}
         />
       )}
-      {reqView && (
-        <RequestsViewerModal
-          project={reqView.project}
-          requests={board.requests ?? []}
-          me={me}
-          soft={reqView.soft}
-          onPut={putRequests}
-          onClose={() => setReqView(null)}
-        />
-      )}
       {reqGate && (
         <RequestsGateModal
           project={reqGate.project}
@@ -2951,8 +2941,11 @@ export default function BoardTab({
         />
       )}
 
+      {/* The project panel — a side panel, not a modal (Aboud 2026-11-15,
+          "like monday.com"): the board stays live behind it, and clicking
+          another row's chip just switches the panel to that project. */}
       {updatesFor && (
-        <UpdatesModal
+        <UpdatesPanel
           project={updatesFor}
           updates={board.updates ?? []}
           requests={board.requests ?? []}

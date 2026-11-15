@@ -184,6 +184,14 @@ export interface NoteGate {
 export interface ProjectUpdate {
   id: string; // uuid — merge/dedup key
   projectId: string;
+  /**
+   * Threaded replies (Aboud 2026-11-15, "like monday.com"): a reply is an
+   * ordinary update pointing at its parent post. OPTIONAL — every update
+   * written before this date has no such field and renders as a root post,
+   * which is exactly what it is. One level deep by design: replies to
+   * replies become noise. Read through lib/updates.threadRoots.
+   */
+  parentId?: string;
   /** Slack-native light markup, same format as the notes composers. */
   text: string;
   by: string;

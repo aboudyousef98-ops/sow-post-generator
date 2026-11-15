@@ -1223,6 +1223,46 @@ describe('Updates thread', () => {
     expect(screen.queryByText('oops')).toBeNull();
     expect(screen.getByText('0 updates')).toBeTruthy();
   });
+
+  // ---- Monday-style side panel + replies (Aboud 2026-11-15) -----------------
+
+  it('replies nest under their post, named, and count toward the pill', () => {
+    render(<Harness initial={withRow()} />);
+    fireEvent.click(screen.getAllByTitle('Post the first update')[0]);
+    fireEvent.change(screen.getByRole('textbox', { name: 'New update' }), { target: { value: 'waiting on the AHJ' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Post update' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
+    fireEvent.change(screen.getByRole('textbox', { name: 'Reply' }), {
+      target: { value: 'they answered this morning' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Post reply' }));
+
+    const reply = document.querySelector('.upd-replies .upd-reply')!;
+    expect(reply.textContent).toContain('they answered this morning');
+    expect(reply.textContent).toContain('Aboud Yousef'); // the poster is named
+    expect(screen.getByText('2 updates')).toBeTruthy(); // conversation size
+
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+    expect(screen.getAllByTitle('2 updates — open the thread').length).toBeGreaterThan(0);
+  });
+
+  it('is a side panel: switches projects without closing, Escape closes', () => {
+    const b = emptyBoard();
+    b.projects = [boardProject('Martha Thompson', 'pm'), boardProject('Carla Nunez', 'pc')];
+    render(<Harness initial={b} />);
+    const open = (name: string) =>
+      fireEvent.click(within(screen.getByText(name).closest('tr')!).getByTitle('Post the first update'));
+
+    open('Martha Thompson');
+    expect(document.querySelector('.upd-panel h3')!.textContent).toBe('Martha Thompson');
+    // The board is still live behind it — the other row's chip just switches.
+    open('Carla Nunez');
+    expect(document.querySelector('.upd-panel h3')!.textContent).toBe('Carla Nunez');
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.querySelector('.upd-panel')).toBeNull();
+  });
 });
 
 // Aboud 2026-10-17: "do u see the 'Last update' column, use this one for the

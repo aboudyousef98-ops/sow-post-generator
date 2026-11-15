@@ -112,6 +112,47 @@ export function updatesFor(all: ProjectUpdate[] | undefined, projectId: string):
     .sort((a, b) => b.at.localeCompare(a.at));
 }
 
+// ---- Threaded replies (Aboud 2026-11-15 — "like monday.com") ---------------
+
+/** A reply is an ordinary update carrying its parent's id — same storage,
+ * same merge, same search corpus. One level deep by design. */
+export function newReply(
+  parent: ProjectUpdate,
+  text: string,
+  by: string,
+  now: string = new Date().toISOString(),
+): ProjectUpdate {
+  return { ...newUpdate(parent.projectId, text, by, 'note', {}, now), parentId: parent.id };
+}
+
+/**
+ * One project's thread: live root posts newest-first, each with its live
+ * replies oldest-first (a conversation reads downward). A deleted root whose
+ * replies are still live RIDES ALONG flagged deleted, so the panel can render
+ * an "(update deleted)" stub instead of orphaning the replies.
+ */
+export function threadRoots(
+  all: ProjectUpdate[] | undefined,
+  projectId: string,
+): { root: ProjectUpdate; replies: ProjectUpdate[] }[] {
+  const mine = (all ?? []).filter((u) => u.projectId === projectId);
+  const liveReplies = new Map<string, ProjectUpdate[]>();
+  for (const u of mine) {
+    if (!u.parentId || u.deleted) continue;
+    const list = liveReplies.get(u.parentId);
+    if (list) list.push(u);
+    else liveReplies.set(u.parentId, [u]);
+  }
+  return mine
+    .filter((u) => !u.parentId)
+    .filter((u) => !u.deleted || (liveReplies.get(u.id)?.length ?? 0) > 0)
+    .sort((a, b) => b.at.localeCompare(a.at))
+    .map((root) => ({
+      root,
+      replies: (liveReplies.get(root.id) ?? []).sort((a, b) => a.at.localeCompare(b.at)),
+    }));
+}
+
 /** projectId → live update count, for the board column badge. */
 export function updateCounts(all: ProjectUpdate[] | undefined): Map<string, number> {
   const m = new Map<string, number>();
