@@ -91,6 +91,7 @@ import {
 import { relativeTime, isoToUs, todayIso } from '../lib/dates';
 import { hasSfNotes, type SfNotes } from '../lib/sfNotes';
 import { matchesSearch } from '../lib/boardSearch';
+import { downloadBoardCsv, downloadBoardXlsx } from '../lib/boardExport';
 import {
   isPendingInfoLabel,
   labelRequiresNote,
@@ -1030,6 +1031,7 @@ export default function BoardTab({
     rules?: AutomationRule[];
   } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<BoardProject | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [addName, setAddName] = useState('');
   const [duplicate, setDuplicate] = useState<BoardProject | null>(null);
@@ -2726,6 +2728,17 @@ export default function BoardTab({
           >
             Import from Salesforce
           </button>
+          {/* Export the whole board (Aboud 2026-11-17) — for daily assignment
+              and stuck-project checks. Honours the archived filter, so what
+              downloads is what is on screen. */}
+          <button
+            type="button"
+            className="btn small secondary"
+            onClick={() => setExportOpen(true)}
+            title="Download every project as .csv or .xlsx"
+          >
+            Export board
+          </button>
           <Popover
             open={columnsMenu}
             onOpenChange={setColumnsMenu}
@@ -3197,6 +3210,50 @@ export default function BoardTab({
       {activityFor && (
         <ActivityModal project={activityFor} activity={board.activity} onClose={() => setActivityFor(null)} />
       )}
+      {exportOpen && (
+        <div className="modal-overlay" onClick={() => setExportOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Export board</h3>
+            <p className="muted">
+              Every project with its status, coordinator, dates and days-since-update — for assignment and
+              stuck-project checks. Deleted rows are never included
+              {filters.showArchived ? '; archived rows ARE, because “Show archived” is on' : '; archived rows are not'}.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setExportOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => {
+                  downloadBoardCsv(boardRef.current, {
+                    includeArchived: filters.showArchived,
+                    installByProject,
+                  });
+                  setExportOpen(false);
+                }}
+              >
+                Download .csv
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => {
+                  void downloadBoardXlsx(boardRef.current, {
+                    includeArchived: filters.showArchived,
+                    installByProject,
+                  });
+                  setExportOpen(false);
+                }}
+              >
+                Download .xlsx
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDelete && (
         <div className="modal-overlay" onClick={() => setConfirmDelete(null)}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>

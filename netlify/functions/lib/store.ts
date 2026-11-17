@@ -11,6 +11,17 @@
 
 import { getStore } from '@netlify/blobs';
 
+/**
+ * The store this deploy will read and write. Exported separately from
+ * getSowpostStore so /health can REPORT it without opening a connection —
+ * "which board am I actually talking to" has to be answerable from outside,
+ * or a draft deploy silently editing production is undetectable until
+ * somebody notices the damage (Aboud, 2026-11-17).
+ */
+export function sowpostStoreName(env: Record<string, string | undefined> = process.env): string {
+  return env.BLOBS_STORE_NAME || 'sowpost';
+}
+
 export function getSowpostStore(env: Record<string, string | undefined> = process.env) {
-  return getStore(env.BLOBS_STORE_NAME || 'sowpost');
+  return getStore(sowpostStoreName(env));
 }
