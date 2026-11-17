@@ -16,6 +16,7 @@ import { autoTags } from '../lib/record';
 import { bulletCountChange, droppedTokens } from '../lib/tokenGuard';
 import { POLISH_KEYS, rawTextFor } from '../lib/installNotes';
 import { labelById, labelTextColor, matchProjectByCustomer } from '../lib/board';
+import RuleList from './RuleList';
 import type { BoardLabel, BoardProject } from '../board/types';
 import type { Ahj, Level, PolishKey, PostRecord, Region, RewriteMode, Settings, SfFields } from '../types';
 import InstallNotesCard from './InstallNotesCard';
@@ -764,20 +765,7 @@ export default function ComposeTab({
                 </span>
               </div>
               <div className="ahj-banner-posts">
-                {ahjPosts.map((p) => (
-                  <div key={p.id} className="ahj-banner-post">
-                    <span className="muted" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <strong style={{ color: 'var(--dyn-ink)' }}>{p.by}</strong>
-                      {new Date(p.editedAt ?? p.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                      {p.editedAt && ' · edited'}
-                      {p.pinned && <span className="pin-chip" style={{ fontSize: 11, padding: '1px 8px' }}>Pinned</span>}
-                    </span>
-                    <span style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, color: 'var(--dyn-ink)', fontSize: 13.5 }}>
-                      {p.text}
-                    </span>
-                  </div>
-                ))}
-                {ahjPosts.length === 0 && <div className="muted" style={{ fontSize: 13 }}>No requirement posts yet.</div>}
+                <RuleList posts={ahjPosts} emptyText="No requirement posts yet." />
               </div>
               <label className="ahj-banner-include">
                 <input
@@ -811,17 +799,7 @@ export default function ComposeTab({
                 </span>
               </div>
               <div className="ahj-banner-posts">
-                {posts.map((p) => (
-                  <div key={p.id} className="ahj-banner-post">
-                    <span className="muted" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <strong style={{ color: 'var(--dyn-ink)' }}>{p.by}</strong>
-                      {new Date(p.editedAt ?? p.at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-                    </span>
-                    <span style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55, color: 'var(--dyn-ink)', fontSize: 13.5 }}>
-                      {p.text}
-                    </span>
-                  </div>
-                ))}
+                <RuleList posts={posts} />
               </div>
               <label className="ahj-banner-include">
                 <input

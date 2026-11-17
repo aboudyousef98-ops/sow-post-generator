@@ -4,7 +4,7 @@
 // Kept dependency-free so the Netlify function (`ahjs.mts`) can import the
 // same merge the client uses — one merge algorithm, tested once.
 
-import type { Ahj, AhjPost, RequirementKind } from '../types';
+import type { Ahj, AhjPost, RequirementKind, RuleStatus } from '../types';
 
 /** Case/whitespace-insensitive canonical form of a jurisdiction name. */
 export function normName(s: string): string {
@@ -67,6 +67,59 @@ export function livePosts(a: Ahj): AhjPost[] {
   return a.posts
     .filter((p) => !p.deleted)
     .sort((x, y) => Number(y.pinned) - Number(x.pinned) || y.at.localeCompare(x.at));
+}
+
+// ---- Per-rule fields (Aboud 2026-11-17) -----------------------------------
+
+/**
+ * A rule's status. ABSENT means `current` — every post written before the
+ * per-rule fields existed has no status, and must keep reaching Compose
+ * exactly as it does today. Read status through here, never off the field.
+ */
+export function ruleStatus(p: AhjPost): RuleStatus {
+  return p.status ?? 'current';
+}
+
+/** Superseded rules stay on the board and out of every handoff. */
+export function isPostable(p: AhjPost): boolean {
+  return ruleStatus(p) !== 'superseded';
+}
+
+/**
+ * Canonical form of a category, for GROUPING ONLY.
+ *
+ * Category is free text (Aboud 2026-11-17), so "Setbacks", "setbacks " and
+ * "SETBACKS" are one group. The original spelling of the first rule in a
+ * group is what gets displayed — this value is a key, never a label.
+ */
+export function normCategory(s: string | undefined): string {
+  return (s ?? '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+export interface RuleGroup {
+  /** The category as first written, or '' for rules with no category. */
+  label: string;
+  posts: AhjPost[];
+}
+
+/**
+ * Group posts by category for Compose, preserving the order they arrive in.
+ *
+ * Uncategorised rules collect under a '' label and are emitted LAST, so a
+ * board that predates categories reads exactly as one ungrouped list — which
+ * is how every existing board must keep reading.
+ */
+export function groupByCategory(posts: AhjPost[]): RuleGroup[] {
+  const groups = new Map<string, RuleGroup>();
+  for (const p of posts) {
+    const key = normCategory(p.category);
+    const g = groups.get(key);
+    if (g) g.posts.push(p);
+    else groups.set(key, { label: key ? (p.category ?? '').trim() : '', posts: [p] });
+  }
+  const out = [...groups.values()];
+  // Uncategorised last — a labelled group is more useful at the top.
+  return [...out.filter((g) => g.label), ...out.filter((g) => !g.label)];
 }
 
 const lastAct = (p: AhjPost) => p.editedAt ?? p.at;

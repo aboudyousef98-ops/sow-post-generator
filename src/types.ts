@@ -572,6 +572,20 @@ export interface AhjPostVersion {
   by: string;
 }
 
+/**
+ * How sure we are of a rule. Imported from the Confidence column; absent on
+ * everything written by hand before 2026-11-17.
+ */
+export type RuleConfidence = 'high' | 'medium' | 'low';
+
+/**
+ * A rule's lifecycle. **Absent means `current`** — every post written before
+ * 2026-11-17 has no status and must keep showing exactly as it does now.
+ * `superseded` is hidden from Compose but never deleted: the board keeps the
+ * history, the post just stops reaching a handoff.
+ */
+export type RuleStatus = 'current' | 'to-confirm' | 'superseded';
+
 export interface AhjPost {
   id: string; // uuid
   text: string;
@@ -584,6 +598,34 @@ export interface AhjPost {
   deleted?: { at: string; by: string };
   /** Bumped on ANY post change (edit/pin/delete/restore) — per-post merge key. */
   updatedAt: string;
+
+  // ---- Per-rule fields (Aboud 2026-11-17, for the ~265-rule bulk import) ---
+  // All OPTIONAL and all absent on existing posts, so nothing already on a
+  // board changes behaviour. `schemaVersion` stays 1 — no migration. The
+  // server schema is already `.loose()` on posts, so these pass through the
+  // PUT with no function change.
+  /**
+   * Groups rules in Compose. FREE TEXT, normalised for grouping only
+   * (`normCategory`) — the import preview shows every distinct category with
+   * its row count so typos are caught before the write, not after. A rule is
+   * never rejected for an unrecognised category.
+   */
+  category?: string;
+  confidence?: RuleConfidence;
+  /** Absent = `current`. Read it through `ruleStatus()`, never directly. */
+  status?: RuleStatus;
+  /** Where the rule came from — rendered as a link icon beside the rule. */
+  sourceUrl?: string;
+  /** ISO date the source was published or last checked. */
+  sourceDate?: string;
+  /** Free text: who or what asserted this (a person, a permit, a phone call). */
+  origin?: string;
+  /**
+   * Set by a bulk import, so "Undo this import" can remove exactly the posts
+   * that import created and nothing else. Absent on hand-written posts, which
+   * is what makes them un-undoable by a batch action.
+   */
+  importBatchId?: string;
 }
 
 /**

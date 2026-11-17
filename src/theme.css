@@ -7748,6 +7748,58 @@ tr:hover .board-label-cell.empty {
   justify-content: space-between;
   gap: 8px;
 }
+/* Requirement rules grouped by category (Aboud 2026-11-17). A board with no
+   categories renders ONE unlabelled group, so these rules only ever add
+   structure to data that has it — an old board looks exactly as it did. */
+.rule-group + .rule-group {
+  margin-block-start: 10px;
+}
+.rule-group-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dyn-navy);
+  margin-block-end: 4px;
+}
+.rule-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--dyn-border);
+  background: var(--dyn-subtle);
+  color: var(--dyn-text);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+/* An unconfirmed rule still reaches the handoff — the badge says "verify me",
+   not "ignored". Amber, which is this app's "look at this" colour. */
+.rule-badge.to-confirm {
+  background: var(--dyn-warn-bg);
+  border-color: var(--dyn-highlight);
+  color: var(--dyn-warn-ink);
+}
+.rule-source {
+  text-decoration: none;
+  font-size: 12px;
+  line-height: 1;
+  /* 24x24 CSS px minimum pointer target (WCAG 2.2 AA), same floor as the
+     tick chips — a bare emoji link is about 12px. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  min-height: 24px;
+  border-radius: 6px;
+}
+.rule-source:hover {
+  background: var(--dyn-subtle);
+}
+.rule-source:focus-visible {
+  outline: 2px solid var(--dyn-teal-ink);
+  outline-offset: 1px;
+}
 /* The live clearance verdict (Aboud 2026-11-17). Advisory, never a gate: it
    states the arithmetic the post will print so the number is checked here
    rather than in Slack. Logical properties — the app is RTL-safe. */

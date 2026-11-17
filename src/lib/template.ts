@@ -2,7 +2,7 @@
 
 import type { BoardProject } from '../board/types';
 import type { Ahj, PostRecord, PostValue, Settings } from '../types';
-import { boardsOfKind, livePosts, matchAhj } from './ahj';
+import { boardsOfKind, groupByCategory, isPostable, livePosts, matchAhj } from './ahj';
 import { LEVEL_INFO, LEVEL_NAMES } from './classify';
 import { isoToUs, weekdayName } from './dates';
 import { batteryAnalysisLines, conduitRunLines, installNoteLines } from './installNotes';
@@ -261,26 +261,53 @@ const SECTION_TITLE: Record<PostableKind, (name: string) => string> = {
   funding: (n) => `Funding Requirements (${n})`,
 };
 
+/** One requirement section's rules, grouped by category. */
+export interface RequirementSection {
+  title: string;
+  /**
+   * Category groups, labelled ones first, uncategorised last with `label: ''`.
+   *
+   * A board whose rules carry NO category produces exactly one group with an
+   * empty label, and every renderer below prints that case the way it always
+   * has — identical bytes. That is the compatibility contract: grouping may
+   * not change the output of a board that predates categories.
+   */
+  groups: { label: string; posts: string[] }[];
+}
+
 /**
  * Every approved requirement section, always in the order AHJ → Utility →
  * Funding. A section appears only when its board is still the approved one AND
  * it has live posts, so switching Jurisdiction or Utility silently drops it —
  * the same self-un-approving contract AHJ has always had.
+ *
+ * Superseded rules are dropped here (Aboud 2026-11-17) — they stay on the
+ * board, they just stop reaching a handoff.
  */
-export function requirementSections(
-  record: PostRecord,
-  ahjs: Ahj[] | undefined,
-): { title: string; posts: string[] }[] {
-  const out: { title: string; posts: string[] }[] = [];
+export function requirementSections(record: PostRecord, ahjs: Ahj[] | undefined): RequirementSection[] {
+  const out: RequirementSection[] = [];
   for (const kind of ['ahj', 'utility', 'funding'] as PostableKind[]) {
     const approvedId = record[APPROVAL_FIELD[kind]];
     if (!approvedId) continue;
     const board = matchedBoard(record, ahjs, kind);
     if (!board || board.id !== approvedId) continue;
-    const posts = livePosts(board).map((p) => p.text.trim()).filter(Boolean);
-    if (posts.length) out.push({ title: SECTION_TITLE[kind](board.name), posts });
+    const live = livePosts(board).filter(isPostable).filter((p) => p.text.trim());
+    if (!live.length) continue;
+    const groups = groupByCategory(live)
+      .map((g) => ({ label: g.label, posts: g.posts.map((p) => p.text.trim()).filter(Boolean) }))
+      .filter((g) => g.posts.length);
+    if (groups.length) out.push({ title: SECTION_TITLE[kind](board.name), groups });
   }
   return out;
+}
+
+/**
+ * A section's rules as flat lines, with a category heading only where one
+ * exists. The shared shape behind all three renderers, so Slack, SF and the
+ * rich clipboard can never group differently.
+ */
+export function sectionLines(sec: RequirementSection): { label: string; posts: string[] }[] {
+  return sec.groups;
 }
 
 /**
@@ -314,8 +341,13 @@ export function buildPostText(record: PostRecord, settings: Settings, ahjs?: Ahj
   const lines = [...intro, ...renderItemsText(items)];
   for (const sec of requirementSections(record, ahjs)) {
     lines.push(`*${sec.title}:*`);
-    // Multi-line posts keep their line breaks, indented under the bullet.
-    lines.push(...sec.posts.map((t) => `• ${t.split('\n').filter((l) => l.trim()).join('\n   ')}`));
+    for (const g of sec.groups) {
+      // An unlabelled group prints no heading, so a board with no categories
+      // reads exactly as it did before grouping existed.
+      if (g.label) lines.push(`_${g.label}_`);
+      // Multi-line posts keep their line breaks, indented under the bullet.
+      lines.push(...g.posts.map((t) => `• ${t.split('\n').filter((l) => l.trim()).join('\n   ')}`));
+    }
   }
   if (tags.length) lines.push(tags.map((t) => `@${t}`).join(' '));
   return lines.join('\n');
@@ -411,12 +443,13 @@ export function buildPostHtml(record: PostRecord, settings: Settings, ahjs?: Ahj
   const { intro, items, tags } = buildLines(record, settings);
   const parts = [...intro.map((l) => `<p>${esc(l)}</p>`), renderItemsHtml(items)];
   for (const sec of requirementSections(record, ahjs)) {
-    parts.push(
-      `<p><strong>${esc(sec.title)}:</strong></p>`,
-      '<ul>',
-      ...sec.posts.map((t) => `<li>${esc(t).replace(/\n/g, '<br>')}</li>`),
-      '</ul>',
-    );
+    parts.push(`<p><strong>${esc(sec.title)}:</strong></p>`);
+    for (const g of sec.groups) {
+      // Same contract as the text renderer: no label, no heading, identical
+      // markup to what an uncategorised board has always produced.
+      if (g.label) parts.push(`<p><em>${esc(g.label)}</em></p>`);
+      parts.push('<ul>', ...g.posts.map((t) => `<li>${esc(t).replace(/\n/g, '<br>')}</li>`), '</ul>');
+    }
   }
   if (tags.length) parts.push(`<p>${esc(tags.map((t) => `@${t}`).join(' '))}</p>`);
   return parts.join('');

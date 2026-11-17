@@ -120,15 +120,20 @@ export function buildSfSubmission(record: PostRecord, settings: Settings, ahjs?:
   // A multi-line requirement keeps its continuation lines indented under its
   // dash, so it reads as one item.
   for (const sec of requirementSections(record, ahjs)) {
-    const items = sec.posts.map((p) =>
+    const dashed = (p: string) =>
       p
         .split('\n')
         .map((l) => l.trim())
         .filter(Boolean)
         .map((l, i) => (i === 0 ? `- ${l}` : `  ${l}`))
-        .join('\n'),
-    );
-    windowParts.push(`${underline(sec.title)}\n${items.join('\n')}`);
+        .join('\n');
+    // A labelled group gets its category as a plain heading line; an
+    // unlabelled one prints its items straight under the section title, which
+    // is byte-identical to what an uncategorised board produced before.
+    const body = sec.groups
+      .map((g) => (g.label ? `${g.label}:\n${g.posts.map(dashed).join('\n')}` : g.posts.map(dashed).join('\n')))
+      .join('\n');
+    windowParts.push(`${underline(sec.title)}\n${body}`);
   }
 
   const stories =
