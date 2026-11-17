@@ -40,6 +40,7 @@ import {
   useRef,
   useState,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
 } from 'react';
 import {
   activityEntry,
@@ -741,6 +742,221 @@ const MemoBody = memo(
     prev.collapsed === next.collapsed &&
     prev.selectedIds === next.selectedIds,
 ) as typeof BodyInner;
+
+/**
+ * The full-fat board table: headers that sort, filter, resize and drag to
+ * reorder; rows that drag to reorder; grouping; and the drag overlay that
+ * makes a held row feel held.
+ *
+ * Extracted from the Active Projects table on 2026-11-17 so the Pre-Design
+ * section can be the SAME thing rather than a stripped copy (Aboud: "the
+ * active project group of tasks to have the same features as the pre-design
+ * same same"). `SectionCard` is still the light table, used by the three
+ * read-mostly sections below.
+ *
+ * Each instance owns its OWN DndContext, deliberately:
+ * - a ROW drag only ever means something inside one section — what moves a row
+ *   between sections is its status, never a pointer — so two contexts also
+ *   make a cross-section row drag impossible rather than ambiguous;
+ * - a COLUMN drag writes the ONE shared column order, so dragging a header in
+ *   either table moves that column in both (Aboud 2026-11-17: one layout,
+ *   editable from any section).
+ */
+function FullTable({
+  table,
+  rows,
+  tableClassName = '',
+  onRowMove,
+  onColumnMove,
+  columnFilters,
+  onColumnFilterChange,
+  filterMenu,
+  onFilterMenuChange,
+  valuePool,
+  columnCtx,
+  body,
+  empty,
+}: {
+  table: TanTable<BoardProject>;
+  /** This table's rows, in displayed order — the row sortable's item list. */
+  rows: BoardProject[];
+  tableClassName?: string;
+  onRowMove: (activeId: string, overId: string) => void;
+  onColumnMove: (activeId: string, overId: string) => void;
+  columnFilters: Record<string, string[]>;
+  onColumnFilterChange: (columnId: string, values: string[]) => void;
+  filterMenu: string | null;
+  onFilterMenuChange: (columnId: string | null) => void;
+  valuePool: BoardProject[];
+  columnCtx: Parameters<typeof distinctColumnValues>[2];
+  /** Everything BodyInner needs except the table, which is this one. */
+  body: Omit<Parameters<typeof BodyInner>[0], 'table'>;
+  /** Shown under the headers when there are no rows (the Active table's own
+   * "where did my projects go" message). */
+  empty?: ReactNode;
+}) {
+  const [dragId, setDragId] = useState<string | null>(null);
+  const [dragType, setDragType] = useState<'row' | 'column' | null>(null);
+
+  const sensors = useSensors(
+    // 8px, so a click on a status chip stays a click.
+    useSensor(RowPointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  const order = table.getState().columnOrder;
+  const sizingState = table.getState().columnSizing;
+  const visibilityState = table.getState().columnVisibility;
+  const columnSizeVars = useMemo(
+    () => sizeVarsFor(table),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [sizingState, visibilityState, table.options.columns],
+  );
+  const isResizing = Boolean(table.getState().columnSizingInfo.isResizingColumn);
+  /** The row the overlay renders, found once rather than per cell. */
+  const overlayRow =
+    dragType === 'row' && dragId ? table.getRowModel().rows.find((r) => r.original.id === dragId) : undefined;
+
+  const bodyProps = { table, ...body };
+
+  const onDragStart = (e: DragStartEvent) => {
+    setDragId(String(e.active.id));
+    setDragType((e.active.data.current?.type as 'row' | 'column') ?? null);
+  };
+
+  const onDragEnd = (e: DragEndEvent) => {
+    const type = e.active.data.current?.type;
+    setDragId(null);
+    setDragType(null);
+    if (!e.over || e.active.id === e.over.id) return;
+    if (type === 'column') onColumnMove(String(e.active.id), String(e.over.id));
+    else onRowMove(String(e.active.id), String(e.over.id));
+  };
+
+  return (
+    /* ONE context for rows and columns; each sortable says which it is.
+       The axis modifier is picked from what is actually moving, so a row
+       cannot drift sideways and a header cannot drift down. */
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      modifiers={[dragType === 'column' ? restrictToHorizontalAxis : restrictToVerticalAxis]}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragCancel={() => {
+        setDragId(null);
+        setDragType(null);
+      }}
+    >
+      <div className="board-scroll">
+        <table
+          className={`board-table ${tableClassName} ${dragId ? 'board-reordering' : ''}`}
+          style={{ ...columnSizeVars, width: table.getTotalSize() }}
+        >
+          <SortableContext
+            items={order.filter((c) => !PINNED_COLUMNS.includes(c))}
+            strategy={horizontalListSortingStrategy}
+          >
+            <thead>
+              {table.getHeaderGroups().map((hg) => (
+                <tr key={hg.id}>
+                  {hg.headers.map((header) => {
+                    const colId = header.column.id;
+                    const movable = !PINNED_COLUMNS.includes(colId);
+                    const picked = columnFilters[colId] ?? [];
+                    const thClass = [
+                      colId === 'name' ? 'board-sticky' : '',
+                      movable ? 'board-th-movable' : '',
+                      dragType === 'column' && dragId !== colId && movable ? 'board-th-droppable' : '',
+                    ]
+                      .filter(Boolean)
+                      .join(' ');
+                    const thStyle = { width: `calc(var(--header-${header.id}-size) * 1px)` };
+                    // Reorder by dragging the header onto another one (Aboud
+                    // 2026-10-18). `select` and the sticky `name` never move,
+                    // so they stay plain <th> and are not sortable items.
+                    const Cell = movable ? SortableHeader : 'th';
+                    return (
+                      <Cell key={header.id} id={colId} className={thClass} style={thStyle}>
+                        {/* The select column holds a checkbox — it must not be
+                            wrapped in the sort button (invalid, and every click
+                            would sort instead of select). */}
+                        {colId === 'select' ? (
+                          <span className="board-th-plain">
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </span>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              className="board-th"
+                              onClick={header.column.getToggleSortingHandler()}
+                              title={movable ? 'Sort · drag the header to move this column' : 'Sort'}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              <SortArrow dir={header.column.getIsSorted()} />
+                            </button>
+                            {!UNFILTERABLE_COLUMNS.includes(colId) && (
+                              <ColumnFilter
+                                columnId={colId}
+                                label={String(header.column.columnDef.header ?? colId)}
+                                values={distinctColumnValues(valuePool, colId, columnCtx)}
+                                selected={picked}
+                                open={filterMenu === colId}
+                                onOpenChange={(v) => onFilterMenuChange(v ? colId : null)}
+                                onChange={(vals) => onColumnFilterChange(colId, vals)}
+                              />
+                            )}
+                            <div
+                              className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
+                              onMouseDown={header.getResizeHandler()}
+                              onTouchStart={header.getResizeHandler()}
+                              onDoubleClick={() => header.column.resetSize()}
+                              title="Drag to resize · double-click to reset"
+                            />
+                          </>
+                        )}
+                      </Cell>
+                    );
+                  })}
+                </tr>
+              ))}
+            </thead>
+          </SortableContext>
+          <SortableContext items={rows.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            {isResizing ? <MemoBody {...bodyProps} /> : <BodyInner {...bodyProps} />}
+          </SortableContext>
+        </table>
+
+        {rows.length === 0 && empty}
+      </div>
+
+      {/* The thing that makes a row feel held: a real copy of it, lifted off
+          the page and following the cursor, rather than the original turning
+          a different colour in place. Wrapped in its own <table> so the
+          width variables and the cell layout still apply. */}
+      <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
+        {dragId && dragType === 'row' && overlayRow ? (
+          <table className="board-table board-drag-ghost" style={{ ...columnSizeVars, width: table.getTotalSize() }}>
+            <tbody>
+              <tr>
+                {overlayRow.getVisibleCells().map((cell) => (
+                  <td key={cell.id} style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}>
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        ) : dragId && dragType === 'column' ? (
+          <div className="board-drag-ghost board-col-ghost">
+            {String(table.getColumn(dragId)?.columnDef.header ?? dragId)}
+          </div>
+        ) : null}
+      </DragOverlay>
+    </DndContext>
+  );
+}
 
 export default function BoardTab({
   board,
@@ -1609,53 +1825,49 @@ export default function BoardTab({
   // ---- drag-to-reorder (hold a row, move it, drop — spec: monday-style) -----
 
   /**
-   * Rows and columns both drag through ONE dnd-kit context, told apart by the
-   * `type` each sortable carries. Replaced ~55 lines of hand-rolled pointer
-   * tracking plus the HTML5 column drag (Aboud 2026-11-05, who wanted the row
-   * to feel genuinely held): dnd-kit gives a DragOverlay that follows the
-   * cursor, neighbours that slide out of the way, and keyboard dragging —
-   * which the hand-rolled version never had.
+   * Rows and columns both drag through dnd-kit, told apart by the `type` each
+   * sortable carries. Replaced ~55 lines of hand-rolled pointer tracking plus
+   * the HTML5 column drag (Aboud 2026-11-05, who wanted the row to feel
+   * genuinely held): dnd-kit gives a DragOverlay that follows the cursor,
+   * neighbours that slide out of the way, and keyboard dragging — which the
+   * hand-rolled version never had.
+   *
+   * The context itself now lives inside FullTable, one per full table, so the
+   * Active and Pre-Design tables each drag their own rows. What stays here is
+   * what a drop MEANS, because only the board can write a patch.
    */
-  const [dragId, setDragId] = useState<string | null>(null);
-  const [dragType, setDragType] = useState<'row' | 'column' | null>(null);
   const activeRef = useRef<BoardProject[]>([]);
   activeRef.current = active;
 
-  const sensors = useSensors(
-    // 8px, so a click on a status chip stays a click.
-    useSensor(RowPointerSensor, { activationConstraint: { distance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
+  /** One shared column order, moved from either table's header. */
+  const moveColumnTo = (dragged: string, onto: string) =>
+    setColumnOrder(moveColumn(resolvedOrder, dragged, onto));
 
-  const onDragStart = (e: DragStartEvent) => {
-    setDragId(String(e.active.id));
-    setDragType((e.active.data.current?.type as 'row' | 'column') ?? null);
-  };
+  /**
+   * A row dropped onto another, within ONE section's rows.
+   *
+   * `bandOf` is what the section ranks by — status in the Active table, the
+   * Pre-Design sub-status in that section (Aboud 2026-11-17: the two tables
+   * behave the same, each banding by the column that orders it). A row may
+   * only be reordered inside its own band; bandMove returns null for a
+   * cross-band drop and dnd-kit springs the row back, so say why or it reads
+   * as the drag having failed.
+   */
+  const rowMover =
+    (rowsRef: { current: BoardProject[] }, bandOf: (p: BoardProject) => string | null, bandName: string) =>
+    (draggedId: string, ontoId: string) => {
+      const rows = rowsRef.current;
+      const moved = rows.find((p) => p.id === draggedId);
+      const onto = rows.find((p) => p.id === ontoId);
+      if (moved && onto && bandOf(moved) !== bandOf(onto)) {
+        toast(`A row can only be reordered within its own ${bandName} while auto-sort is on.`);
+        return;
+      }
+      const position = bandMove(rows, draggedId, ontoId, bandOf);
+      if (position !== null && moved) applyPatch(moved, { position });
+    };
 
-  const onDragEnd = (e: DragEndEvent) => {
-    const type = e.active.data.current?.type;
-    setDragId(null);
-    setDragType(null);
-    if (!e.over || e.active.id === e.over.id) return;
-
-    if (type === 'column') {
-      setColumnOrder(moveColumn(resolvedOrder, String(e.active.id), String(e.over.id)));
-      return;
-    }
-
-    const rows = activeRef.current;
-    const moved = rows.find((p) => p.id === e.active.id);
-    const onto = rows.find((p) => p.id === e.over!.id);
-    // Auto-sort ranks by status, so a row may only be reordered inside its own
-    // band. bandMove returns null for a cross-band drop and dnd-kit springs
-    // the row back — say why, or it reads as the drag having failed.
-    if (moved && onto && moved.statusId !== onto.statusId) {
-      toast('A row can only be reordered within its own status while auto-sort is on.');
-      return;
-    }
-    const position = bandMove(rows, String(e.active.id), String(e.over.id));
-    if (position !== null && moved) applyPatch(moved, { position });
-  };
+  const moveActiveRow = rowMover(activeRef, (p) => p.statusId, 'status');
 
   /**
    * Ctrl/Cmd-click toggles a row into the selection; Shift-click takes
@@ -2233,20 +2445,6 @@ export default function BoardTab({
 
   // The main table's own width variables. The three sections compute theirs in
   // SectionCard (sizeVarsFor) — they no longer share a header set.
-  const sizingState = table.getState().columnSizing;
-  const visibilityState = table.getState().columnVisibility;
-  const columnSizeVars = useMemo(
-    () => sizeVarsFor(table),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [sizingState, visibilityState, columns],
-  );
-
-  const isResizing = Boolean(table.getState().columnSizingInfo.isResizingColumn);
-  /** The row the overlay renders, found once rather than per cell. */
-  const overlayRow = dragType === 'row' && dragId
-    ? table.getRowModel().rows.find((r) => r.original.id === dragId)
-    : undefined;
-
   const toggleGroup = (key: string) => setCollapsed((c) => ({ ...c, [key]: !c[key] }));
 
   // Grouping rearranges the rows, so a manual drag would land somewhere the
@@ -2260,8 +2458,9 @@ export default function BoardTab({
   // the status rank still decides the bands, and a drag reorders within one.
   // Grouping still does, because it rearranges the rows underneath the drop.
   const canReorder = groupBy === 'none';
-  const mainBodyProps = {
-    table,
+  /** What BodyInner needs, minus the table — each FullTable adds its own, so
+   * the Active and Pre-Design bodies cannot drift apart. */
+  const bodyProps = {
     highlightId,
     sortableRows: canReorder,
     onRowClickCapture,
@@ -2559,107 +2758,20 @@ export default function BoardTab({
 
         {(activeOpen || searching) && (
         <>
-        {/* ONE context for rows and columns; each sortable says which it is.
-            The axis modifier is picked from what is actually moving, so a row
-            cannot drift sideways and a header cannot drift down. */}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          modifiers={[dragType === 'column' ? restrictToHorizontalAxis : restrictToVerticalAxis]}
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
-          onDragCancel={() => {
-            setDragId(null);
-            setDragType(null);
-          }}
-        >
-        <div className="board-scroll">
-          <table
-            className={`board-table board-table-main ${dragId ? 'board-reordering' : ''}`}
-            style={{ ...columnSizeVars, width: table.getTotalSize() }}
-          >
-            <SortableContext
-              items={resolvedOrder.filter((c) => !PINNED_COLUMNS.includes(c))}
-              strategy={horizontalListSortingStrategy}
-            >
-            <thead>
-              {table.getHeaderGroups().map((hg) => (
-                <tr key={hg.id}>
-                  {hg.headers.map((header) => {
-                    const colId = header.column.id;
-                    const movable = !PINNED_COLUMNS.includes(colId);
-                    const picked = columnFilters[colId] ?? [];
-                    const thClass = [
-                      colId === 'name' ? 'board-sticky' : '',
-                      movable ? 'board-th-movable' : '',
-                      dragType === 'column' && dragId !== colId && movable ? 'board-th-droppable' : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ');
-                    const thStyle = { width: `calc(var(--header-${header.id}-size) * 1px)` };
-                    // Reorder by dragging the header onto another one (Aboud
-                    // 2026-10-18). `select` and the sticky `name` never move,
-                    // so they stay plain <th> and are not sortable items.
-                    const Cell = movable ? SortableHeader : 'th';
-                    return (
-                      <Cell key={header.id} id={colId} className={thClass} style={thStyle}>
-                        {/* The select column holds a checkbox — it must not be
-                            wrapped in the sort button (invalid, and every click
-                            would sort instead of select). */}
-                        {colId === 'select' ? (
-                          <span className="board-th-plain">
-                            {flexRender(header.column.columnDef.header, header.getContext())}
-                          </span>
-                        ) : (
-                          <>
-                            <button
-                              type="button"
-                              className="board-th"
-                              onClick={header.column.getToggleSortingHandler()}
-                              title={movable ? 'Sort · drag the header to move this column' : 'Sort'}
-                            >
-                              {flexRender(header.column.columnDef.header, header.getContext())}
-                              <SortArrow dir={header.column.getIsSorted()} />
-                            </button>
-                            {!UNFILTERABLE_COLUMNS.includes(colId) && (
-                              <ColumnFilter
-                                columnId={colId}
-                                label={String(header.column.columnDef.header ?? colId)}
-                                values={distinctColumnValues(valuePool, colId, columnCtx)}
-                                selected={picked}
-                                open={filterMenu === colId}
-                                onOpenChange={(v) => setFilterMenu(v ? colId : null)}
-                                onChange={(vals) =>
-                                  setColumnFilters((f) => ({ ...f, [colId]: vals }))
-                                }
-                              />
-                            )}
-                            <div
-                              className={`board-resizer ${header.column.getIsResizing() ? 'resizing' : ''}`}
-                              onMouseDown={header.getResizeHandler()}
-                              onTouchStart={header.getResizeHandler()}
-                              onDoubleClick={() => header.column.resetSize()}
-                              title="Drag to resize · double-click to reset"
-                            />
-                          </>
-                        )}
-                      </Cell>
-                    );
-                  })}
-                </tr>
-              ))}
-            </thead>
-            </SortableContext>
-            <SortableContext items={active.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-              {isResizing ? (
-                <MemoBody {...mainBodyProps} />
-              ) : (
-                <BodyInner {...mainBodyProps} />
-              )}
-            </SortableContext>
-          </table>
-
-          {active.length === 0 && (
+        <FullTable
+          table={table}
+          rows={active}
+          tableClassName="board-table-main"
+          onRowMove={moveActiveRow}
+          onColumnMove={moveColumnTo}
+          columnFilters={columnFilters}
+          onColumnFilterChange={(colId, vals) => setColumnFilters((f) => ({ ...f, [colId]: vals }))}
+          filterMenu={filterMenu}
+          onFilterMenuChange={setFilterMenu}
+          valuePool={valuePool}
+          columnCtx={columnCtx}
+          body={bodyProps}
+          empty={
             <p className="muted board-empty">
               {activeTotal === 0 && completed.length === 0 && outOfScope.length === 0
                 ? 'No projects yet — add the first one below.'
@@ -2674,33 +2786,8 @@ export default function BoardTab({
                       `No active projects match — but ${matchesBelow(outOfScope.length, completed.length)}, shown below.`
                     : 'Nothing matches the filters.'}
             </p>
-          )}
-        </div>
-
-        {/* The thing that makes a row feel held: a real copy of it, lifted off
-            the page and following the cursor, rather than the original turning
-            a different colour in place. Wrapped in its own <table> so the
-            width variables and the cell layout still apply. */}
-        <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(0.18, 0.67, 0.6, 1.22)' }}>
-          {dragId && dragType === 'row' && overlayRow ? (
-            <table className="board-table board-drag-ghost" style={{ ...columnSizeVars, width: table.getTotalSize() }}>
-              <tbody>
-                <tr>
-                  {overlayRow.getVisibleCells().map((cell) => (
-                    <td key={cell.id} style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          ) : dragId && dragType === 'column' ? (
-            <div className="board-drag-ghost board-col-ghost">
-              {String(table.getColumn(dragId)?.columnDef.header ?? dragId)}
-            </div>
-          ) : null}
-        </DragOverlay>
-        </DndContext>
+          }
+        />
 
         <div className="board-add">
           <span className="board-avatar add">+</span>

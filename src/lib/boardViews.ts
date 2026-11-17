@@ -373,6 +373,18 @@ export function statusBand(rows: BoardProject[], statusId: string | null): Board
 }
 
 /**
+ * What a row is ranked by — its status, by default.
+ *
+ * The Pre-Design section passes the sub-status instead (Aboud 2026-11-17):
+ * every row in that section shares one status, so banding by status there
+ * would be one undifferentiated band, and the sub-status is what actually
+ * orders the table.
+ */
+export type BandOf = (p: BoardProject) => string | null;
+
+const BY_STATUS: BandOf = (p) => p.statusId;
+
+/**
  * The new `position` for a row dragged onto another row, or null when the move
  * is not allowed.
  *
@@ -385,13 +397,22 @@ export function statusBand(rows: BoardProject[], statusId: string | null): Board
  * The midpoint is computed against the BAND, not the whole table. Measuring
  * against the full list would put the row between neighbours from other
  * status groups, whose positions say nothing about this one.
+ *
+ * `bandOf` says what a band IS — the status by default, the Pre-Design
+ * sub-status for that section (2026-11-17). Everything above holds either
+ * way: whatever ranks the table is what a drag may not cross.
  */
-export function bandMove(rows: BoardProject[], activeId: string, overId: string): number | null {
+export function bandMove(
+  rows: BoardProject[],
+  activeId: string,
+  overId: string,
+  bandOf: BandOf = BY_STATUS,
+): number | null {
   const from = rows.find((p) => p.id === activeId);
   const to = rows.find((p) => p.id === overId);
   if (!from || !to || from.id === to.id) return null;
-  if (from.statusId !== to.statusId) return null;
-  const band = statusBand(rows, from.statusId);
+  if (bandOf(from) !== bandOf(to)) return null;
+  const band = rows.filter((p) => bandOf(p) === bandOf(from));
   const oldIndex = band.indexOf(from);
   const newIndex = band.indexOf(to);
   // positionForMove takes an INSERT-BEFORE index ("the drop line sits here"),
