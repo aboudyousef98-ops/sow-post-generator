@@ -8,8 +8,10 @@ import {
   buildSvtPostHtml,
   buildSvtPostText,
   buildSvtSfText,
+  BATTERY_WIDTH,
   HO_UNKNOWN_LINE,
   STACK_KWH,
+  wallNeeded,
 } from './svtPost';
 
 // The pre-design fields mined from #sow-svt-collab (Aboud 2026-11-17).
@@ -121,6 +123,61 @@ describe('site conditions', () => {
 
   it('the kWh mapping is the one the team published', () => {
     expect(STACK_KWH).toEqual({ 1: 20, 2: 40, 3: 60 });
+  });
+});
+
+describe('wall fit', () => {
+  // Body width is measured exactly (23.57"). The gap is ROUNDED UP from the
+  // drawn 3.76"/3.97" to a flat 4", so the answer is deliberately ~0.3"
+  // conservative against the template's own 50.9" and 78.44" runs — erring
+  // toward "needs more wall" is the safe direction for a fit check.
+  it('stays within a third of an inch of the runs the drawing contains', () => {
+    expect(Math.round(wallNeeded(2) * 100) / 100).toBe(51.14);
+    expect(Math.round(wallNeeded(3) * 100) / 100).toBe(78.71);
+    expect(wallNeeded(1)).toBe(BATTERY_WIDTH);
+    // Conservative, never optimistic, against what the template draws.
+    expect(wallNeeded(2)).toBeGreaterThan(50.9);
+    expect(wallNeeded(2) - 50.9).toBeLessThan(0.33);
+    expect(wallNeeded(3)).toBeGreaterThan(78.44);
+    expect(wallNeeded(3) - 78.44).toBeLessThan(0.33);
+  });
+
+  it('a run that fits says how much is spare', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { batteryStacks: 3, wallAvailable: 96 } }));
+    expect(text).toContain(
+      '*Wall Fit:* 3 stacks need 78.7" of wall (23.6" each, 4" gaps); 96" available — fits, with 17.3" to spare.',
+    );
+  });
+
+  it('a run that does not fit says how short it is', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { batteryStacks: 3, wallAvailable: 72 } }));
+    expect(text).toContain('only 72" available — short by 6.7".');
+  });
+
+  it('exactly enough wall counts as a fit', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { batteryStacks: 2, wallAvailable: 51.14 } }));
+    expect(text).toContain('fits, with 0" to spare.');
+  });
+
+  it('one stack has no gaps to mention', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { batteryStacks: 1, wallAvailable: 40 } }));
+    expect(text).toContain('1 stack need 23.6" of wall (23.6" each);');
+    expect(text).not.toContain('gaps');
+  });
+
+  it('a stack count with no measured wall prints nothing', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { batteryStacks: 3 } }))).not.toContain('Wall Fit');
+  });
+
+  it('a measured wall with no stack count prints nothing', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { wallAvailable: 96 } }))).not.toContain('Wall Fit');
+  });
+
+  it('prints before Clearance — width decides the wall, clearance the standing room', () => {
+    const text = buildSvtPostText(
+      svtRecord({ svt: { batteryStacks: 2, wallAvailable: 96, clearanceAllMet: true } }),
+    );
+    expect(text.indexOf('Wall Fit')).toBeLessThan(text.indexOf('Clearance'));
   });
 
   it('"no" is a finding, not a blank', () => {

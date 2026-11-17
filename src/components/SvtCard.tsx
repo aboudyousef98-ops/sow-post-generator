@@ -28,6 +28,7 @@ import {
   NOT_REVIEWED,
   STACK_KWH,
   SVT_PATHS,
+  wallNeeded,
 } from '../lib/svtPost';
 import { useEffect, useState } from 'react';
 import type {
@@ -257,6 +258,16 @@ export default function SvtCard({
     return { left, required, ok: left >= required };
   })();
 
+  // The live wall-fit verdict, mirroring wallFitLines() in svtPost.ts —
+  // same rounding, and equal counts as a fit.
+  const wallFit = (() => {
+    const { batteryStacks: stacks, wallAvailable: avail } = s;
+    if (stacks === undefined || avail === undefined) return undefined;
+    const need = Math.round(wallNeeded(stacks) * 10) / 10;
+    const spare = Math.round((avail - need) * 10) / 10;
+    return { stacks, need, spare, short: Math.round(-spare * 10) / 10, ok: spare >= 0 };
+  })();
+
   const removeAlt = (slot: 1 | 2) => {
     if (slot === 1) setSvt({ alt1Location: undefined, alt1Reason: undefined });
     else setSvt({ alt2Location: undefined, alt2Reason: undefined });
@@ -446,7 +457,28 @@ export default function SvtCard({
           </select>
           <span className="field-hint">Read it off the scope of the project — the kWh is written into the post too</span>
         </label>
+        {/* Only asked once there is a stack count to measure against. */}
+        {s.batteryStacks !== undefined && (
+          <label className="field">
+            Wall space for the batteries (in)
+            <input
+              type="number"
+              step="0.1"
+              inputMode="decimal"
+              value={s.wallAvailable ?? ''}
+              placeholder="96"
+              onChange={(e) => setSvt({ wallAvailable: numParse(e.target.value) })}
+            />
+          </label>
+        )}
       </div>
+      {wallFit && (
+        <div className={`svt-verdict ${wallFit.ok ? 'ok' : 'bad'}`}>
+          {wallFit.ok ? '✓' : '✗'} {wallFit.stacks} stack{wallFit.stacks === 1 ? '' : 's'} need{' '}
+          {wallFit.need}&quot; —{' '}
+          {wallFit.ok ? `${wallFit.spare}" to spare` : `short by ${wallFit.short}"`}
+        </div>
+      )}
 
       <div className="install-subhead">Clearance check</div>
       <div className="install-row">

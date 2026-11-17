@@ -105,6 +105,7 @@ export function hasContent(r: PostRecord): boolean {
     (s?.notReviewed?.length ?? 0) > 0 ||
     s?.hoa !== undefined ||
     s?.batteryStacks !== undefined ||
+    s?.wallAvailable !== undefined ||
     s?.costDirection !== undefined ||
     (s?.costDrivers?.length ?? 0) > 0 ||
     (s?.hoActions?.length ?? 0) > 0 ||

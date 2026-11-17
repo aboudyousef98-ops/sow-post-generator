@@ -368,6 +368,13 @@ export interface SvtNotes {
    * STACK_KWH in svtPost.ts holds the mapping and prints both numbers.
    */
   batteryStacks?: 1 | 2 | 3;
+  /**
+   * Wall space available for the battery run, in inches. The one number
+   * measured on site — the stack widths and gaps come from the elevation
+   * template (see `_STUDY_equipment_widths_dxf.md`), so one dropdown pick
+   * plus this answers "do three stacks fit on that wall?".
+   */
+  wallAvailable?: number;
 
   // ---- Cost impact (Aboud 2026-11-17) -----------------------------------
   // Named in all three notes ("will add cost, mainly for the long run of SER

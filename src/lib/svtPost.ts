@@ -123,6 +123,47 @@ export const stackLine = (stacks: 1 | 2 | 3) =>
   `Sold with ${stacks} battery ${stacks === 1 ? 'stack' : 'stacks'} (${STACK_KWH[stacks]} kWh).`;
 
 /**
+ * Duracell battery body width, inches — measured from `BOS_DURACELL_BATTERY`
+ * in the elevation template (`_STUDY_equipment_widths_dxf.md`, 2026-11-17).
+ */
+export const BATTERY_WIDTH = 23.57;
+
+/**
+ * Clear gap between adjacent stacks, inches. Measured across 53 real inserts:
+ * 27.33" and 27.54" centre-to-centre on a 23.57" body, i.e. 3.76"/3.97".
+ *
+ * NOT confirmed to be a manufacturer or fire-code minimum — it is what the
+ * template draws. Open question 5 in the study; if it turns out to be a code
+ * figure that varies, this becomes an input like the clearance requirement.
+ */
+export const BATTERY_GAP = 4;
+
+/** Wall inches a run of N stacks needs, bodies plus the gaps between them. */
+export const wallNeeded = (stacks: 1 | 2 | 3) => stacks * BATTERY_WIDTH + (stacks - 1) * BATTERY_GAP;
+
+/**
+ * The Wall Fit line. Only printed when BOTH the stack count and the measured
+ * wall are present — a need with nothing to compare it to says nothing.
+ * Equal counts as a fit, same rule as the clearance check.
+ */
+function wallFitLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  const stacks = s.batteryStacks;
+  const avail = s.wallAvailable;
+  if (stacks === undefined || avail === undefined) return [];
+  const need = wallNeeded(stacks);
+  const spare = avail - need;
+  const head = `${stacks} stack${stacks === 1 ? '' : 's'} need ${inches(need)}" of wall (${inches(BATTERY_WIDTH)}" each${
+    stacks > 1 ? `, ${inches(BATTERY_GAP)}" gaps` : ''
+  })`;
+  return [
+    spare >= 0
+      ? `${head}; ${inches(avail)}" available — fits, with ${inches(spare)}" to spare.`
+      : `${head}; only ${inches(avail)}" available — short by ${inches(-spare)}".`,
+  ];
+}
+
+/**
  * The closing sentences. "they/them" for the homeowner on purpose: the form
  * cannot know a customer's pronouns, and this text is pasted into Salesforce.
  */
@@ -350,6 +391,9 @@ export function buildSvtLines(record: PostRecord): PostItem[] {
     // ("detached buildings, so the garage would need an attic run and a
     // trench"), and clearance follows as the verdict on the chosen wall.
     { label: 'Site Conditions', values: siteConditionLines(record) },
+    // Wall fit before clearance: width decides whether the run goes on that
+    // wall at all, clearance decides whether you can stand in front of it.
+    { label: 'Wall Fit', values: wallFitLines(record) },
     { label: 'Clearance', values: clearanceLines(record) },
     {
       label: 'Installation Notes',
