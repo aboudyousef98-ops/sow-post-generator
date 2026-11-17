@@ -18,7 +18,8 @@ import {
   listImportBatches,
   undoImportBatch,
 } from '../lib/requirementsImport';
-import type { Ahj, AhjPost, Settings } from '../types';
+import { downloadRequirementsCsv, downloadRequirementsXlsx, matchReport } from '../lib/requirementsExport';
+import type { Ahj, AhjPost, PostRecord, Settings } from '../types';
 import type { Toast } from './Toast';
 import FormatToolbar, { continueList, formatHotkey } from './FormatToolbar';
 import RequirementsImportModal from './RequirementsImportModal';
@@ -57,6 +58,13 @@ interface Props {
    */
   allAhjs?: Ahj[];
   setAllAhjs?: (a: Ahj[]) => void;
+  /**
+   * Compose drafts, for the match report. Jurisdiction and utility live on a
+   * RECORD, not on a board project, so this is the only place that can answer
+   * "which jobs have a jurisdiction no board matches". Optional — without it
+   * the Match report button simply is not offered.
+   */
+  records?: PostRecord[];
 }
 
 const fmt = (iso: string) =>
@@ -91,14 +99,19 @@ export default function AhjTab({
   subtitle = 'Compose shows a board automatically when the Jurisdiction matches',
   allAhjs,
   setAllAhjs,
+  records,
 }: Props) {
   const author = lockedAuthor ?? settings.lastAuthor ?? settings.authors[0] ?? '';
 
   const [importOpen, setImportOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [matchOpen, setMatchOpen] = useState(false);
   const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
   // The newest batch still present in the data. Derived, not stored — a batch
   // stops existing the moment its last post does.
   const lastBatch = allAhjs ? listImportBatches(allAhjs)[0] : undefined;
+  const report = records && allAhjs ? matchReport(records, allAhjs) : null;
+  const matchGapCount = report?.gaps.length ?? 0;
 
   const [globalQuery, setGlobalQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -408,6 +421,20 @@ export default function AhjTab({
                 Undo last import
               </button>
             )}
+            {records && (
+              <button
+                type="button"
+                className="btn secondary"
+                title="Jurisdictions and utilities in the drafts that no board matches"
+                onClick={() => setMatchOpen(true)}
+              >
+                Match report
+                {matchGapCount > 0 && <span className="rule-badge to-confirm" style={{ marginInlineStart: 6 }}>{matchGapCount}</span>}
+              </button>
+            )}
+            <button type="button" className="btn secondary" onClick={() => setExportOpen(true)}>
+              Export rules
+            </button>
             <button type="button" className="btn secondary" onClick={() => setImportOpen(true)}>
               Bulk import
             </button>
@@ -943,6 +970,79 @@ export default function AhjTab({
             toast(`Imported ${n} rule${n === 1 ? '' : 's'} across ${plan.entries.length} entr${plan.entries.length === 1 ? 'y' : 'ies'}.`);
           }}
         />
+      )}
+
+      {exportOpen && allAhjs && (
+        <div className="modal-overlay" onClick={() => setExportOpen(false)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Export rules</h3>
+            <p className="muted">
+              Every board of every kind, in the same columns Bulk import reads — so you can edit it in Excel and
+              import it straight back.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setExportOpen(false)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => { downloadRequirementsCsv(allAhjs); setExportOpen(false); }}
+              >
+                Download .csv
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => { void downloadRequirementsXlsx(allAhjs); setExportOpen(false); }}
+              >
+                Download .xlsx
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {matchOpen && report && (
+        <div className="modal-overlay" onClick={() => setMatchOpen(false)}>
+          <div className="modal board-import" onClick={(e) => e.stopPropagation()}>
+            <h3>Match report</h3>
+            <p className="muted">
+              Checked <b>{report.checked}</b> draft{report.checked === 1 ? '' : 's'}. These values have no board, so
+              those jobs get no requirements at all in Compose. An alias counts as a match — only real gaps are listed.
+            </p>
+            {report.gaps.length === 0 ? (
+              <p className="muted">Every jurisdiction and utility in the drafts matches a board.</p>
+            ) : (
+              <ul className="sf-submit-list">
+                {report.gaps.map((g) => (
+                  <li key={`${g.kind}:${g.value}`}>
+                    <b>{g.value}</b> <span className="muted">({g.kind === 'ahj' ? 'jurisdiction' : 'utility'})</span> —{' '}
+                    {g.count} draft{g.count === 1 ? '' : 's'}
+                    {g.customers.length > 0 && (
+                      <span className="muted">
+                        {' '}
+                        · {g.customers.slice(0, 4).join(', ')}
+                        {g.customers.length > 4 ? ` +${g.customers.length - 4}` : ''}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {report.blank.length > 0 && (
+              <p className="muted" style={{ fontSize: 12 }}>
+                Not counted as gaps:{' '}
+                {report.blank.map((b) => `${b.count} with no ${b.kind === 'ahj' ? 'jurisdiction' : 'utility'}`).join(' · ')}.
+              </p>
+            )}
+            <div className="modal-actions">
+              <button type="button" className="btn primary" onClick={() => setMatchOpen(false)}>
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {confirmUndo && allAhjs && setAllAhjs && (

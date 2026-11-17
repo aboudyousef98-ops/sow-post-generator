@@ -1014,6 +1014,9 @@ export default function App({ session, onLogout, onSessionChange }: AppProps = {
             // the whole list — replaceKind would drop the other kinds' rows.
             allAhjs={ahjs}
             setAllAhjs={setAhjs}
+            // Jurisdiction and utility live on a RECORD, so the match report
+            // can only be answered from the drafts, not from the board.
+            records={records}
             selectedId={ahjSelectedId}
             onSelect={setAhjSelectedId}
             settings={settings}
