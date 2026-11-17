@@ -273,6 +273,21 @@ export interface AutomationRule {
     coordinator?: string;
     phaseId?: string;
   };
+  /**
+   * Actors this rule ignores — roster names, matched exactly.
+   *
+   * Added 2026-11-17: `sow_bot` adding a project fired the "make whoever
+   * added it the SOW coordinator" rule, so every bot-added row came back
+   * assigned to the bot, and setting it to Unassigned by hand was undone the
+   * next time the bot touched the row. Suppressing the rule for the bot is
+   * the fix; chasing the un-persisting value was chasing the symptom.
+   *
+   * Per-rule rather than one global "bots never fire automations" switch, so
+   * a future rule can still deliberately fire on a bot's changes. Absent on
+   * every rule written before this date, and an empty list means the same as
+   * absent — the rule fires for everyone.
+   */
+  exceptActors?: string[];
   action: {
     kind: ActionKind;
     statusId?: string;

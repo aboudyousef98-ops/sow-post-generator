@@ -1795,3 +1795,57 @@ describe('Pre-Design is a full table, like Active Projects', () => {
     expect(within(card()).queryByText('Rating')).toBeNull();
   });
 });
+
+// Aboud 2026-11-17: "Archived projects still show in the Pre-Design section —
+// hide archived rows there like in Active Projects." The live board has
+// exactly one such row ("TEST - Grok CLR Request", archived 2026-11-17 with
+// status-predesign), so this pins the behaviour against a real case.
+describe('Pre-Design hides archived rows, like Active Projects', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const withArchivedPredesign = (): BoardState => {
+    const b = emptyBoard();
+    b.projects = [
+      { ...boardProject('Live Analysis', 'p-live'), statusId: 'status-predesign', position: 200 },
+      {
+        ...boardProject('TEST - Grok CLR Request', 'p-arch'),
+        statusId: 'status-predesign',
+        position: 100,
+        archivedAt: '2026-11-17T00:00:00.000Z',
+      },
+      { ...boardProject('Archived Active', 'p-arch-act'), statusId: 'status-working', position: 300,
+        archivedAt: '2026-11-17T00:00:00.000Z' },
+    ];
+    return b;
+  };
+
+  const pdCard = () => document.querySelector('.board-predesign') as HTMLElement;
+
+  it('an archived Pre-Design row is not in the section', () => {
+    render(<Harness initial={withArchivedPredesign()} />);
+    expect(within(pdCard()).queryByText('TEST - Grok CLR Request')).toBeNull();
+    expect(within(pdCard()).getByText('Live Analysis')).toBeTruthy();
+  });
+
+  it('it is hidden from the whole board, exactly as an archived active row is', () => {
+    render(<Harness initial={withArchivedPredesign()} />);
+    expect(screen.queryByText('TEST - Grok CLR Request')).toBeNull();
+    expect(screen.queryByText('Archived Active')).toBeNull();
+  });
+
+  it('turning Show archived ON brings BOTH back — the filter is one rule, not per-section', () => {
+    render(<Harness initial={withArchivedPredesign()} />);
+    fireEvent.click(screen.getByText('Show archived'));
+    expect(within(pdCard()).getByText('TEST - Grok CLR Request')).toBeTruthy();
+    expect(screen.getByText('Archived Active')).toBeTruthy();
+  });
+});

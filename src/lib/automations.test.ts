@@ -335,3 +335,65 @@ describe('the behaviours the board already had', () => {
     expect(rules.find((r) => r.id === 'aging')!.knob).toBeUndefined();
   });
 });
+
+// Actor exclusions (Aboud 2026-11-17).
+//
+// sow_bot adding a project fired "make whoever added it the SOW coordinator",
+// so every bot-added row came back assigned to the bot — and setting it to
+// Unassigned by hand was undone the next time the bot touched the row. The
+// exclusion is the fix; chasing the un-persisting value was chasing a symptom.
+describe('a rule can ignore specific actors', () => {
+  const assignAdder = (except?: string[]): AutomationRule => ({
+    id: 'r1',
+    enabled: true,
+    trigger: { kind: 'project-created' },
+    action: { kind: 'set-coordinator', person: ACTOR },
+    ...(except ? { exceptActors: except } : {}),
+    createdAt: T0, createdBy: 'A', updatedAt: T0, updatedBy: 'A',
+  });
+
+  it('fires for everyone when no exclusion is set', () => {
+    expect(matchingRules([assignAdder()], null, {}, 'SOW Bot - Aboud')).toHaveLength(1);
+    expect(matchingRules([assignAdder()], null, {}, 'Aboud Yousef')).toHaveLength(1);
+  });
+
+  it('does NOT fire for an excluded actor', () => {
+    expect(matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {}, 'SOW Bot - Aboud')).toHaveLength(0);
+  });
+
+  it('still fires for everyone else', () => {
+    expect(matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {}, 'Aboud Yousef')).toHaveLength(1);
+  });
+
+  it('an EMPTY list means the same as no list', () => {
+    expect(matchingRules([assignAdder([])], null, {}, 'SOW Bot - Aboud')).toHaveLength(1);
+  });
+
+  it('omitting the actor keeps the old behaviour exactly', () => {
+    // Every call site that predates this passes no actor; such a call must
+    // behave as it always did rather than silently suppressing a rule.
+    expect(matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {})).toHaveLength(1);
+  });
+
+  it('matches the roster name exactly — no partial or case-folded match', () => {
+    expect(matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {}, 'SOW Bot')).toHaveLength(1);
+    expect(matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {}, 'sow bot - aboud')).toHaveLength(1);
+  });
+
+  it('the bot therefore leaves the coordinator alone', () => {
+    const matched = matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {}, 'SOW Bot - Aboud');
+    expect(followUpPatch(matched, 'SOW Bot - Aboud')).toEqual({});
+  });
+
+  it('…while a human adding a project still gets assigned', () => {
+    const matched = matchingRules([assignAdder(['SOW Bot - Aboud'])], null, {}, 'Aboud Yousef');
+    expect(followUpPatch(matched, 'Aboud Yousef')).toEqual({ coordinator: 'Aboud Yousef' });
+  });
+
+  it('the description says so, and says nothing when there is no exclusion', () => {
+    expect(describeRule(assignAdder(['SOW Bot - Aboud']), [])).toContain(
+      'Except when the change is made by SOW Bot - Aboud.',
+    );
+    expect(describeRule(assignAdder(), [])).not.toContain('Except');
+  });
+});

@@ -177,6 +177,40 @@ function RuleBuilder({
         </select>
       </div>
 
+      {/* Actor exclusions (Aboud 2026-11-17). sow_bot adding a project fired
+          the "make whoever added it the coordinator" rule, so bot-added rows
+          kept reassigning themselves to the bot. Per-rule, so a future rule
+          can still fire on a bot's changes on purpose. */}
+      <div className="board-auto-line">
+        <span className="board-auto-kw">Except when done by</span>
+        <div className="service-ticks">
+          {roster.map((n) => {
+            const on = (draft.exceptActors ?? []).includes(n);
+            return (
+              <label key={n} className={`service-tick${on ? ' on' : ''}`}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={() => {
+                    const cur = draft.exceptActors ?? [];
+                    const next = on ? cur.filter((x) => x !== n) : [...cur, n];
+                    // Empty stores undefined, so a rule that excludes nobody
+                    // looks exactly like one written before this existed.
+                    onChange({ ...draft, exceptActors: next.length ? next : undefined });
+                  }}
+                />
+                {n}
+              </label>
+            );
+          })}
+        </div>
+      </div>
+      {(draft.exceptActors ?? []).length > 0 && (
+        <p className="field-hint" style={{ maxWidth: 'none' }}>
+          This rule will not fire when one of these people makes the change.
+        </p>
+      )}
+
       <div className="board-auto-line">
         <span className="board-auto-kw">Then</span>
         <select

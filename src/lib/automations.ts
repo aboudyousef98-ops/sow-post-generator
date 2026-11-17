@@ -113,18 +113,39 @@ function conditionHolds(rule: AutomationRule, before: BoardProject | null, patch
 }
 
 /**
+ * Does this rule ignore the person making the change?
+ *
+ * Exact match on the roster name. Absent or empty means "fires for everyone",
+ * which is how every rule written before 2026-11-17 behaves.
+ */
+export function actorExcluded(rule: AutomationRule, actor: string | undefined): boolean {
+  const except = rule.exceptActors;
+  if (!except?.length || !actor) return false;
+  return except.includes(actor);
+}
+
+/**
  * Which rules this change fires. `before === null` means a brand-new project.
  *
  * Callers pass the patch the USER asked for, never a follow-up this function
  * produced — see followUpPatch for why there is no cascade.
+ *
+ * `actor` is who is making the change. It is OPTIONAL so older call sites keep
+ * compiling, and omitting it means "no actor to exclude" — i.e. the previous
+ * behaviour exactly. Pass it wherever a rule might name an excluded actor.
  */
 export function matchingRules(
   rules: AutomationRule[] | undefined,
   before: BoardProject | null,
   patch: ProjectPatch,
+  actor?: string,
 ): AutomationRule[] {
   return enabledRules(rules).filter(
-    (r) => ruleIsComplete(r) && triggerFires(r, before, patch) && conditionHolds(r, before, patch),
+    (r) =>
+      ruleIsComplete(r) &&
+      !actorExcluded(r, actor) &&
+      triggerFires(r, before, patch) &&
+      conditionHolds(r, before, patch),
   );
 }
 
@@ -225,7 +246,17 @@ export function describeRule(rule: AutomationRule, labels: BoardLabel[]): string
       then = `post the update “${a.text?.trim() || '…'}”`;
       break;
   }
-  return `When ${when}${iff} → ${then}.`;
+  // The exclusion reads last, as the exception it is — a rule that fires for
+  // everyone says nothing extra, which keeps every existing description
+  // byte-identical.
+  const except = rule.exceptActors?.length ? ` Except when the change is made by ${listWords(rule.exceptActors)}.` : '';
+  return `When ${when}${iff} → ${then}.${except}`;
+}
+
+/** "Omar", "Omar or the bot", "A, B or C" — an exclusion list in prose. */
+function listWords(names: string[]): string {
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(', ')} or ${names[names.length - 1]}`;
 }
 
 // ---- the behaviours the board already had -----------------------------------

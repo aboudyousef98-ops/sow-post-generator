@@ -1264,7 +1264,7 @@ export default function BoardTab({
    */
   const applyWithAutomations = (project: BoardProject, patch: ProjectPatch) => {
     if (refuseIfBlocked(patch)) return;
-    const matched = matchingRules(boardRef.current.automations, project, patch);
+    const matched = matchingRules(boardRef.current.automations, project, patch, me);
     if (matched.length === 0) {
       applyPatch(project, patch);
       return;
@@ -1301,7 +1301,7 @@ export default function BoardTab({
   const guardedPatch = (project: BoardProject, patch: ProjectPatch): boolean => {
     // A team-written "require an update first" rule gates exactly like the
     // built-in ones, so all three are collected before anything is written.
-    const matched = matchingRules(boardRef.current.automations, project, patch);
+    const matched = matchingRules(boardRef.current.automations, project, patch, me);
     const customGates = gatingRules(matched);
 
     if ('rating' in patch && needsRatingReason(patch.rating as number | null)) {
@@ -1724,7 +1724,7 @@ export default function BoardTab({
     // `before` is what marks this as a creation rather than an edit, and the
     // follow-ups are folded into the row before it is ever written, so a new
     // project is born already correct instead of flickering.
-    const matched = matchingRules(cur.automations, null, base);
+    const matched = matchingRules(cur.automations, null, base, me);
     const project = { ...base, ...followUpPatch(matched, me) };
     const posts = autoUpdates(matched, project.id, me);
     let updates = cur.updates ?? [];
