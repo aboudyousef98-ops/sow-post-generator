@@ -107,6 +107,19 @@ export default function SvtCard({
 
   const setSvt = (patch: Partial<SvtNotes>) => update((r) => ({ ...r, svt: { ...r.svt, ...patch } }));
 
+  /**
+   * One tick chip. Every tick group in this card renders through here so the
+   * `on` class can never be forgotten on one of them — that class is what
+   * fills the pill (see `.service-tick` in theme.css), and a group missing it
+   * would look permanently unchecked.
+   */
+  const tick = (key: string, label: string, checked: boolean, onChange: () => void) => (
+    <label key={key} className={`service-tick${checked ? ' on' : ''}`}>
+      <input type="checkbox" checked={checked} onChange={onChange} />
+      {label}
+    </label>
+  );
+
   /** Editing a box invalidates that box's stale polished version and guard hints. */
   const setInstallText = (field: InstallTextField, key: PolishKey, value: string) => {
     onClearDropped(key);
@@ -311,16 +324,9 @@ export default function SvtCard({
         <div className="field">
           Tick all that apply
           <div className="service-ticks">
-            {SVT_PATHS.map((p) => (
-              <label key={p.field} className="service-tick">
-                <input
-                  type="checkbox"
-                  checked={s[p.field] ?? false}
-                  onChange={(e) => setSvt({ [p.field]: e.target.checked || undefined })}
-                />
-                {p.label}
-              </label>
-            ))}
+            {SVT_PATHS.map((p) =>
+              tick(p.field, p.label, s[p.field] ?? false, () => setSvt({ [p.field]: !s[p.field] || undefined })),
+            )}
           </div>
         </div>
       </div>
@@ -438,14 +444,9 @@ export default function SvtCard({
       <div className="install-row">
         <div className="field">
           <div className="service-ticks">
-            <label className="service-tick">
-              <input
-                type="checkbox"
-                checked={s.clearanceAllMet ?? false}
-                onChange={(e) => setSvt({ clearanceAllMet: e.target.checked || undefined })}
-              />
-              All required clearances met (no measurement quoted)
-            </label>
+            {tick('allMet', 'All required clearances met (no measurement quoted)', s.clearanceAllMet ?? false, () =>
+              setSvt({ clearanceAllMet: !s.clearanceAllMet || undefined }),
+            )}
           </div>
           {clearVerdict && !clearVerdict.ok && s.clearanceAllMet && (
             <span className="field-hint warn">
@@ -460,20 +461,13 @@ export default function SvtCard({
         <div className="field">
           Service equipment
           <div className="service-ticks">
-            {SERVICE_WORK.map((w) => (
-              <label key={w} className="service-tick">
-                <input
-                  type="checkbox"
-                  checked={servicesOf(n).includes(w)}
-                  onChange={() => {
-                    const cur = servicesOf(n);
-                    const next: ServiceWork[] = cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w];
-                    setNotes({ services: next, service: undefined });
-                  }}
-                />
-                {w}
-              </label>
-            ))}
+            {SERVICE_WORK.map((w) =>
+              tick(w, w, servicesOf(n).includes(w), () => {
+                const cur = servicesOf(n);
+                const next: ServiceWork[] = cur.includes(w) ? cur.filter((x) => x !== w) : [...cur, w];
+                setNotes({ services: next, service: undefined });
+              }),
+            )}
           </div>
         </div>
         <label className="field">
@@ -592,32 +586,35 @@ export default function SvtCard({
         </label>
       </div>
       {s.costDirection && s.costDirection !== 'neutral' && (
-        <div className="install-row">
-          <div className="field">
-            Why — tick all that apply
-            <div className="service-ticks">
-              {COST_DRIVERS.map((d) => (
-                <label key={d} className="service-tick">
-                  <input
-                    type="checkbox"
-                    checked={(s.costDrivers ?? []).includes(d)}
-                    onChange={() => setSvt({ costDrivers: toggleIn(s.costDrivers, d) })}
-                  />
-                  {d}
-                </label>
-              ))}
+        <>
+          {/* The chips get a row to themselves. Sharing one with a text box
+              squeezed eight of them into a strip too narrow to hold a
+              two-word label, which is what broke them in half. */}
+          <div className="install-row">
+            <div className="field tick-field">
+              Why — tick all that apply
+              <div className="service-ticks">
+                {COST_DRIVERS.map((d) =>
+                  tick(d, d, (s.costDrivers ?? []).includes(d), () =>
+                    setSvt({ costDrivers: toggleIn(s.costDrivers, d) }),
+                  ),
+                )}
+              </div>
             </div>
           </div>
-          <label className="field" style={{ flex: '1 1 240px' }}>
-            Another driver
-            <input
-              type="text"
-              value={s.costNotes ?? ''}
-              placeholder="e.g. second meter pedestal"
-              onChange={(e) => setSvt({ costNotes: e.target.value || undefined })}
-            />
-          </label>
-        </div>
+          <div className="install-row">
+            <label className="field" style={{ flex: '1 1 320px' }}>
+              Another driver
+              <input
+                type="text"
+                value={s.costNotes ?? ''}
+                placeholder="e.g. second meter pedestal"
+                onChange={(e) => setSvt({ costNotes: e.target.value || undefined })}
+              />
+              <span className="field-hint">Joins the list above in the sentence</span>
+            </label>
+          </div>
+        </>
       )}
 
       <div className="install-subhead">Special</div>
@@ -642,22 +639,17 @@ export default function SvtCard({
 
       <div className="install-subhead">Homeowner actions</div>
       <div className="install-row">
-        <div className="field">
+        <div className="field tick-field">
           What the homeowner needs to do before the crew arrives
           <div className="service-ticks">
-            {HO_ACTIONS.map((a) => (
-              <label key={a} className="service-tick">
-                <input
-                  type="checkbox"
-                  checked={(s.hoActions ?? []).includes(a)}
-                  onChange={() => setSvt({ hoActions: toggleIn(s.hoActions, a) })}
-                />
-                {a}
-              </label>
-            ))}
+            {HO_ACTIONS.map((a) =>
+              tick(a, a, (s.hoActions ?? []).includes(a), () => setSvt({ hoActions: toggleIn(s.hoActions, a) })),
+            )}
           </div>
         </div>
-        <label className="field" style={{ flex: '1 1 240px' }}>
+      </div>
+      <div className="install-row">
+        <label className="field" style={{ flex: '1 1 320px' }}>
           Something else
           <input
             type="text"
@@ -665,6 +657,7 @@ export default function SvtCard({
             placeholder="e.g. unlock the side gate"
             onChange={(e) => setSvt({ hoActionsOther: e.target.value || undefined })}
           />
+          <span className="field-hint">Joins the list above</span>
         </label>
       </div>
 

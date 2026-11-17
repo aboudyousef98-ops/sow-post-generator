@@ -1263,6 +1263,15 @@ table.list tr.row:hover {
   flex: 0 0 230px;
 }
 
+/* A field holding a tick group claims the whole row. `.install-row .field` is
+   `flex: 0 1 auto` with a 140px floor, which let an eight-chip group be
+   squeezed by whatever sat next to it until the labels broke in half
+   (2026-11-17). Chips need the full width to wrap between themselves. */
+.install-row .field.tick-field {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
 .install-row-even .field select {
   width: 100%;
 }
@@ -2234,19 +2243,72 @@ table.list tr.row:hover {
 }
 
 /* Installation Notes — service multi-ticks + meeting-2026-10-04 fields */
+/* Tick groups (service equipment, conduit path, cost drivers, homeowner
+   actions). Redesigned 2026-11-17 after the cost-driver row shipped with
+   eight chips on a row that could not wrap: every two-word label broke in
+   half ("long SER / run", "concrete / pad").
+
+   Two rules carry the fix:
+   1. the ROW wraps, the LABEL never does — a compact label that breaks onto
+      a second line reads as two chips (UX: Compact Label Overflow, High);
+   2. the whole pill is the hit area, so a target is >= 24x24 CSS px even
+      though the native box is ~13px (WCAG 2.2 AA Target Size, High). */
 .service-ticks {
   display: flex;
-  gap: 14px;
+  flex-wrap: wrap;
+  /* >= 8px between adjacent targets, both axes (UX: Touch Spacing). */
+  gap: 8px;
   align-items: center;
   min-height: 34px;
 }
 
 .service-tick {
-  display: flex;
-  gap: 6px;
+  display: inline-flex;
+  gap: 7px;
   align-items: center;
+  /* The label stays whole; the row above wraps between chips instead. */
+  white-space: nowrap;
+  min-height: 30px;
+  padding-block: 4px;
+  padding-inline: 10px 12px;
+  border: 1px solid var(--dyn-border);
+  border-radius: 999px;
+  background: var(--dyn-surface);
   font-weight: 500;
   cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.service-tick input[type='checkbox'] {
+  accent-color: var(--dyn-teal-ink);
+  margin: 0;
+  cursor: pointer;
+}
+
+.service-tick:hover {
+  border-color: var(--dyn-dash);
+  background: var(--dyn-subtle);
+}
+
+/* `on` is set by React rather than :has() — the stylesheet uses :has()
+   nowhere else, and a class is the thing a test can assert on. */
+.service-tick.on {
+  background: var(--dyn-teal-soft);
+  border-color: var(--dyn-teal-line);
+  color: var(--dyn-navy);
+}
+
+.service-tick:focus-within {
+  outline: 2px solid var(--dyn-teal-ink);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .service-tick {
+    transition: none;
+  }
 }
 
 .field-hint {

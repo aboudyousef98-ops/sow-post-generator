@@ -218,7 +218,7 @@ export default function InstallNotesCard({
           Service equipment
           <div className="service-ticks">
             {SERVICE_WORK.map((s) => (
-              <label key={s} className="service-tick">
+              <label key={s} className={`service-tick${servicesOf(n).includes(s) ? ' on' : ''}`}>
                 <input
                   type="checkbox"
                   checked={servicesOf(n).includes(s)}
@@ -241,7 +241,7 @@ export default function InstallNotesCard({
         <div className="field">
           Panel facing
           <div className="service-ticks">
-            <label className="service-tick">
+            <label className={`service-tick${n.panelFacesFront ? ' on' : ''}`}>
               <input
                 type="checkbox"
                 checked={n.panelFacesFront ?? false}
@@ -432,7 +432,7 @@ export default function InstallNotesCard({
         <div className="field">
           Trench?
           <div className="service-ticks">
-            <label className="service-tick">
+            <label className={`service-tick${n.trench ? ' on' : ''}`}>
               <input
                 type="checkbox"
                 checked={n.trench ?? false}

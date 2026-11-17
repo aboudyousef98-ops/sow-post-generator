@@ -603,6 +603,46 @@ Backup of the pre-change files: `_versions/v42-pre-svt-fields-2026-11-17/`.
 **Not reviewed yet: whether the Compose skeleton enumerates card blocks**
 (CLAUDE.md requires the skeleton to ship with the screen). Check before deploy.
 
+### Item 13b — tick-chip redesign + UI audit (2026-11-17)
+
+Aboud flagged the cost-driver row: eight chips on a row that could not wrap,
+so every two-word label broke in half — "long SER / run", "concrete / pad".
+Audited with the `ui-ux-pro-max` skill rather than eyeballed.
+
+Findings applied, each tied to a rule the skill returned:
+
+| Rule | Severity | Fix |
+|---|---|---|
+| Compact Label Overflow | High | `flex-wrap: wrap` on the ROW, `white-space: nowrap` on the CHIP — the row wraps between chips, a label never breaks |
+| Target Size (WCAG 2.2 AA, 24×24 CSS px) | High | whole pill is the hit area: `min-height: 30px` + padding, not the ~13px native box |
+| Touch Spacing (≥8px) | Medium | `gap: 8px` both axes (was 14px one axis, no row-gap because nothing wrapped) |
+
+Also fixed, from reading the card rather than from the skill: the chips and a
+free-text input shared one `.install-row`, so an eight-chip group was squeezed
+by whatever sat beside it. New `.tick-field` (`flex: 1 1 100%`) gives a tick
+group the whole row; "Another driver" and "Something else" moved to their own
+rows and gained a hint saying they join the list above.
+
+Checked state is an **`on` class set by React, not `:has(input:checked)`** —
+`:has()` appears nowhere else in `theme.css` (verified: 0 occurrences), and a
+class is assertable. New `ChipTicks.test.tsx` guards it, since a group that
+forgets the class just looks permanently unchecked and nothing else would
+catch that. Applied to `InstallNotesCard` too, so both Compose cards match.
+
+Also added: `accent-color`, hover, `:focus-within` ring, and a
+`prefers-reduced-motion` guard on the transition (the file already uses
+reduced-motion in 4 places — consistent, not new).
+
+Contrast checked by hand, not assumed: `--dyn-warn-ink` #8a6d00 on
+`--dyn-warn-bg` #fff8dc = **4.62:1**, over the 4.5:1 floor.
+
+**Flaky-test note, carried forward:** `App.integration.test.tsx` passes
+isolated (31/31, ~12s) but times out under full-suite load on this laptop.
+`ChipTicks.test.tsx` was written with 4 `<App />` mounts and tipped it over;
+trimmed to 2 and the full suite went green again. Gate now:
+**78 files / 1416 tests, 0 failures**, `tsc` and `eslint` clean. Keep new
+App-mounting tests lean or this resurfaces.
+
 ---
 
 ## Blocking the deploy
