@@ -533,6 +533,78 @@ status sits second. "Reset column widths" is in the Columns ▾ menu.
 
 ---
 
+## Item 13 — SVT pre-design fields, mined from #sow-svt-collab (2026-11-17)
+
+Read the channel the taskforce actually works in and diffed the three real
+pre-design notes (all Omar Rajab, 13–17 Nov) against the built SVT form. The
+team had already converged on a seven-beat template unprompted; the form
+captured beats 1 and 3 and none of 2, 4, 5, 6, 7. Aboud's call: **additive
+only** — the four battery boxes and their tests stay exactly as they were.
+
+Added to `SvtNotes` (all optional, `schemaVersion` stays 1, no migration):
+
+| Block | Fields | Pinned to |
+|---|---|---|
+| HO agreement | `hoAgrees` widened `boolean` → `boolean \| 'unknown'` | William Giles — "no stated preference" was the headline, and a blank could not say it |
+| Clearance | `clearEquipment`, `clearAvailable`, `clearDepth`, `clearRequired`, `clearanceAllMet` | Louis Fritz / Garage — 40" − 11.9" = 28" vs 36" |
+| Site conditions | `atticAccessible`, `detachedStructure`, `hoa`, `batteryStacks` | the conditions each note cites to justify a route |
+| Cost impact | `costDirection`, `costDrivers[]`, `costNotes` | all three notes name a direction and a driver |
+| Homeowner actions | `hoActions[]`, `hoActionsOther` | "clear the garage", "remove or relocate the plants" |
+| The ask | `ask`, `blockedOn` | all three notes close with one of four asks |
+
+Post grows from 4 bullets to 9: Battery Location → Conduit Path → **Site
+Conditions** → **Clearance** → Installation Notes → **Cost Impact** →
+Scheduling → **Homeowner Actions** → **The Ask**. Empty bullets still drop, so
+a thin note stays short. `buildSvtLines` remains the one source feeding Slack,
+SF and the rich clipboard.
+
+**Battery stacks → kWh.** Ya'rob asked on 2026-11-16 how to verify 2 vs 3
+stacks; Daniel Beier answered the same night — read it off the scope, 20 kWh =
+1 stack, 40 = 2, 60 = 3. So `batteryStacks` is `1 | 2 | 3`, `STACK_KWH` holds
+the mapping, and one pick writes both numbers: "Sold with 3 battery stacks
+(60 kWh)." The dropdown shows the kWh so the pick is unambiguous.
+
+Deliberate calls:
+- **Zero new polish keys** — every new text input is a short noun phrase, so
+  `rewriteSchema.ts` (closed enum, client *and* server) is untouched.
+- **"they/them"** for the homeowner in generated sentences — the form cannot
+  know a customer's pronouns and this text is pasted into Salesforce.
+- **36" is an input with a default, never a hardcoded constant** — the figure
+  is equipment- and AHJ-specific and was cited for an inverter, not a battery.
+- **No board automation** (Aboud): the ask writes its sentence only; the
+  Pre-Design sub-status stays hand-set. Compose never writes to the Board.
+- `CLEARANCE_LINE` is now exported from `sfSubmission.ts` and reused, so the
+  pre-design note and the SOW handoff cannot word the same claim two ways.
+- Two new advisory rows (never gates): "Battery stacks recorded", and a
+  contradiction row when a short measurement sits next to a ticked
+  "all clearances met". Both print; the row only makes the conflict visible.
+- `missingRequired()` still has its 4 entries — no required fields.
+
+Files: `types.ts`, `lib/svtPost.ts`, `lib/sfSubmission.ts` (export only),
+`lib/record.ts` (`hasContent`), `components/SvtCard.tsx`,
+`components/OutputColumn.tsx`, `theme.css`, new
+`lib/svtPost.predesign.test.ts`.
+
+Gate: **77 files / 1414 tests** (+49), `tsc --noEmit` and `eslint` clean.
+Two tests (`App.integration`, `BoardTab`) time out under
+`--no-file-parallelism` on this laptop and pass isolated in 8s / 18s — load,
+not regressions.
+
+Driven on `localhost:8888` against a **blank New Post** (never a real draft —
+Compose autosaves), reproducing the Louis Fritz / Garage note: the preview
+printed the clearance arithmetic, "Sold with 3 battery stacks (60 kWh)",
+"Saves cost — external conduit length", the nested homeowner actions and the
+closing ask. Live verdict chip read "✗ Leaves about 28" — short of 36" by
+about 8"". **Left behind: one "Untitled draft" (Nov 17, 7:37 PM) in Drafts**
+— delete it before the deploy.
+
+Backup of the pre-change files: `_versions/v42-pre-svt-fields-2026-11-17/`.
+
+**Not reviewed yet: whether the Compose skeleton enumerates card blocks**
+(CLAUDE.md requires the skeleton to ship with the screen). Check before deploy.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify

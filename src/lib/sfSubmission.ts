@@ -66,7 +66,10 @@ const SF_DURATION: Record<'1-2' | '4-6', string> = { '1-2': '1 to 2 hours', '4-6
 /** Crew-days per level, as a number SF accepts (level 4 is "minimum 2"). */
 const LEVEL_DAYS: Record<1 | 2 | 3 | 4, string> = { 1: '1', 2: '1.5', 3: '2', 4: '2' };
 
-const CLEARANCE_LINE = 'All required clearance requirements have been met.';
+/** Exported for svtPost.ts: the SVT post's "all met" tick prints this exact
+ * sentence, so the pre-design note and the SOW handoff cannot word the same
+ * claim two ways. */
+export const CLEARANCE_LINE = 'All required clearance requirements have been met.';
 
 /** A PostValue as dashed lines — nested points indent under their line.
  * Exported for svtPost.ts, same reason as `underline`. */

@@ -9,7 +9,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { boardsOfKind, matchAhj } from '../lib/ahj';
 import { LEVEL_NAMES } from '../lib/classify';
 import { buildPostHtml, buildPostText, missingRequired } from '../lib/template';
-import { buildSvtPostHtml, buildSvtPostText, buildSvtSfText, SVT_PATHS } from '../lib/svtPost';
+import {
+  buildSvtPostHtml,
+  buildSvtPostText,
+  buildSvtSfText,
+  CLEAR_REQUIRED_DEFAULT,
+  SVT_PATHS,
+} from '../lib/svtPost';
 import { noteCheck } from '../lib/api';
 import { SHORT, wireStatus } from '../lib/wireMaterial';
 import { eligibleNotes, keywordMatches, mergeHits, postHash, triggerIsGrounded, type NoteHit } from '../lib/noteMatch';
@@ -235,6 +241,14 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
           }
         : { label: 'Wire material not confirmed', done: false, tone: 'advisory', action: 'Pick' };
 
+  // A measured clearance that falls short while "all clearances met" is also
+  // ticked. Same rounding and same equal-is-met rule as clearanceLines().
+  const clearanceConflict = (() => {
+    const s = record.svt;
+    if (!s?.clearanceAllMet || s.clearAvailable === undefined || s.clearDepth === undefined) return false;
+    return Math.round(s.clearAvailable - s.clearDepth) < (s.clearRequired ?? CLEAR_REQUIRED_DEFAULT);
+  })();
+
   // The battery installation analysis is deliberately absent from this list
   // (Aboud 2026-11-03) — it is not required, so it must not read as a gap.
   const requiredChecks: Check[] = [
@@ -272,6 +286,28 @@ export default function OutputColumn({ record, settings, ahjs, boardProjects, up
             tone: 'advisory',
             action: 'Tick',
           },
+          // Ya'rob's open question, #sow-svt-collab 2026-11-16: "How can we
+          // verify whether the project was sold with two or three battery
+          // stacks?" Visible gap, not a gate.
+          {
+            label: 'Battery stacks recorded',
+            done: record.svt?.batteryStacks !== undefined,
+            tone: 'advisory',
+            action: 'Pick',
+          },
+          // The contradiction row: a failed measurement next to a ticked
+          // "all clearances met". Both still print — this only makes sure the
+          // conflict is seen before the post is copied.
+          ...(clearanceConflict
+            ? [
+                {
+                  label: 'Clearance says met, but the measurement falls short',
+                  done: false,
+                  tone: 'advisory',
+                  action: 'Review',
+                } as Check,
+              ]
+            : []),
         ]
       : [
           ...requiredChecks,

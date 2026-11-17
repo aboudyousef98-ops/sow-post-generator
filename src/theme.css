@@ -7686,6 +7686,34 @@ tr:hover .board-label-cell.empty {
   justify-content: space-between;
   gap: 8px;
 }
+/* The live clearance verdict (Aboud 2026-11-17). Advisory, never a gate: it
+   states the arithmetic the post will print so the number is checked here
+   rather than in Slack. Logical properties — the app is RTL-safe. */
+.svt-verdict {
+  display: block;
+  margin-block: 6px 2px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--dyn-border);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.svt-verdict.ok {
+  background: var(--dyn-teal-soft);
+  border-color: var(--dyn-teal-line);
+  color: var(--dyn-navy);
+}
+.svt-verdict.bad {
+  background: var(--dyn-warn-bg);
+  border-color: var(--dyn-highlight);
+  color: var(--dyn-warn-ink);
+}
+/* A hint that is pointing at a contradiction, not just explaining a field. */
+.field-hint.warn {
+  max-width: none;
+  color: var(--dyn-warn-ink);
+  font-weight: 600;
+}
 .sf-submit-list {
   list-style: none;
   margin: 0;

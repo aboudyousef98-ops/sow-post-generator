@@ -21,9 +21,17 @@ import {
   servicesOf,
   SVT_TEXT_FIELDS,
 } from '../lib/installNotes';
-import { SVT_PATHS } from '../lib/svtPost';
+import {
+  CLEAR_REQUIRED_DEFAULT,
+  COST_DRIVERS,
+  HO_ACTIONS,
+  STACK_KWH,
+  SVT_PATHS,
+} from '../lib/svtPost';
 import { useEffect, useState } from 'react';
 import type {
+  ClearEquipment,
+  CostDirection,
   InstallNotes,
   InstallTextField,
   Orientation,
@@ -32,6 +40,7 @@ import type {
   RoofMaterial,
   ServiceWork,
   Settings,
+  SvtAsk,
   SvtNotes,
   SvtTextField,
 } from '../types';
@@ -40,6 +49,27 @@ import NoteBox from './NoteBox';
 /** Tri-state mapping shared with InstallNotesCard: '' is "not answered yet". */
 const yesNoValue = (v: boolean | undefined) => (v === undefined ? '' : v ? 'yes' : 'no');
 const yesNoParse = (v: string) => (v === '' ? undefined : v === 'yes');
+
+/** hoAgrees is FOUR-state — "unknown" is an answer that prints, '' does not. */
+const hoAgreesValue = (v: boolean | 'unknown' | undefined) =>
+  v === undefined ? '' : v === 'unknown' ? 'unknown' : v ? 'yes' : 'no';
+const hoAgreesParse = (v: string): boolean | 'unknown' | undefined =>
+  v === '' ? undefined : v === 'unknown' ? 'unknown' : v === 'yes';
+
+/** A number box: blank and garbage both mean "not answered". */
+const numParse = (v: string): number | undefined => {
+  const t = v.trim();
+  if (!t) return undefined;
+  const n = Number(t);
+  return Number.isFinite(n) ? n : undefined;
+};
+
+/** Multi-select tick lists store `undefined` when emptied, not `[]`. */
+const toggleIn = (list: string[] | undefined, v: string): string[] | undefined => {
+  const cur = list ?? [];
+  const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+  return next.length ? next : undefined;
+};
 
 interface Props {
   record: PostRecord;
@@ -196,6 +226,17 @@ export default function SvtCard({
   useEffect(() => setExtraAlts(0), [record.id]);
   const altCount = Math.max(filledAlts, extraAlts);
 
+  // The live clearance verdict, mirroring clearanceLines() in svtPost.ts:
+  // both numbers are needed, equal counts as met, and the remainder is
+  // rounded the same way the printed sentence rounds it.
+  const clearVerdict = (() => {
+    const { clearAvailable: avail, clearDepth: depth } = s;
+    if (avail === undefined || depth === undefined) return undefined;
+    const required = s.clearRequired ?? CLEAR_REQUIRED_DEFAULT;
+    const left = Math.round(avail - depth);
+    return { left, required, ok: left >= required };
+  })();
+
   const removeAlt = (slot: 1 | 2) => {
     if (slot === 1) setSvt({ alt1Location: undefined, alt1Reason: undefined });
     else setSvt({ alt2Location: undefined, alt2Reason: undefined });
@@ -211,12 +252,16 @@ export default function SvtCard({
       <div className="install-row">
         <label className="field">
           Homeowner agrees with the proposed location?
-          <select value={yesNoValue(s.hoAgrees)} onChange={(e) => setSvt({ hoAgrees: yesNoParse(e.target.value) })}>
+          <select value={hoAgreesValue(s.hoAgrees)} onChange={(e) => setSvt({ hoAgrees: hoAgreesParse(e.target.value) })}>
             <option value="">—</option>
             <option value="yes">Yes</option>
             <option value="no">No</option>
+            <option value="unknown">No stated preference</option>
           </select>
-          <span className="field-hint">No → prints the HO’s preferred location and why it does not work</span>
+          <span className="field-hint">
+            No → prints the HO’s preferred location and why it does not work. No stated preference → says we optimised
+            for cost and the installers
+          </span>
         </label>
       </div>
       {s.hoAgrees === false && (
@@ -280,6 +325,135 @@ export default function SvtCard({
         </div>
       </div>
       <div className="note-grid">{svtBox('pathNotes', 'Path notes', 2)}</div>
+
+      <div className="install-subhead">Site conditions</div>
+      <div className="install-row">
+        <label className="field">
+          Attic accessible?
+          <select
+            value={yesNoValue(s.atticAccessible)}
+            onChange={(e) => setSvt({ atticAccessible: yesNoParse(e.target.value) })}
+          >
+            <option value="">—</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <label className="field">
+          Detached buildings?
+          <select
+            value={yesNoValue(s.detachedStructure)}
+            onChange={(e) => setSvt({ detachedStructure: yesNoParse(e.target.value) })}
+          >
+            <option value="">—</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <label className="field">
+          HOA?
+          <select value={yesNoValue(s.hoa)} onChange={(e) => setSvt({ hoa: yesNoParse(e.target.value) })}>
+            <option value="">—</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </label>
+        <label className="field">
+          Battery stacks sold
+          <select
+            value={s.batteryStacks ?? ''}
+            onChange={(e) =>
+              setSvt({ batteryStacks: e.target.value ? (Number(e.target.value) as 1 | 2 | 3) : undefined })
+            }
+          >
+            <option value="">—</option>
+            {([1, 2, 3] as const).map((n) => (
+              <option key={n} value={n}>
+                {n} {n === 1 ? 'stack' : 'stacks'} — {STACK_KWH[n]} kWh
+              </option>
+            ))}
+          </select>
+          <span className="field-hint">Read it off the scope of the project — the kWh is written into the post too</span>
+        </label>
+      </div>
+
+      <div className="install-subhead">Clearance check</div>
+      <div className="install-row">
+        <label className="field">
+          Measured on
+          <select
+            value={s.clearEquipment ?? ''}
+            onChange={(e) => setSvt({ clearEquipment: (e.target.value || undefined) as ClearEquipment | undefined })}
+          >
+            <option value="">Equipment</option>
+            <option value="inverter">Inverter</option>
+            <option value="battery">Battery</option>
+          </select>
+        </label>
+        <label className="field">
+          Wall space available (in)
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            value={s.clearAvailable ?? ''}
+            placeholder="40"
+            onChange={(e) => setSvt({ clearAvailable: numParse(e.target.value) })}
+          />
+        </label>
+        <label className="field">
+          Equipment depth (in)
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            value={s.clearDepth ?? ''}
+            placeholder="11.9"
+            onChange={(e) => setSvt({ clearDepth: numParse(e.target.value) })}
+          />
+        </label>
+        <label className="field">
+          Required clearance (in)
+          <input
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            value={s.clearRequired ?? ''}
+            placeholder={String(CLEAR_REQUIRED_DEFAULT)}
+            onChange={(e) => setSvt({ clearRequired: numParse(e.target.value) })}
+          />
+          <span className="field-hint">
+            Blank = {CLEAR_REQUIRED_DEFAULT}&quot;. Varies by equipment and AHJ — confirm it, don’t assume
+          </span>
+        </label>
+      </div>
+      {clearVerdict && (
+        <div className={`svt-verdict ${clearVerdict.ok ? 'ok' : 'bad'}`}>
+          {clearVerdict.ok ? '✓' : '✗'} Leaves about {clearVerdict.left}&quot; —{' '}
+          {clearVerdict.ok
+            ? `meets the ${clearVerdict.required}" requirement`
+            : `short of ${clearVerdict.required}" by about ${clearVerdict.required - clearVerdict.left}"`}
+        </div>
+      )}
+      <div className="install-row">
+        <div className="field">
+          <div className="service-ticks">
+            <label className="service-tick">
+              <input
+                type="checkbox"
+                checked={s.clearanceAllMet ?? false}
+                onChange={(e) => setSvt({ clearanceAllMet: e.target.checked || undefined })}
+              />
+              All required clearances met (no measurement quoted)
+            </label>
+          </div>
+          {clearVerdict && !clearVerdict.ok && s.clearanceAllMet && (
+            <span className="field-hint warn">
+              This contradicts the measurement above — the post will print both. Advisory only, nothing is blocked.
+            </span>
+          )}
+        </div>
+      </div>
 
       <div className="install-subhead">Electrical upgrades &amp; site facts</div>
       <div className="install-row">
@@ -402,6 +576,50 @@ export default function SvtCard({
         </label>
       </div>
 
+      <div className="install-subhead">Cost impact</div>
+      <div className="install-row">
+        <label className="field">
+          Direction
+          <select
+            value={s.costDirection ?? ''}
+            onChange={(e) => setSvt({ costDirection: (e.target.value || undefined) as CostDirection | undefined })}
+          >
+            <option value="">—</option>
+            <option value="adds">Adds cost</option>
+            <option value="saves">Saves cost</option>
+            <option value="neutral">No significant change</option>
+          </select>
+        </label>
+      </div>
+      {s.costDirection && s.costDirection !== 'neutral' && (
+        <div className="install-row">
+          <div className="field">
+            Why — tick all that apply
+            <div className="service-ticks">
+              {COST_DRIVERS.map((d) => (
+                <label key={d} className="service-tick">
+                  <input
+                    type="checkbox"
+                    checked={(s.costDrivers ?? []).includes(d)}
+                    onChange={() => setSvt({ costDrivers: toggleIn(s.costDrivers, d) })}
+                  />
+                  {d}
+                </label>
+              ))}
+            </div>
+          </div>
+          <label className="field" style={{ flex: '1 1 240px' }}>
+            Another driver
+            <input
+              type="text"
+              value={s.costNotes ?? ''}
+              placeholder="e.g. second meter pedestal"
+              onChange={(e) => setSvt({ costNotes: e.target.value || undefined })}
+            />
+          </label>
+        </div>
+      )}
+
       <div className="install-subhead">Special</div>
       <div className="note-grid">{installBox('specialCases', 'Anything special about this project?', 3)}</div>
 
@@ -421,6 +639,63 @@ export default function SvtCard({
         </label>
       </div>
       <div className="note-grid">{svtBox('schedulingNotes', 'Scheduling notes', 2)}</div>
+
+      <div className="install-subhead">Homeowner actions</div>
+      <div className="install-row">
+        <div className="field">
+          What the homeowner needs to do before the crew arrives
+          <div className="service-ticks">
+            {HO_ACTIONS.map((a) => (
+              <label key={a} className="service-tick">
+                <input
+                  type="checkbox"
+                  checked={(s.hoActions ?? []).includes(a)}
+                  onChange={() => setSvt({ hoActions: toggleIn(s.hoActions, a) })}
+                />
+                {a}
+              </label>
+            ))}
+          </div>
+        </div>
+        <label className="field" style={{ flex: '1 1 240px' }}>
+          Something else
+          <input
+            type="text"
+            value={s.hoActionsOther ?? ''}
+            placeholder="e.g. unlock the side gate"
+            onChange={(e) => setSvt({ hoActionsOther: e.target.value || undefined })}
+          />
+        </label>
+      </div>
+
+      <div className="install-subhead">The ask</div>
+      <div className="install-row">
+        <label className="field">
+          How this post closes
+          <select
+            value={s.ask ?? ''}
+            onChange={(e) => setSvt({ ask: (e.target.value || undefined) as SvtAsk | undefined })}
+          >
+            <option value="">—</option>
+            <option value="goodToGo">Good to go</option>
+            <option value="hoConfirm">Needs HO confirmation</option>
+            <option value="hoConvince">Needs HO convincing</option>
+            <option value="blocked">Blocked — info needed</option>
+          </select>
+          <span className="field-hint">Writes the closing line only — the board sub-status stays yours to set</span>
+        </label>
+        {s.ask === 'blocked' && (
+          <label className="field" style={{ flex: '1 1 280px' }}>
+            What do we need?
+            <input
+              type="text"
+              value={s.blockedOn ?? ''}
+              placeholder="e.g. confirmation of 2 vs 3 battery stacks sold"
+              onChange={(e) => setSvt({ blockedOn: e.target.value || undefined })}
+            />
+          </label>
+        )}
+      </div>
 
       {actions}
     </div>

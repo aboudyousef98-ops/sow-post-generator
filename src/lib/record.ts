@@ -59,6 +59,11 @@ export function hasContent(r: PostRecord): boolean {
     ...SVT_TEXT_FIELDS.map((f) => s?.[f.field]),
     n?.storiesOther,
     n?.roofMaterialOther,
+    // Pre-design short inputs (Aboud 2026-11-17). Not polishable, so they are
+    // not in SVT_TEXT_FIELDS — but losing them is the same data-loss class.
+    s?.costNotes,
+    s?.hoActionsOther,
+    s?.blockedOn,
     ...(n?.orientations ?? []),
   ];
   const dropdownChosen =
@@ -84,6 +89,22 @@ export function hasContent(r: PostRecord): boolean {
     s?.pathTrench !== undefined ||
     s?.pathExisting !== undefined ||
     s?.crewDays !== undefined ||
+    // Pre-design picks and ticks (Aboud 2026-11-17). Listed explicitly because
+    // `false` and `0` are real answers here — "no HOA" and "attic not
+    // accessible" are findings, and truthiness would throw the draft away.
+    s?.clearEquipment !== undefined ||
+    s?.clearAvailable !== undefined ||
+    s?.clearDepth !== undefined ||
+    s?.clearRequired !== undefined ||
+    s?.clearanceAllMet !== undefined ||
+    s?.atticAccessible !== undefined ||
+    s?.detachedStructure !== undefined ||
+    s?.hoa !== undefined ||
+    s?.batteryStacks !== undefined ||
+    s?.costDirection !== undefined ||
+    (s?.costDrivers?.length ?? 0) > 0 ||
+    (s?.hoActions?.length ?? 0) > 0 ||
+    s?.ask !== undefined ||
     (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }

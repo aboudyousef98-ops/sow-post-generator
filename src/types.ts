@@ -239,14 +239,34 @@ export type SvtTextField =
   | 'pathNotes'
   | 'schedulingNotes';
 
+/** What the clearance check measures the depth of. */
+export type ClearEquipment = 'inverter' | 'battery' | 'equipment';
+
+/** Which way the chosen route moves the cost. */
+export type CostDirection = 'adds' | 'saves' | 'neutral';
+
+/**
+ * The closing ask of a pre-design post. Every real note in #sow-svt-collab
+ * ends with one of these four (Omar Rajab ×3, Ya'rob's stacks blocker ×1), so
+ * it is a pick, not prose. Writes the closing sentence ONLY — the board's
+ * Pre-Design sub-status stays hand-set (Aboud 2026-11-17: Compose never
+ * writes to the Board).
+ */
+export type SvtAsk = 'goodToGo' | 'hoConfirm' | 'hoConvince' | 'blocked';
+
 export interface SvtNotes {
   /**
-   * Does the homeowner agree with the proposed battery location? Tri-state on
-   * purpose (same contract as batteryBaseNeedsWork): `undefined` is "not asked
-   * yet" and prints nothing; `false` prints the HO's preference and why it
-   * does not work.
+   * Does the homeowner agree with the proposed battery location?
+   * FOUR states, not three (Aboud 2026-11-17, from William Giles):
+   * `undefined` is "not asked yet" and prints nothing; `false` prints the HO's
+   * preference and why it does not work; `'unknown'` prints HO_UNKNOWN_LINE —
+   * "we looked, nobody knows, so we optimised for us", which was the headline
+   * of that note and could not be said with a blank.
+   *
+   * Widening `boolean` to `boolean | 'unknown'` keeps every stored record
+   * valid, so there is no migration and `schemaVersion` stays 1.
    */
-  hoAgrees?: boolean;
+  hoAgrees?: boolean | 'unknown';
   /** Where the HO wants the batteries, when hoAgrees === false. */
   hoLocation?: string;
   /** Why the HO's preference does not work / why SOW's location is preferred. */
@@ -280,6 +300,73 @@ export interface SvtNotes {
   crewDays?: 1 | 2;
   /** Anything scheduling should know (HO availability, access windows…). */
   schedulingNotes?: string;
+
+  // ---- Clearance check (Aboud 2026-11-17) --------------------------------
+  // Omar's Louis Fritz / Garage note typed the whole calculation by hand:
+  // "The inverter is 11.9" deep and only 40" of space is available, which
+  // leaves about 28" of clearance" against a required 36". Three numbers in,
+  // the sentence and the pass/fail out.
+  /** Which piece the depth belongs to; defaults to the generic "equipment". */
+  clearEquipment?: ClearEquipment;
+  /** Wall space available, in inches. */
+  clearAvailable?: number;
+  /** Equipment depth, in inches. Decimals are real here (11.9). */
+  clearDepth?: number;
+  /**
+   * Required clearance, in inches. An INPUT with a 36" default, never a
+   * hardcoded constant — the figure is equipment- and AHJ-specific (it differs
+   * between Duracell and Sonnen, and Omar cited it for an inverter, not a
+   * battery), and this file is not the place to assert a code reference.
+   */
+  clearRequired?: number;
+  /**
+   * The blanket statement, for when no measurement is quoted (Louis Fritz /
+   * Main House: "All clearance requirements have been met"). Prints the SAME
+   * CLEARANCE_LINE the SOW post uses, so the two can never word it differently.
+   */
+  clearanceAllMet?: boolean;
+
+  // ---- Site conditions (Aboud 2026-11-17) --------------------------------
+  // The facts the notes cite to JUSTIFY a route, which is why they print
+  // beside the conduit path: "the attic is accessible, so we can run through
+  // it", "the property has detached buildings, so the garage would require
+  // both an attic run and trenching". All tri-state — unanswered says nothing.
+  atticAccessible?: boolean;
+  detachedStructure?: boolean;
+  /** Reported by the survey crew on every job in #site-survey-svt-collab. */
+  hoa?: boolean;
+  /**
+   * Battery stacks sold. Ya'rob Nabulsi asked how to verify this
+   * (#sow-svt-collab, 2026-11-16) and Daniel Beier answered it the same night:
+   * read it off the scope of the project, where 20 kWh = 1 stack, 40 = 2,
+   * 60 = 3. So the pick is the stack count and the kWh comes with it —
+   * STACK_KWH in svtPost.ts holds the mapping and prints both numbers.
+   */
+  batteryStacks?: 1 | 2 | 3;
+
+  // ---- Cost impact (Aboud 2026-11-17) -----------------------------------
+  // Named in all three notes ("will add cost, mainly for the long run of SER
+  // cables", "more cost-effective because it shortens the external conduit
+  // run", "the most cost-efficient option").
+  costDirection?: CostDirection;
+  /** Picked from COST_DRIVERS; unknown strings are dropped when printing. */
+  costDrivers?: string[];
+  /** A short driver the list cannot say. Not polishable — a noun phrase. */
+  costNotes?: string;
+
+  // ---- Homeowner actions (Aboud 2026-11-17) ------------------------------
+  // "the homeowner will need to clear the garage", "the flowers and plants in
+  // the installation area will need to be removed or relocated", "a leader on
+  // the exterior wall will need to be relocated" — a recurring checklist.
+  /** Picked from HO_ACTIONS; unknown strings are dropped when printing. */
+  hoActions?: string[];
+  /** One more action the list cannot say. Not polishable — a noun phrase. */
+  hoActionsOther?: string;
+
+  // ---- The ask (Aboud 2026-11-17) ---------------------------------------
+  ask?: SvtAsk;
+  /** What is needed, when `ask === 'blocked'`. Not polishable. */
+  blockedOn?: string;
 }
 
 // ---- Wire material check (Aboud 2026-11-11) ------------------------------

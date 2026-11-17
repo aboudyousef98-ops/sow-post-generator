@@ -13,10 +13,10 @@
 
 import type { PostItem } from './template';
 import { escapeHtml, renderItemsHtml, renderItemsText } from './template';
-import { runLines, underline } from './sfSubmission';
+import { CLEARANCE_LINE, runLines, underline } from './sfSubmission';
 import { clauses, installNoteLines, labelled, leadSentence } from './installNotes';
-import { effectiveText, noteLines } from './noteText';
-import type { PostRecord, SvtNotes } from '../types';
+import { effectiveText, noteLines, punctuate, stripBullet } from './noteText';
+import type { ClearEquipment, CostDirection, PostRecord, PostValue, SvtAsk, SvtNotes } from '../types';
 
 /**
  * The conduit-path ticks, in the order the post prints them. Fixed names,
@@ -46,6 +46,180 @@ export const TWO_DAY_LINE = 'Two-day job — schedule two consecutive crew days.
 export const HO_AGREES_LINE = 'The homeowner agrees with the proposed battery location.';
 
 /**
+ * The homeowner has no stated preference (Omar Rajab, William Giles,
+ * 2026-11-17: "Since we don't have the homeowner's preferred battery location,
+ * we'll go with the approach that works best for us: the most cost-efficient
+ * option and the easiest for the installers"). Distinct from an unanswered
+ * question, which still prints nothing.
+ */
+export const HO_UNKNOWN_LINE =
+  'The homeowner has no stated preference for the battery location — this proposal is the most cost-efficient option and the easiest for the installers.';
+
+/** Default required clearance, in inches. Overridable per record on purpose. */
+export const CLEAR_REQUIRED_DEFAULT = 36;
+
+/** How each equipment choice reads mid-sentence. */
+export const CLEAR_EQUIPMENT_LABEL: Record<ClearEquipment, string> = {
+  inverter: 'inverter',
+  battery: 'battery',
+  equipment: 'equipment',
+};
+
+/** The cost drivers already named across the 402-record corpus. */
+export const COST_DRIVERS = [
+  'long SER run',
+  'external conduit length',
+  'trenching',
+  'attic run',
+  'service upgrade',
+  'concrete pad',
+  'equipment relocation',
+  'tree work',
+] as const;
+
+/** The direction word; `neutral` is a whole sentence since it takes no driver. */
+export const COST_HEAD: Record<CostDirection, string> = {
+  adds: 'Adds cost',
+  saves: 'Saves cost',
+  neutral: 'No significant cost change expected.',
+};
+
+/** The recurring things a homeowner is asked to do before the crew arrives. */
+export const HO_ACTIONS = [
+  'clear the garage',
+  'remove or relocate plants and landscaping in the installation area',
+  'relocate a gutter leader or downspout',
+  'move stored items out of the work area',
+  'trim or remove trees',
+  'secure pets and provide gate access',
+  'clear attic access',
+] as const;
+
+export const HO_ACTIONS_LEAD = 'The homeowner will need to';
+
+/**
+ * Battery stacks → kWh sold (Daniel Beier, #sow-svt-collab 2026-11-16, in
+ * answer to Ya'rob Nabulsi: read it "from the scope of the project").
+ * One pick writes both numbers, so the post never carries a stack count the
+ * capacity contradicts.
+ */
+export const STACK_KWH: Record<1 | 2 | 3, number> = { 1: 20, 2: 40, 3: 60 };
+
+/** "Sold with 3 battery stacks (60 kWh)." — singular at one stack. */
+export const stackLine = (stacks: 1 | 2 | 3) =>
+  `Sold with ${stacks} battery ${stacks === 1 ? 'stack' : 'stacks'} (${STACK_KWH[stacks]} kWh).`;
+
+/**
+ * The closing sentences. "they/them" for the homeowner on purpose: the form
+ * cannot know a customer's pronouns, and this text is pasted into Salesforce.
+ */
+export const ASK_LINES: Record<SvtAsk, string> = {
+  goodToGo: 'The project is good to go.',
+  hoConfirm: 'Please confirm with the homeowner and let us know how they prefer to proceed.',
+  hoConvince: 'Please let us know whether we can convince the homeowner to go with this approach.',
+  blocked: 'Blocked — we need more information before this can be finalized.',
+};
+
+/** `Blocked` with something named. */
+export const blockedLine = (what: string) => `Blocked — we need the following before this can be finalized: ${what}.`;
+
+/** Trim float noise without forcing a decimal: 40 → "40", 11.9 → "11.9". */
+const inches = (v: number) => String(Math.round(v * 10) / 10);
+
+/** Sub-points read as sentences of their own, so they start with a capital. */
+const capitalize = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
+
+/**
+ * The Clearance bullet. Omar's Garage note is the spec: available space,
+ * equipment depth, what is left, and whether that clears the requirement.
+ * Equal counts as met. Both numbers are needed for the calculation — one
+ * alone says nothing, so it prints nothing.
+ */
+function clearanceLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  const lines: string[] = [];
+  const { clearAvailable: avail, clearDepth: depth } = s;
+  const required = s.clearRequired ?? CLEAR_REQUIRED_DEFAULT;
+  if (avail !== undefined && depth !== undefined) {
+    const left = Math.round(avail - depth);
+    const what = CLEAR_EQUIPMENT_LABEL[s.clearEquipment ?? 'equipment'];
+    const head = `The wall has ${inches(avail)}" of space and the ${what} is ${inches(depth)}" deep, leaving about ${left}"`;
+    lines.push(
+      left >= required
+        ? `${head} — the ${inches(required)}" requirement is met.`
+        : `${head} — short of the ${inches(required)}" required.`,
+    );
+  }
+  if (s.clearanceAllMet) lines.push(CLEARANCE_LINE);
+  return lines;
+}
+
+/**
+ * The Site Conditions bullet — the facts the notes cite to justify a route,
+ * which is why it prints right after the conduit path. Tri-state throughout.
+ */
+function siteConditionLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  const lines: string[] = [];
+  if (s.atticAccessible === true) lines.push('The attic is accessible, so wires can be routed through it.');
+  else if (s.atticAccessible === false) lines.push('The attic is not accessible.');
+  if (s.detachedStructure === true) lines.push('The property has detached buildings.');
+  else if (s.detachedStructure === false) lines.push('No detached buildings on the property.');
+  if (s.hoa !== undefined) lines.push(`HOA: ${s.hoa ? 'yes' : 'no'}.`);
+  if (s.batteryStacks !== undefined) lines.push(stackLine(s.batteryStacks));
+  return lines;
+}
+
+/**
+ * The Cost Impact bullet: the direction, then the drivers that explain it.
+ *
+ * `costNotes` is a one-line noun phrase labelled "Another driver", so it joins
+ * the driver list rather than printing as a line of its own — which also means
+ * there is no capitalisation question about it.
+ */
+function costLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  const dir = s.costDirection;
+  const typed = (s.costNotes ?? '').trim().replace(/[.\s]+$/, '');
+  if (dir === 'neutral') return [COST_HEAD.neutral];
+  if (dir) {
+    // Unknown strings are dropped: the printed wording stays a closed set even
+    // if a stored record carries a driver this build no longer offers.
+    const drivers = (s.costDrivers ?? []).filter((d) => (COST_DRIVERS as readonly string[]).includes(d));
+    if (typed) drivers.push(typed);
+    return [drivers.length ? `${COST_HEAD[dir]} — ${drivers.join(', ')}.` : `${COST_HEAD[dir]}.`];
+  }
+  // No direction picked. The UI cannot produce this with text in the box, but
+  // a stored record could — print it rather than silently lose it.
+  return noteLines(s.costNotes ?? '');
+}
+
+/**
+ * The Homeowner Actions bullet: one lead line with the picked actions nested
+ * under it, which is how all three notes phrase it.
+ */
+function hoActionValues(record: PostRecord): PostValue[] {
+  const s: SvtNotes = record.svt ?? {};
+  const picked = (s.hoActions ?? []).filter((a) => (HO_ACTIONS as readonly string[]).includes(a));
+  const extra = (s.hoActionsOther ?? '')
+    .split('\n')
+    .map(stripBullet)
+    .filter(Boolean)
+    .filter((l) => /[\p{L}\p{N}]/u.test(l));
+  const all = [...picked, ...extra].map((a) => punctuate(capitalize(a)));
+  return all.length ? [{ label: HO_ACTIONS_LEAD, text: '', sub: all }] : [];
+}
+
+/** The Ask bullet — the closing sentence, and nothing else. */
+function askLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  if (!s.ask) return [];
+  const what = (s.blockedOn ?? '').trim();
+  if (s.ask === 'blocked' && what) return [blockedLine(what.replace(/[.\s]+$/, ''))];
+  return [ASK_LINES[s.ask]];
+}
+
+/**
  * The Battery Location bullet: the proposed location (the SAME sentence the
  * SF "Battery and Equipment Location" field prints), then the homeowner's
  * answer, then any alternative locations with their reasons.
@@ -63,6 +237,8 @@ function batteryLines(record: PostRecord): string[] {
   // battery yes/no questions — "unanswered" and "No" mean different things).
   if (s.hoAgrees === true) {
     lines.push(HO_AGREES_LINE);
+  } else if (s.hoAgrees === 'unknown') {
+    lines.push(HO_UNKNOWN_LINE);
   } else if (s.hoAgrees === false) {
     const loc = clauses(s.hoLocation ?? '', 'svt.hoLocation', record);
     lines.push(
@@ -114,11 +290,20 @@ export function buildSvtLines(record: PostRecord): PostItem[] {
   const items: PostItem[] = [
     { label: 'Battery Location', values: batteryLines(record) },
     { label: 'Most Likely Conduit Path', values: pathLines(record) },
+    // Site conditions sit beside the path because they are what justifies it
+    // ("detached buildings, so the garage would need an attic run and a
+    // trench"), and clearance follows as the verdict on the chosen wall.
+    { label: 'Site Conditions', values: siteConditionLines(record) },
+    { label: 'Clearance', values: clearanceLines(record) },
     {
       label: 'Installation Notes',
       values: installNoteLines(record.installNotes, record, record.sf.utility, ['batteryLocation', 'other']),
     },
+    { label: 'Cost Impact', values: costLines(record) },
     { label: 'Scheduling', values: schedulingLines(record) },
+    // The homeowner's homework, then the ask — the order every real note ends in.
+    { label: 'Homeowner Actions', values: hoActionValues(record) },
+    { label: 'The Ask', values: askLines(record) },
   ];
   return items.filter((it) => it.values.length > 0);
 }
