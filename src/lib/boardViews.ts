@@ -2,7 +2,7 @@
 // (_STUDY_board_benchmark.md Tier 1). Pure functions only: BoardTab owns the
 // state, this file owns the rules so they can be tested without a DOM.
 
-import type { BoardLabel, BoardProject } from '../board/types';
+import type { BoardLabel, BoardProject, LabelColumnKey } from '../board/types';
 import {
   labelById,
   labelsFor,
@@ -153,7 +153,11 @@ export function splitSections(projects: BoardProject[], labels: BoardLabel[]): B
   completed.sort(recentFirst);
   outOfScope.sort(recentFirst);
   installReview.sort(recentFirst);
-  preDesign.sort(recentFirst);
+  // Pre-Design is NOT sorted most-recent-first any more (Aboud 2026-11-17):
+  // it is a table the team works in rather than an archive they look things up
+  // in, so it keeps the caller's `position` order and is ranked by sub-status
+  // in BoardTab, exactly like the active table. Rows that reshuffle on every
+  // edit cannot be dragged into an order that means anything.
   return { active, installReview, preDesign, outOfScope, completed };
 }
 
@@ -177,9 +181,34 @@ export function splitSections(projects: BoardProject[], labels: BoardLabel[]): B
  * it cannot be ranked, and silently ranking it first would be a lie.
  */
 export function sortByStatus(projects: BoardProject[], labels: BoardLabel[]): BoardProject[] {
-  const rank = new Map(labels.filter((l) => l.columnKey === 'status').map((l) => [l.id, l.sortOrder]));
-  const rankOf = (p: BoardProject) =>
-    p.statusId && rank.has(p.statusId) ? (rank.get(p.statusId) as number) : Number.POSITIVE_INFINITY;
+  return sortByLabelRank(projects, labels, 'status', (p) => p.statusId);
+}
+
+/**
+ * The same rule for the Pre-Design section, ranked by its sub-status (Aboud
+ * 2026-11-17: the Pre-Design table behaves like the Active one, "same same").
+ *
+ * It has to be the SUB-status: every row in that section shares the Pre-Design
+ * status, so ranking by status would leave one flat band and the drag order
+ * would be the only thing saying anything — which is not what the team reads
+ * the table for. Working on it / Pending / Done is.
+ */
+export function sortByPreDesignStatus(projects: BoardProject[], labels: BoardLabel[]): BoardProject[] {
+  return sortByLabelRank(projects, labels, 'predesign', (p) => p.preDesignStatusId ?? null);
+}
+
+/** Rank by a label column's own sortOrder, manual drag order as the tie-break. */
+function sortByLabelRank(
+  projects: BoardProject[],
+  labels: BoardLabel[],
+  columnKey: LabelColumnKey,
+  idOf: BandOf,
+): BoardProject[] {
+  const rank = new Map(labels.filter((l) => l.columnKey === columnKey).map((l) => [l.id, l.sortOrder]));
+  const rankOf = (p: BoardProject) => {
+    const id = idOf(p);
+    return id && rank.has(id) ? (rank.get(id) as number) : Number.POSITIVE_INFINITY;
+  };
   // Copy first: this is handed straight to the table, and sorting the caller's
   // array in place would mutate a memo's input.
   return [...projects].sort((a, b) => rankOf(a) - rankOf(b) || b.position - a.position);

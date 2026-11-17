@@ -80,6 +80,7 @@ import {
   isPresetActive,
   idsBetween,
   selectedRows,
+  sortByPreDesignStatus,
   sortByStatus,
   splitSections,
   viewPresets,
@@ -674,6 +675,7 @@ function SectionCard({
   highlightId,
   agingOf,
   selectedIds,
+  full,
 }: {
   /** Drives the accent colour only — see `.board-done` / `.board-scope`. */
   variant: 'done' | 'scope' | 'review' | 'predesign';
@@ -685,6 +687,12 @@ function SectionCard({
   highlightId: string | null;
   agingOf?: (p: BoardProject) => AgingState;
   selectedIds?: Record<string, boolean>;
+  /**
+   * Present = this section renders the FULL table (drag, resize, filter,
+   * group) instead of the light read-mostly one. Pre-Design passes it; the
+   * three archive sections below do not — see FullTable's own comment.
+   */
+  full?: Omit<Parameters<typeof FullTable>[0], 'table' | 'rows' | 'empty'>;
 }) {
   const rows = table.options.data.length;
   return (
@@ -697,6 +705,8 @@ function SectionCard({
       {open &&
         (rows === 0 ? (
           <p className="muted board-empty">{emptyText}</p>
+        ) : full ? (
+          <FullTable {...full} table={table} rows={table.options.data} />
         ) : (
           <div className="board-scroll">
             <table className="board-table" style={{ ...sizeVarsFor(table), width: table.getTotalSize() }}>
@@ -1788,7 +1798,7 @@ export default function BoardTab({
   const {
     active: activeUnsorted,
     installReview,
-    preDesign,
+    preDesign: preDesignUnsorted,
     outOfScope,
     completed,
   } = useMemo(() => splitSections(visible, board.labels), [visible, board.labels]);
@@ -1810,6 +1820,17 @@ export default function BoardTab({
   const active = useMemo(
     () => (autoSort && sorting.length === 0 ? sortByStatus(activeUnsorted, board.labels) : activeUnsorted),
     [autoSort, sorting.length, activeUnsorted, board.labels],
+  );
+
+  /**
+   * The Pre-Design table, ordered the same way for the same reason — by its
+   * OWN column, the sub-status (Aboud 2026-11-17). Auto-sort governs both
+   * tables: it is one team-wide switch about how the board reads, so having
+   * it rank one table and not the other would be the surprise.
+   */
+  const preDesign = useMemo(
+    () => (autoSort && sorting.length === 0 ? sortByPreDesignStatus(preDesignUnsorted, board.labels) : preDesignUnsorted),
+    [autoSort, sorting.length, preDesignUnsorted, board.labels],
   );
 
   const setAutoSort = (on: boolean) => {
@@ -1838,6 +1859,8 @@ export default function BoardTab({
    */
   const activeRef = useRef<BoardProject[]>([]);
   activeRef.current = active;
+  const preDesignRef = useRef<BoardProject[]>([]);
+  preDesignRef.current = preDesign;
 
   /** One shared column order, moved from either table's header. */
   const moveColumnTo = (dragged: string, onto: string) =>
@@ -1868,6 +1891,7 @@ export default function BoardTab({
     };
 
   const moveActiveRow = rowMover(activeRef, (p) => p.statusId, 'status');
+  const movePreDesignRow = rowMover(preDesignRef, (p) => p.preDesignStatusId ?? null, 'Pre-Design status');
 
   /**
    * Ctrl/Cmd-click toggles a row into the selection; Shift-click takes
@@ -2417,17 +2441,24 @@ export default function BoardTab({
     enableColumnResizing: false,
   });
 
-  // Pre-Design — identical contract to reviewTable: this is the one table that
+  // Pre-Design — the one OTHER full table (Aboud 2026-11-17: "the active
+  // project group of tasks to have the same features as the pre-design same
+  // same"). Same options as `table` above, including resizing, and the same
+  // shared sizing/order/visibility state — so a column moved or resized here
+  // is moved or resized in the active table too. It is also the one table that
   // carries the Pre-Design sub-status column.
   const predesignTable = useReactTable({
     data: preDesign,
     columns,
     state: { sorting, columnSizing, columnVisibility: visibilityPredesign, columnOrder: resolvedOrder },
     onSortingChange: setSorting,
+    onColumnSizingChange: setColumnSizing,
     onColumnVisibilityChange: setColumnVisibility,
+    onColumnOrderChange: setColumnOrder,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    enableColumnResizing: false,
+    enableColumnResizing: true,
+    columnResizeMode: 'onChange',
   });
 
   // Out of SOW scope — identical contract to doneTable: shared columns, shared
@@ -2831,6 +2862,10 @@ export default function BoardTab({
       {/* Pre-Design sits directly under the active table (Aboud 2026-11-15):
           the SVT collab taskforce's survey-stage analyses, with their own
           sub-status column, ahead of the Installation Review section. */}
+      {/* The one section that is a full table, not a read-mostly list: the
+          SVT taskforce works in it all day (Aboud 2026-11-17, "it would be
+          like another type of active projects"). Same body props, same shared
+          column layout, its own rows and its own sub-status banding. */}
       <SectionCard
         variant="predesign"
         title="Pre-Design"
@@ -2841,6 +2876,17 @@ export default function BoardTab({
         highlightId={highlightId}
         agingOf={agingFor}
         selectedIds={selected}
+        full={{
+          onRowMove: movePreDesignRow,
+          onColumnMove: moveColumnTo,
+          columnFilters,
+          onColumnFilterChange: (colId, vals) => setColumnFilters((f) => ({ ...f, [colId]: vals })),
+          filterMenu,
+          onFilterMenuChange: setFilterMenu,
+          valuePool,
+          columnCtx,
+          body: bodyProps,
+        }}
       />
 
       <SectionCard

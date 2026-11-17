@@ -13,6 +13,7 @@ import {
   idsBetween,
   isPresetActive,
   selectedRows,
+  sortByPreDesignStatus,
   sortByStatus,
   statusBand,
   splitSections,
@@ -396,12 +397,67 @@ describe('splitSections — Pre-Design', () => {
     expect(s.outOfScope).toHaveLength(0);
   });
 
-  it('newest-touched first, like the other pulled-out sections', () => {
+  // REPLACES "newest-touched first, like the other pulled-out sections"
+  // (Aboud 2026-11-17): Pre-Design is a table the team works in, not an
+  // archive, so it keeps the caller's order and is ranked by sub-status in
+  // BoardTab — rows that reshuffle on every edit cannot be dragged into an
+  // order that means anything. The three archive sections below are unchanged.
+  it('keeps the caller’s order, so a dragged row stays where it was dropped', () => {
     const rows = [
-      p({ id: 'old', statusId: 'status-predesign', updatedAt: '2026-11-01T00:00:00.000Z' }),
-      p({ id: 'new', statusId: 'status-predesign', updatedAt: '2026-11-14T00:00:00.000Z' }),
+      p({ id: 'dragged-to-top', statusId: 'status-predesign', updatedAt: '2026-11-01T00:00:00.000Z' }),
+      p({ id: 'touched-just-now', statusId: 'status-predesign', updatedAt: '2026-11-14T00:00:00.000Z' }),
     ];
-    expect(splitSections(rows, LABELS).preDesign.map((r) => r.id)).toEqual(['new', 'old']);
+    expect(splitSections(rows, LABELS).preDesign.map((r) => r.id)).toEqual([
+      'dragged-to-top',
+      'touched-just-now',
+    ]);
+  });
+
+  it('still sorts the three archive sections newest-touched first', () => {
+    const rev = { ...LABELS[0], id: 'rv', name: 'Reviewing', isDefault: false, review: true };
+    const scoped = { ...LABELS[0], id: 'os', name: 'Parked', isDefault: false, outOfScope: true };
+    const labels = [...LABELS, rev, scoped];
+    const two = (statusId: string) => [
+      p({ id: 'old', statusId, updatedAt: '2026-11-01T00:00:00.000Z' }),
+      p({ id: 'new', statusId, updatedAt: '2026-11-14T00:00:00.000Z' }),
+    ];
+    expect(splitSections(two('status-done'), labels).completed.map((r) => r.id)).toEqual(['new', 'old']);
+    expect(splitSections(two('rv'), labels).installReview.map((r) => r.id)).toEqual(['new', 'old']);
+    expect(splitSections(two('os'), labels).outOfScope.map((r) => r.id)).toEqual(['new', 'old']);
+  });
+});
+
+// Aboud 2026-11-17: the Pre-Design table reads like the active one, ranked by
+// the column that actually orders it — its sub-status — with the manual drag
+// order deciding inside each band.
+describe('sortByPreDesignStatus', () => {
+  const subs = seedLabels().filter((l) => l.columnKey === 'predesign');
+  const idOf = (name: string) => subs.find((l) => l.name === name)!.id;
+
+  it('follows the sub-status label order, not updatedAt', () => {
+    const rows = [
+      p({ id: 'done', preDesignStatusId: idOf('Done') }),
+      p({ id: 'working', preDesignStatusId: idOf('Working on it') }),
+    ];
+    const ranked = sortByPreDesignStatus(rows, subs).map((r) => r.id);
+    expect(ranked.indexOf('working')).toBeLessThan(ranked.indexOf('done'));
+  });
+
+  it('breaks ties on the manual drag order, newest position first', () => {
+    const id = idOf('Working on it');
+    const rows = [
+      p({ id: 'bottom', preDesignStatusId: id, position: 10 }),
+      p({ id: 'top', preDesignStatusId: id, position: 99 }),
+    ];
+    expect(sortByPreDesignStatus(rows, subs).map((r) => r.id)).toEqual(['top', 'bottom']);
+  });
+
+  it('sorts a row with no sub-status last rather than silently first', () => {
+    const rows = [
+      p({ id: 'unset', preDesignStatusId: null }),
+      p({ id: 'working', preDesignStatusId: idOf('Working on it') }),
+    ];
+    expect(sortByPreDesignStatus(rows, subs).map((r) => r.id)).toEqual(['working', 'unset']);
   });
 });
 
@@ -592,5 +648,37 @@ describe('bandMove — where a dragged row actually lands', () => {
       p({ id: 'b', statusId: null, position: 10 }),
     ];
     expect(bandMove(loose, 'b', 'a')).not.toBeNull();
+  });
+
+  // Aboud 2026-11-17 — the Pre-Design table bands by its sub-status, because
+  // every row in it shares the one status.
+  describe('a caller-supplied band', () => {
+    const byPredesign = (r: BoardProject) => r.preDesignStatusId ?? null;
+    const pd = [
+      p({ id: 'a', statusId: 'status-predesign', preDesignStatusId: 'working', position: 300 }),
+      p({ id: 'b', statusId: 'status-predesign', preDesignStatusId: 'working', position: 200 }),
+      p({ id: 'c', statusId: 'status-predesign', preDesignStatusId: 'done', position: 100 }),
+    ];
+
+    it('reorders within one sub-status', () => {
+      const pos = bandMove(pd, 'b', 'a', byPredesign) as number;
+      expect(pos).toBeGreaterThan(300);
+    });
+
+    it('REFUSES a drop onto another sub-status, though the status is identical', () => {
+      // Default banding would have ALLOWED this — every row is Pre-Design.
+      expect(bandMove(pd, 'a', 'c')).not.toBeNull();
+      expect(bandMove(pd, 'a', 'c', byPredesign)).toBeNull();
+    });
+
+    it('treats an unset sub-status as its own band', () => {
+      const mixed = [
+        p({ id: 'x', preDesignStatusId: null, position: 20 }),
+        p({ id: 'y', preDesignStatusId: null, position: 10 }),
+        p({ id: 'z', preDesignStatusId: 'working', position: 5 }),
+      ];
+      expect(bandMove(mixed, 'y', 'x', byPredesign)).not.toBeNull();
+      expect(bandMove(mixed, 'y', 'z', byPredesign)).toBeNull();
+    });
   });
 });

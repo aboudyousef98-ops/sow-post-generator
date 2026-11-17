@@ -1677,3 +1677,121 @@ describe('keyboard-modified selection, and bulk removal', () => {
     expect(screen.queryByRole('button', { name: 'Delete permanently' })).toBeNull();
   });
 });
+
+// Aboud 2026-11-17: "Pre-Install [Pre-Design] board is becoming a really
+// important board for us to work on … it would be like another type of active
+// projects … the active project group of tasks to have the same features as
+// the pre-design same same."
+//
+// So the Pre-Design section renders the FULL table, not the stripped one. The
+// three sections below it stay stripped on purpose, which is what most of
+// these tests pin: parity for Pre-Design, no change for the archives.
+describe('Pre-Design is a full table, like Active Projects', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  /** Two Pre-Design rows (one of each sub-status) plus one active and one done. */
+  const withPredesign = (): BoardState => {
+    const b = emptyBoard();
+    b.projects = [
+      { ...boardProject('Active Row', 'p-act'), statusId: 'status-working', position: 400 },
+      {
+        ...boardProject('Working Analysis', 'p-pd-working'),
+        statusId: 'status-predesign',
+        preDesignStatusId: 'predesign-working',
+        position: 100,
+        updatedAt: '2026-11-01T00:00:00.000Z',
+      },
+      {
+        ...boardProject('Finished Analysis', 'p-pd-done'),
+        statusId: 'status-predesign',
+        preDesignStatusId: 'predesign-done',
+        position: 300,
+        // Touched most recently — under the old newest-first rule this sat on
+        // top. The sub-status rank now decides.
+        updatedAt: '2026-11-16T00:00:00.000Z',
+      },
+      { ...boardProject('Done Row', 'p-done'), statusId: 'status-done', position: 200 },
+    ];
+    return b;
+  };
+
+  /** The Pre-Design card — `board-predesign` is its accent class. */
+  const card = () => document.querySelector('.board-predesign') as HTMLElement;
+
+  it('its headers can be dragged to move a column and dragged to resize', () => {
+    render(<Harness initial={withPredesign()} />);
+    const pd = within(card());
+    // The movable-header affordance and the resize handle are what the light
+    // SectionCard has never had.
+    expect(pd.getAllByTitle('Sort · drag the header to move this column').length).toBeGreaterThan(0);
+    expect(card().querySelectorAll('.board-resizer').length).toBeGreaterThan(0);
+    expect(card().querySelectorAll('.board-th-movable').length).toBeGreaterThan(0);
+  });
+
+  it('the three archive sections stay the light table', () => {
+    render(<Harness initial={withPredesign()} />);
+    // Completed carries `board-done` with no variant of its own, and it has to
+    // be opened before it renders anything at all.
+    fireEvent.click(screen.getByRole('button', { name: /Completed projects/ }));
+    const done = Array.from(document.querySelectorAll('.list-card')).find(
+      (c) =>
+        c.classList.contains('board-done') &&
+        !c.classList.contains('board-scope') &&
+        !c.classList.contains('board-review') &&
+        !c.classList.contains('board-predesign'),
+    ) as HTMLElement;
+    expect(within(done).getByText('Done Row')).toBeTruthy();
+    expect(done.querySelectorAll('.board-resizer')).toHaveLength(0);
+    expect(done.querySelectorAll('.board-th-movable')).toHaveLength(0);
+  });
+
+  it('carries the per-column filter funnels and the select-all checkbox', () => {
+    render(<Harness initial={withPredesign()} />);
+    const pd = within(card());
+    expect(pd.getByRole('checkbox', { name: 'Select all shown' })).toBeTruthy();
+    // One funnel per filterable column — the light table offers none.
+    expect(pd.getAllByRole('button', { name: /^Filter / }).length).toBeGreaterThan(0);
+  });
+
+  it('shows the Pre-Design status column that the active table hides', () => {
+    render(<Harness initial={withPredesign()} />);
+    expect(within(card()).getByText('Pre-Design status')).toBeTruthy();
+    const main = document.querySelector('.board-table-main') as HTMLElement;
+    expect(within(main).queryByText('Pre-Design status')).toBeNull();
+  });
+
+  it('ranks its rows by sub-status, not by whatever was touched last', () => {
+    render(<Harness initial={withPredesign()} />);
+    const names = Array.from(card().querySelectorAll('tbody tr')).map(
+      (tr) => tr.querySelector('.board-sticky')?.textContent ?? '',
+    );
+    const working = names.findIndex((n) => n.includes('Working Analysis'));
+    const done = names.findIndex((n) => n.includes('Finished Analysis'));
+    expect(working).toBeGreaterThanOrEqual(0);
+    expect(done).toBeGreaterThan(working);
+  });
+
+  // ONE layout, not two (Aboud 2026-11-17, picking "editable from any
+  // section"): the two full tables share column order, widths and visibility,
+  // so a change made in either is a change in both.
+  it('shares one column layout with the active table', () => {
+    render(<Harness initial={withPredesign()} />);
+    expect(within(card()).getByText('Rating')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: /Columns/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Rating' }));
+
+    const main = document.querySelector('.board-table-main') as HTMLElement;
+    expect(within(main).queryByText('Rating')).toBeNull();
+    expect(within(card()).queryByText('Rating')).toBeNull();
+  });
+});
