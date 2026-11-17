@@ -9,11 +9,11 @@
 // PUTs cannot overwrite each other's read-merge-write; on repeated conflict we
 // return 503 and the client keeps its data locally and re-pushes later.
 
-import { getStore } from '@netlify/blobs';
 import { z } from 'zod';
 import { mergeAhjs } from '../../src/lib/ahj';
 import type { Ahj } from '../../src/types';
 import { guardRequest, jsonResponse, readGuardConfig, readJsonBody } from './lib/guard';
+import { getSowpostStore } from './lib/store';
 
 // Loose on purpose (same rationale as records.mts): the client owns the full
 // shape; the server only needs the merge keys to be present.
@@ -29,7 +29,7 @@ export default async (req: Request): Promise<Response> => {
   if (!guard.ok) return jsonResponse(guard.status ?? 403, { error: 'forbidden' }, guard.corsOrigin);
   const cors = guard.corsOrigin;
 
-  const store = getStore('sowpost');
+  const store = getSowpostStore();
 
   if (req.method === 'GET') {
     const ahjs = ((await store.get('ahjs', { type: 'json' })) as Ahj[] | null) ?? [];

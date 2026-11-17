@@ -11,9 +11,9 @@
 // out of sync with BoardState rejected every write for 37 hours on
 // 2026-10-17 and nothing surfaced it.
 
-import { getStore } from '@netlify/blobs';
 import { guardRequest, jsonResponse, readGuardConfig, readJsonBody } from './lib/guard';
 import { type BoardBlob, PutSchema, mergeBoard } from './lib/boardMerge';
+import { getSowpostStore } from './lib/store';
 
 export default async (req: Request): Promise<Response> => {
   const cfg = readGuardConfig(process.env);
@@ -21,7 +21,7 @@ export default async (req: Request): Promise<Response> => {
   if (!guard.ok) return jsonResponse(guard.status ?? 403, { error: 'forbidden' }, guard.corsOrigin);
   const cors = guard.corsOrigin;
 
-  const store = getStore('sowpost');
+  const store = getSowpostStore();
 
   if (req.method === 'GET') {
     const board = ((await store.get('board', { type: 'json' })) as BoardBlob | null) ?? {

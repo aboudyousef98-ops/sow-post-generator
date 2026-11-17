@@ -17,6 +17,24 @@ export function readGuardConfig(env: Record<string, string | undefined>): GuardC
   };
 }
 
+// scheme://host with any path/query/fragment stripped off (Referer carries a
+// path; Origin never does).
+function originOf(candidate: string): string {
+  const m = candidate.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]+/i);
+  return (m ? m[0] : candidate).replace(/\/$/, '');
+}
+
+// `*` in an allowed-origins entry matches one path-free, dot-free host
+// segment — e.g. "https://*--sow-post-generator.netlify.app" matches Netlify
+// deploy-preview/branch-deploy subdomains but not "...netlify.app.evil.com".
+function wildcardToRegex(pattern: string): RegExp {
+  const body = pattern
+    .split('*')
+    .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('[^./]+');
+  return new RegExp(`^${body}$`);
+}
+
 /** The matched allowed origin, or null when the request must be rejected. */
 export function matchOrigin(
   cfg: GuardConfig,
@@ -25,8 +43,13 @@ export function matchOrigin(
 ): string | null {
   const candidate = origin || referer;
   if (!candidate) return null;
+  const candidateOrigin = originOf(candidate);
   for (const allowed of cfg.allowedOrigins) {
-    if (candidate === allowed || candidate.startsWith(`${allowed}/`)) return allowed;
+    if (allowed.includes('*')) {
+      if (wildcardToRegex(allowed).test(candidateOrigin)) return candidateOrigin;
+      continue;
+    }
+    if (candidateOrigin === allowed) return allowed;
   }
   return null;
 }

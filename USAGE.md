@@ -18,7 +18,7 @@
    | `OPENAI_API_KEY` | the new key |
    | `OPENAI_MODEL_VISION` | `gpt-4o` (default if unset) |
    | `OPENAI_MODEL_TEXT` | `gpt-4o-mini` (default if unset) |
-   | `ALLOWED_ORIGINS` | `https://<your-site>.netlify.app,http://localhost:8888` |
+   | `ALLOWED_ORIGINS` | `https://<your-site>.netlify.app,https://*--<your-site>.netlify.app,http://localhost:8888` |
    | `API_PATH_TOKEN` | the token from step 2 |
    | `VITE_API_PATH_TOKEN` | the SAME token (build-time copy for the client) |
 5. Redeploy after setting the vars. Open the site → the top-right pill must say **AI available**.
@@ -189,6 +189,10 @@ deploy._
 - Drafts and history are stored in **Netlify Blobs** (store `sowpost`), shared by all three
   designers. No extra setup, no env vars — it activates automatically once the site is deployed
   (and `netlify dev` emulates it locally).
+- Only a **production** deploy touches that `sowpost` store. Deploy previews, branch deploys and
+  `netlify dev` are automatically routed to a separate `sowpost-test` store (keyed off Netlify's
+  built-in `CONTEXT` env var — see `netlify/functions/lib/store.ts`), so testing on a draft URL
+  can never read or corrupt live team data.
 - The top-bar pill shows **Team synced** / **Local only**. When offline, everything keeps working
   from the browser cache and re-syncs on the next successful save.
 - Conflicts merge by "newer edit wins" per record; deletions sync too (and Clear All in Settings

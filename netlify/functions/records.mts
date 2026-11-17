@@ -9,9 +9,9 @@
 // simultaneous PUTs cannot overwrite each other's read-merge-write; on
 // repeated conflict we return 503 and the client re-pushes later.
 
-import { getStore } from '@netlify/blobs';
 import { z } from 'zod';
 import { guardRequest, jsonResponse, readGuardConfig, readJsonBody } from './lib/guard';
+import { getSowpostStore } from './lib/store';
 
 // Loose validation on purpose: the client owns the full PostRecord shape and
 // it will evolve; the server only needs id + updatedAt to merge correctly.
@@ -35,7 +35,7 @@ export default async (req: Request): Promise<Response> => {
   if (!guard.ok) return jsonResponse(guard.status ?? 403, { error: 'forbidden' }, guard.corsOrigin);
   const cors = guard.corsOrigin;
 
-  const store = getStore('sowpost');
+  const store = getSowpostStore();
 
   if (req.method === 'GET') {
     const records = ((await store.get('records', { type: 'json' })) as AnyRecord[] | null) ?? [];

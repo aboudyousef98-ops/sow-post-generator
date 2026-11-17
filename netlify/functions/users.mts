@@ -7,9 +7,9 @@
 // fresh deployment can log in. Only the salted hash lives here — the hash
 // algorithm is mirrored in src/lib/auth.ts (a test pins the two together).
 
-import { getStore } from '@netlify/blobs';
 import { z } from 'zod';
 import { guardRequest, jsonResponse, readGuardConfig, readJsonBody } from './lib/guard';
+import { getSowpostStore } from './lib/store';
 
 const UserSchema = z.object({ username: z.string().min(1), updatedAt: z.string().min(1) }).loose();
 const PutSchema = z.object({ users: z.array(UserSchema).max(1000) }).strict();
@@ -42,7 +42,7 @@ export default async (req: Request): Promise<Response> => {
   if (!guard.ok) return jsonResponse(guard.status ?? 403, { error: 'forbidden' }, guard.corsOrigin);
   const cors = guard.corsOrigin;
 
-  const store = getStore('sowpost');
+  const store = getSowpostStore();
 
   if (req.method === 'GET') {
     let users = ((await store.get('users', { type: 'json' })) as AnyUser[] | null) ?? [];

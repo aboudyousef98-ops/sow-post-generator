@@ -25,6 +25,48 @@ describe('matchOrigin', () => {
   });
 });
 
+describe('matchOrigin with a wildcard entry', () => {
+  const wildcardCfg = readGuardConfig({
+    ALLOWED_ORIGINS: 'https://sow-post-generator.netlify.app, https://*--sow-post-generator.netlify.app, http://localhost:8888',
+    API_PATH_TOKEN: 'tok123',
+  });
+
+  it('accepts a deploy-preview subdomain', () => {
+    expect(
+      matchOrigin(wildcardCfg, 'https://deploy-preview-12--sow-post-generator.netlify.app', null),
+    ).toBe('https://deploy-preview-12--sow-post-generator.netlify.app');
+  });
+
+  it('accepts a branch-deploy subdomain', () => {
+    expect(
+      matchOrigin(wildcardCfg, 'https://my-feature-branch--sow-post-generator.netlify.app', null),
+    ).toBe('https://my-feature-branch--sow-post-generator.netlify.app');
+  });
+
+  it('still accepts the production origin and localhost', () => {
+    expect(matchOrigin(wildcardCfg, 'https://sow-post-generator.netlify.app', null)).toBe(
+      'https://sow-post-generator.netlify.app',
+    );
+    expect(matchOrigin(wildcardCfg, 'http://localhost:8888', null)).toBe('http://localhost:8888');
+  });
+
+  it('rejects a lookalike that smuggles a foreign suffix past the wildcard', () => {
+    expect(
+      matchOrigin(wildcardCfg, 'https://x--sow-post-generator.netlify.app.evil.com', null),
+    ).toBeNull();
+  });
+
+  it('rejects a lookalike that smuggles a dot into the wildcard segment', () => {
+    expect(
+      matchOrigin(wildcardCfg, 'https://evil.com--sow-post-generator.netlify.app', null),
+    ).toBeNull();
+  });
+
+  it('rejects an unrelated origin', () => {
+    expect(matchOrigin(wildcardCfg, 'https://evil.example', null)).toBeNull();
+  });
+});
+
 describe('pathTokenOk', () => {
   it('accepts the tokenized path and rejects others', () => {
     expect(pathTokenOk(cfg, 'https://sowpost.netlify.app/api/tok123/rewrite')).toBe(true);

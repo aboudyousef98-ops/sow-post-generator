@@ -4,11 +4,11 @@
 // compare-and-swap against lost updates. The merge itself is imported from
 // src/lib/extraWork.ts (the ahjs.mts precedent) so it is unit-tested.
 
-import { getStore } from '@netlify/blobs';
 import { z } from 'zod';
 import type { ExtraWorkState } from '../../src/extrawork/types';
 import { mergeExtraWork } from '../../src/lib/extraWork';
 import { guardRequest, jsonResponse, readGuardConfig, readJsonBody } from './lib/guard';
+import { getSowpostStore } from './lib/store';
 
 // Loose on purpose (same reasoning as records.mts): the client owns the full
 // shape; the server needs only the merge keys.
@@ -21,7 +21,7 @@ export default async (req: Request): Promise<Response> => {
   if (!guard.ok) return jsonResponse(guard.status ?? 403, { error: 'forbidden' }, guard.corsOrigin);
   const cors = guard.corsOrigin;
 
-  const store = getStore('sowpost');
+  const store = getSowpostStore();
 
   if (req.method === 'GET') {
     const state = ((await store.get('extrawork', { type: 'json' })) as ExtraWorkState | null) ?? {
