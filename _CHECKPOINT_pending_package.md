@@ -459,6 +459,80 @@ only … hide columns from some users."
 
 ---
 
+## 12. Pre-Design is a full table, like Active Projects (2026-11-17) ✅ done, tested — PENDING
+
+**Ask (Aboud 2026-11-17):** "Pre-Design is becoming a really important board
+for us to work on … it would be like another type of active projects … the
+active projects board has features that other boards dont have … sync the
+setting make sure they work together. **i need to move columns**." Clarified
+in chat: parity between the Active and Pre-Design tables ("same same"), ONE
+column layout editable from either section, per-device as today.
+
+**What it is.** The Active table's JSX became a `FullTable` component and the
+Pre-Design section now renders it instead of the stripped `SectionCard`. So
+Pre-Design gained: headers that drag to move, resize grips, per-column filter
+funnels, the select-all checkbox, draggable rows, grouping. Installation
+Review / Out of SOW scope / Completed deliberately keep the light table —
+they are looked things up in, not worked in. Say the word if you want them too.
+
+**Why the column move needed this.** `Pre-Design status` is hidden in the
+active table and off the Columns ▾ menu (each section-scoped column is), so
+until now there was no header ANYWHERE that could start a drag on it. Its own
+table can. Verified: it moved to second position and stayed there after reload.
+
+**One layout, two tables.** Column order, widths and visibility were already
+one shared state — what was missing was being able to *start* a move or a
+resize from the Pre-Design header. Now either header does, and the change
+lands in both. Each table owns its own `DndContext`: a row drag only means
+something inside one section (status is what moves a row between sections),
+while a column drag writes the one shared order.
+
+**⚠ The one thing the team will notice.** Pre-Design rows no longer sort
+most-recently-touched first. They rank by **sub-status** — the team's own
+Edit-labels order, Working on it → Done → Pending… — with the manual drag
+order as the tie-break, exactly like the active table. Rows that reshuffle on
+every edit cannot be dragged into an order that means anything (Aboud picked
+this over keeping newest-first). **The Pre-Design list reorders once, on
+everyone's first load after deploy.** The three archive sections are
+unchanged and still sort newest-first (pinned by a test).
+
+A drag across sub-statuses is refused with "A row can only be reordered
+within its own Pre-Design status while auto-sort is on" — the band rule the
+active table already had, told to band by the column that orders this one.
+
+**Decision changed mid-build:** group-collapse state is NOT namespaced per
+section, as first sketched. One `collapsed` map is what `shown` and the
+select-all safety rule ("never write a teammate's collapsed group") already
+assume; splitting it would have put that invariant at risk for a cosmetic
+gain. Collapsing a group collapses it in both tables.
+
+**Deliberately NOT built:** "group by Pre-Design status" as a menu option —
+the Group by menu is shared with the active table, where that column does not
+exist. Easy to add if wanted.
+
+**Files:** `src/board/BoardTab.tsx` (FullTable extracted + Pre-Design wired),
+`src/lib/boardViews.ts` (`sortByPreDesignStatus`, `bandMove` takes a `bandOf`,
+`splitSections` stops sorting preDesign), `+ both test files`.
+
+Gate: **76 files / 1365 tests** (+13), `tsc --noEmit` and
+`eslint --max-warnings 0` clean. The refactor landed as its own commit
+(`28ab5c7`) with the Active table provably unchanged before anything was
+added; the feature is `43ab22c`.
+
+Driven end-to-end on `localhost:8888` with REAL PointerEvents (dnd-kit
+ignores synthetic drags): column move from the Pre-Design header → moved in
+both tables; `Pre-Design status` moved for the first time; resize 148→228px
+in both; row drag inside a band; cross-band drag refused with the toast;
+sub-status ranking (a row marked Done sank below the Working-on-it row);
+select-all ticks/unticks and both headers stay in sync; order + widths
+survive a reload; no console errors. Demo rows put back to Working on it.
+
+**Left on the LOCAL dev box only** (localhost preferences, not production):
+Rating is moved before Designed date and widened to 228px, and Pre-Design
+status sits second. "Reset column widths" is in the Columns ▾ menu.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
