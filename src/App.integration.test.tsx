@@ -105,11 +105,14 @@ describe('Compose acceptance flow', () => {
     fireEvent.click(screen.getByRole('button', { name: /^History/ }));
     expect(screen.getByText('Norca Garcia')).toBeTruthy();
     second.unmount();
-    // 15s, not the 5s default: this drives the WHOLE app twice over — paste,
+    // No per-test budget: this drives the WHOLE app twice over — paste,
     // classify, preview, persist, post, remount, History — and has always run
-    // at ~4.5s, which left almost no headroom. It started timing out once the
-    // suite grew past 60 files, so the budget was the problem, not the flow.
-  }, 15_000);
+    // at ~4.5s. It carried a 15s override written when the global default was
+    // 5s; once vite.config raised the global past that, the override stopped
+    // being headroom and became a CAP, failing this test at 15s inside a 30s
+    // suite (2026-11-17). It inherits the global ceiling now, so there is one
+    // number to raise instead of two to keep in sync.
+  });
 
   it('pulls the shared team history on load and shows it in History', async () => {
     const serverRecord = {
@@ -333,8 +336,14 @@ describe('draft safety', () => {
       target: { value: 'Conduit through the attic to the garage' },
     });
 
-    await waitFor(() => expect(stored()).toHaveLength(1), { timeout: 2000 });
-    expect(stored()[0].notes.homeowner).toBe('Conduit through the attic to the garage');
+    // Wait for the CONTENT, not merely for a record to exist. The list is
+    // written on a debounce, so "a record is there" can be true a tick before
+    // the note text has landed inside it — waiting on length and then
+    // asserting content synchronously is a race. It passed for a long time by
+    // luck and started failing once the suite grew heavy enough to shift the
+    // interleaving (2026-11-17). Same assertion, waited on properly.
+    await waitFor(() => expect(stored()[0]?.notes.homeowner).toBe('Conduit through the attic to the garage'));
+    expect(stored()).toHaveLength(1);
 
     // And it survives a reload.
     unmount();

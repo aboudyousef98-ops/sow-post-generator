@@ -291,6 +291,20 @@ export interface SvtNotes {
   /** Anything about the path the ticks cannot say. */
   pathNotes?: string;
   /**
+   * Paths CONSIDERED AND REJECTED, held as `SVT_PATHS[].field` keys so the two
+   * groups print the same names.
+   *
+   * Added 2026-11-17 after a measured round-trip: the William Giles note said
+   * why the meter wall was best but never why an external-only run fails, so
+   * Allie Mullen asked "could we do external conduit run?" and Omar had to
+   * write the rejection by hand a day later. A path is mutually exclusive
+   * between `path*` and here — SvtCard clears the other side on toggle, so a
+   * contradiction cannot be stored.
+   */
+  ruledOut?: string[];
+  /** Why those paths were rejected. Not polishable — one short clause. */
+  ruledOutReason?: string;
+  /**
    * One- or two-day job (Issam, #sow-svt-collab 2026-11-13; widened from a
    * two-day tick on Aboud's 2026-11-15 review): SOW calls the crew days and
    * the CLR team books the Gantt accordingly — two-day means two consecutive
@@ -333,6 +347,17 @@ export interface SvtNotes {
   // both an attic run and trenching". All tri-state — unanswered says nothing.
   atticAccessible?: boolean;
   detachedStructure?: boolean;
+  /**
+   * Are the attics CONTINUOUS between the structures? Only meaningful when
+   * `detachedStructure` is true, and only asked then.
+   *
+   * Added 2026-11-17. `atticAccessible` + `detachedStructure` could state two
+   * disconnected facts but not the causal chain the William Giles note turned
+   * on — "although the buildings are connected by the catwalk, their attics
+   * aren't connected", which is what forces the trench and therefore the
+   * meter-wall recommendation.
+   */
+  atticsContinuous?: boolean;
   /** Reported by the survey crew on every job in #site-survey-svt-collab. */
   hoa?: boolean;
   /**
@@ -362,6 +387,12 @@ export interface SvtNotes {
   hoActions?: string[];
   /** One more action the list cannot say. Not polishable — a noun phrase. */
   hoActionsOther?: string;
+
+  // ---- Scope boundary (Aboud 2026-11-17) ---------------------------------
+  // Allie Mullen asked whether SOW checks that the panels fit and land in the
+  // approved production range; they do not — that is the PR team. Saying so in
+  // the note heads the question off. Held as `NOT_REVIEWED[].key` values.
+  notReviewed?: string[];
 
   // ---- The ask (Aboud 2026-11-17) ---------------------------------------
   ask?: SvtAsk;

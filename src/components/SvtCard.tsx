@@ -25,6 +25,7 @@ import {
   CLEAR_REQUIRED_DEFAULT,
   COST_DRIVERS,
   HO_ACTIONS,
+  NOT_REVIEWED,
   STACK_KWH,
   SVT_PATHS,
 } from '../lib/svtPost';
@@ -68,6 +69,12 @@ const numParse = (v: string): number | undefined => {
 const toggleIn = (list: string[] | undefined, v: string): string[] | undefined => {
   const cur = list ?? [];
   const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
+  return next.length ? next : undefined;
+};
+
+/** Remove one entry, keeping the same empty-is-undefined contract. */
+const dropFrom = (list: string[] | undefined, v: string): string[] | undefined => {
+  const next = (list ?? []).filter((x) => x !== v);
   return next.length ? next : undefined;
 };
 
@@ -325,11 +332,51 @@ export default function SvtCard({
           Tick all that apply
           <div className="service-ticks">
             {SVT_PATHS.map((p) =>
-              tick(p.field, p.label, s[p.field] ?? false, () => setSvt({ [p.field]: !s[p.field] || undefined })),
+              tick(p.field, p.label, s[p.field] ?? false, () =>
+                // Ticking a path as likely drops it from "ruled out" — the two
+                // groups are mutually exclusive, so the contradiction is made
+                // unstorable rather than caught later.
+                setSvt({
+                  [p.field]: !s[p.field] || undefined,
+                  ruledOut: s[p.field] ? s.ruledOut : dropFrom(s.ruledOut, p.field),
+                }),
+              ),
             )}
           </div>
         </div>
       </div>
+      <div className="install-row">
+        <div className="field tick-field">
+          Ruled out — considered and rejected
+          <div className="service-ticks">
+            {SVT_PATHS.map((p) =>
+              tick(`out-${p.field}`, p.label, (s.ruledOut ?? []).includes(p.field), () =>
+                setSvt({
+                  ruledOut: toggleIn(s.ruledOut, p.field),
+                  // …and the reverse: ruling a path out unticks it as likely.
+                  ...((s.ruledOut ?? []).includes(p.field) ? {} : { [p.field]: undefined }),
+                }),
+              ),
+            )}
+          </div>
+          <span className="field-hint">
+            Saying why an option does not work is what stops the reply asking “could we not just do X?”
+          </span>
+        </div>
+      </div>
+      {(s.ruledOut ?? []).length > 0 && (
+        <div className="install-row">
+          <label className="field" style={{ flex: '1 1 420px' }}>
+            Why those do not work
+            <input
+              type="text"
+              value={s.ruledOutReason ?? ''}
+              placeholder="e.g. only partially external — would still need both attics and a trench"
+              onChange={(e) => setSvt({ ruledOutReason: e.target.value || undefined })}
+            />
+          </label>
+        </div>
+      )}
       <div className="note-grid">{svtBox('pathNotes', 'Path notes', 2)}</div>
 
       <div className="install-subhead">Site conditions</div>
@@ -356,6 +403,24 @@ export default function SvtCard({
             <option value="no">No</option>
           </select>
         </label>
+        {/* Only meaningful once there IS a second structure. Asking it
+            otherwise invites an answer about a question nobody has. */}
+        {s.detachedStructure === true && (
+          <label className="field">
+            Attics continuous between them?
+            <select
+              value={yesNoValue(s.atticsContinuous)}
+              onChange={(e) => setSvt({ atticsContinuous: yesNoParse(e.target.value) })}
+            >
+              <option value="">—</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+            <span className="field-hint">
+              A catwalk joining two buildings does not join their attics — this is what decides a trench
+            </span>
+          </label>
+        )}
         <label className="field">
           HOA?
           <select value={yesNoValue(s.hoa)} onChange={(e) => setSvt({ hoa: yesNoParse(e.target.value) })}>
@@ -659,6 +724,21 @@ export default function SvtCard({
           />
           <span className="field-hint">Joins the list above</span>
         </label>
+      </div>
+
+      <div className="install-subhead">Not covered here</div>
+      <div className="install-row">
+        <div className="field tick-field">
+          Questions this note does not answer
+          <div className="service-ticks">
+            {NOT_REVIEWED.map((x) =>
+              tick(`nr-${x.key}`, x.key, (s.notReviewed ?? []).includes(x.key), () =>
+                setSvt({ notReviewed: toggleIn(s.notReviewed, x.key) }),
+              ),
+            )}
+          </div>
+          <span className="field-hint">Panel fit and production range point at the PR team</span>
+        </div>
       </div>
 
       <div className="install-subhead">The ask</div>

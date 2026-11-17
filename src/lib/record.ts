@@ -64,6 +64,7 @@ export function hasContent(r: PostRecord): boolean {
     s?.costNotes,
     s?.hoActionsOther,
     s?.blockedOn,
+    s?.ruledOutReason,
     ...(n?.orientations ?? []),
   ];
   const dropdownChosen =
@@ -99,6 +100,9 @@ export function hasContent(r: PostRecord): boolean {
     s?.clearanceAllMet !== undefined ||
     s?.atticAccessible !== undefined ||
     s?.detachedStructure !== undefined ||
+    s?.atticsContinuous !== undefined ||
+    (s?.ruledOut?.length ?? 0) > 0 ||
+    (s?.notReviewed?.length ?? 0) > 0 ||
     s?.hoa !== undefined ||
     s?.batteryStacks !== undefined ||
     s?.costDirection !== undefined ||

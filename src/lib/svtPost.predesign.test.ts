@@ -142,6 +142,117 @@ describe('site conditions', () => {
   });
 });
 
+describe('attic continuity between structures', () => {
+  // Omar Rajab, 2026-11-17, with an annotated aerial showing two separate
+  // Attic boxes joined by a catwalk: "although the buildings are connected by
+  // the catwalk, their attics aren't connected."
+  it('states the fact that forces the trench', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { detachedStructure: true, atticsContinuous: false } }));
+    expect(text).toContain('The property has detached buildings.');
+    expect(text).toContain('The attics are not continuous between the structures, so wires cannot run attic-to-attic.');
+  });
+
+  it('continuous attics read the other way', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { detachedStructure: true, atticsContinuous: true } }));
+    expect(text).toContain('The attics are continuous between the structures, so wires can be routed attic-to-attic.');
+  });
+
+  it('means nothing without a second structure, so it prints nothing', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { detachedStructure: false, atticsContinuous: false } }));
+    expect(text).toContain('No detached buildings on the property.');
+    expect(text).not.toContain('attic-to-attic');
+  });
+
+  it('unanswered prints nothing', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { detachedStructure: true } }))).not.toContain('attic-to-attic');
+  });
+});
+
+describe('ruled-out paths', () => {
+  // The William Giles round-trip: the note said why the meter wall was best
+  // but never why external-only fails, so the question came back.
+  it('names the rejected paths and why', () => {
+    const text = buildSvtPostText(
+      svtRecord({
+        svt: {
+          pathB2b: true,
+          ruledOut: ['pathExternal', 'pathTrench'],
+          ruledOutReason: 'only partially external — would still need both attics and a trench',
+        },
+      }),
+    );
+    expect(text).toContain(
+      'Ruled out: External run, Trench (underground) — only partially external — would still need both attics and a trench.',
+    );
+  });
+
+  it('rejected paths with no reason still print', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { ruledOut: ['pathAttic'] } }));
+    expect(text).toContain('Ruled out: Attic run.');
+  });
+
+  it('does not double the period when the writer typed one', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { ruledOut: ['pathAttic'], ruledOutReason: 'no access.' } }));
+    expect(text).toContain('Ruled out: Attic run — no access.');
+    expect(text).not.toContain('access..');
+  });
+
+  it('a path cannot be both likely and ruled out — the tick wins', () => {
+    // SvtCard makes this unstorable, but a hand-edited record must not print
+    // a contradiction either.
+    const text = buildSvtPostText(svtRecord({ svt: { pathAttic: true, ruledOut: ['pathAttic', 'pathTrench'] } }));
+    expect(text).toContain('Attic run.');
+    expect(text).toContain('Ruled out: Trench (underground).');
+    expect(text).not.toContain('Ruled out: Attic run');
+  });
+
+  it('prints inside the conduit path bullet, not its own', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { pathB2b: true, ruledOut: ['pathTrench'] } }));
+    expect(text).toContain('*Most Likely Conduit Path:*');
+    expect(text.indexOf('Ruled out')).toBeGreaterThan(text.indexOf('Most Likely Conduit Path'));
+  });
+
+  it('nothing ruled out prints nothing', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { pathB2b: true } }))).not.toContain('Ruled out');
+  });
+});
+
+describe('scope boundary', () => {
+  // Allie Mullen asked whether SOW checks panel fit and production range.
+  it('groups the items that share a team into one sentence', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit', 'production range'] } }));
+    expect(text).toContain(
+      '*Not Covered Here:* Not covered by this note: panel fit and production range — please check with the PR team.',
+    );
+  });
+
+  it('a single item reads without the list join', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit'] } }));
+    expect(text).toContain('Not covered by this note: panel fit — please check with the PR team.');
+  });
+
+  it('an item with no known team prints without inventing one', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['structural'] } }));
+    expect(text).toContain('Not covered by this note: structural.');
+    expect(text).not.toContain('please check with');
+  });
+
+  it('mixed items split into one line per team', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit', 'structural'] } }));
+    expect(text).toContain('Not covered by this note: panel fit — please check with the PR team.');
+    expect(text).toContain('Not covered by this note: structural.');
+  });
+
+  it('drops a stored item this build no longer offers', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { notReviewed: ['astrology'] } }))).not.toContain('Not Covered Here');
+  });
+
+  it('sits immediately before the ask', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit'], ask: 'goodToGo' } }));
+    expect(text.indexOf('Not Covered Here')).toBeLessThan(text.indexOf('The Ask'));
+  });
+});
+
 describe('cost impact', () => {
   it('names the direction and the drivers', () => {
     const text = buildSvtPostText(

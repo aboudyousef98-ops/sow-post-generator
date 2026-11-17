@@ -32,6 +32,25 @@
 // Not implemented: cross-tab `storage` events and the quota limit. Nothing in
 // this app uses either; if that changes, this is the file to revisit.
 
+// ---------------------------------------------------------------------------
+// waitFor's default budget (added 2026-11-17).
+//
+// testing-library defaults `waitFor` to ONE second. That is a wall-clock
+// budget, and this suite runs 78 files across 8 jsdom workers — the same
+// contention documented above. The App-mounting files started failing
+// non-deterministically on plain `await waitFor(...)` calls carrying no
+// explicit timeout, every one of them green in isolation.
+//
+// Raising the default here fixes them in one place instead of editing dozens
+// of call sites, and it leaves every EXPLICIT `{ timeout: n }` untouched —
+// a test that deliberately asserts something happens fast still does.
+//
+// This buys time, it does not buy speed: the underlying cost is the number of
+// full-<App /> mounts in the suite. Cut mounts before raising this again.
+import { configure } from '@testing-library/dom';
+
+configure({ asyncUtilTimeout: 5_000 });
+
 export {};
 
 class MemoryStorage implements Storage {

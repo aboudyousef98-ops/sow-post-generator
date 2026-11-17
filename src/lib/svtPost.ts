@@ -84,6 +84,19 @@ export const COST_HEAD: Record<CostDirection, string> = {
   neutral: 'No significant cost change expected.',
 };
 
+/**
+ * Things a pre-design note is NOT the answer to, and who to ask instead.
+ * `team` is only filled where the channel actually named one — panel fit and
+ * production range go to the PR team (Omar Rajab, 2026-11-17). The other two
+ * print without a pointer rather than invent a routing nobody stated.
+ */
+export const NOT_REVIEWED: { key: string; team: string | null }[] = [
+  { key: 'panel fit', team: 'the PR team' },
+  { key: 'production range', team: 'the PR team' },
+  { key: 'structural', team: null },
+  { key: 'AHJ requirements', team: null },
+];
+
 /** The recurring things a homeowner is asked to do before the crew arrives. */
 export const HO_ACTIONS = [
   'clear the garage',
@@ -163,8 +176,18 @@ function siteConditionLines(record: PostRecord): string[] {
   const lines: string[] = [];
   if (s.atticAccessible === true) lines.push('The attic is accessible, so wires can be routed through it.');
   else if (s.atticAccessible === false) lines.push('The attic is not accessible.');
-  if (s.detachedStructure === true) lines.push('The property has detached buildings.');
-  else if (s.detachedStructure === false) lines.push('No detached buildings on the property.');
+  if (s.detachedStructure === true) {
+    lines.push('The property has detached buildings.');
+    // Continuity only means anything once there is more than one structure,
+    // and it is what decides whether an attic run between them is possible.
+    if (s.atticsContinuous === true) {
+      lines.push('The attics are continuous between the structures, so wires can be routed attic-to-attic.');
+    } else if (s.atticsContinuous === false) {
+      lines.push('The attics are not continuous between the structures, so wires cannot run attic-to-attic.');
+    }
+  } else if (s.detachedStructure === false) {
+    lines.push('No detached buildings on the property.');
+  }
   if (s.hoa !== undefined) lines.push(`HOA: ${s.hoa ? 'yes' : 'no'}.`);
   if (s.batteryStacks !== undefined) lines.push(stackLine(s.batteryStacks));
   return lines;
@@ -257,14 +280,47 @@ function batteryLines(record: PostRecord): string[] {
   return lines;
 }
 
-/** The Most Likely Conduit Path bullet: the ticked names, then the notes. */
+/**
+ * The Most Likely Conduit Path bullet: the ticked names, then what was ruled
+ * out and why, then the notes.
+ *
+ * The ruled-out line is the one that stops the reader asking "could we not
+ * just do X?" — which is exactly the round-trip the William Giles thread cost.
+ */
 function pathLines(record: PostRecord): string[] {
   const s: SvtNotes = record.svt ?? {};
   const names = SVT_PATHS.filter((p) => s[p.field]).map((p) => p.label);
   const lines: string[] = [];
   if (names.length) lines.push(`${names.join(', ')}.`);
+
+  // A path ticked as likely can never also be ruled out — SvtCard clears the
+  // other side on toggle — but filter anyway so a hand-edited record cannot
+  // print a contradiction.
+  const out = SVT_PATHS.filter((p) => (s.ruledOut ?? []).includes(p.field) && !s[p.field]).map((p) => p.label);
+  if (out.length) {
+    const why = (s.ruledOutReason ?? '').trim().replace(/[.\s]+$/, '');
+    lines.push(`Ruled out: ${out.join(', ')}${why ? ` — ${why}` : ''}.`);
+  }
+
   lines.push(...noteLines(effectiveText(s.pathNotes ?? '', 'svt.pathNotes', record)));
   return lines;
+}
+
+/** The Not Covered Here bullet: one line per team the items point at. */
+function notReviewedLines(record: PostRecord): string[] {
+  const s: SvtNotes = record.svt ?? {};
+  const picked = NOT_REVIEWED.filter((x) => (s.notReviewed ?? []).includes(x.key));
+  if (!picked.length) return [];
+  // Group by team so items sharing a pointer share a sentence, and items with
+  // no known team are simply listed.
+  const byTeam = new Map<string | null, string[]>();
+  for (const p of picked) byTeam.set(p.team, [...(byTeam.get(p.team) ?? []), p.key]);
+  return [...byTeam.entries()].map(([team, keys]) => {
+    const list = keys.length > 1 ? `${keys.slice(0, -1).join(', ')} and ${keys[keys.length - 1]}` : keys[0];
+    return team
+      ? `Not covered by this note: ${list} — please check with ${team}.`
+      : `Not covered by this note: ${list}.`;
+  });
 }
 
 /** The Scheduling bullet: the crew-days call, then anything scheduling
@@ -303,6 +359,9 @@ export function buildSvtLines(record: PostRecord): PostItem[] {
     { label: 'Scheduling', values: schedulingLines(record) },
     // The homeowner's homework, then the ask — the order every real note ends in.
     { label: 'Homeowner Actions', values: hoActionValues(record) },
+    // The scope boundary sits immediately before the ask: it is the last thing
+    // read, and it answers the question the ask would otherwise invite.
+    { label: 'Not Covered Here', values: notReviewedLines(record) },
     { label: 'The Ask', values: askLines(record) },
   ];
   return items.filter((it) => it.values.length > 0);
