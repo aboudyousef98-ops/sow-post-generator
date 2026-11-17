@@ -1010,6 +1010,10 @@ export default function App({ session, onLogout, onSessionChange }: AppProps = {
             key={tab}
             ahjs={boardsOfKind(ahjs, TAB_KIND[tab as keyof typeof TAB_KIND])}
             setAhjs={(next) => setAhjs(replaceKind(ahjs, TAB_KIND[tab as keyof typeof TAB_KIND], next))}
+            // Bulk import writes across every kind from one sheet, so it needs
+            // the whole list — replaceKind would drop the other kinds' rows.
+            allAhjs={ahjs}
+            setAllAhjs={setAhjs}
             selectedId={ahjSelectedId}
             onSelect={setAhjSelectedId}
             settings={settings}

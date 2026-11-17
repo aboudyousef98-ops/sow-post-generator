@@ -611,6 +611,8 @@ export interface AhjPost {
    * never rejected for an unrecognised category.
    */
   category?: string;
+  /** Houston / DFW / Other — metadata on the rule, NOT part of a board's key. */
+  region?: string;
   confidence?: RuleConfidence;
   /** Absent = `current`. Read it through `ruleStatus()`, never directly. */
   status?: RuleStatus;

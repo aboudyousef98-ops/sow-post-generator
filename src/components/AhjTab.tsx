@@ -12,9 +12,16 @@ import {
   normName,
   searchAhjs,
 } from '../lib/ahj';
+import {
+  applyRequirementsImport,
+  countImportBatch,
+  listImportBatches,
+  undoImportBatch,
+} from '../lib/requirementsImport';
 import type { Ahj, AhjPost, Settings } from '../types';
 import type { Toast } from './Toast';
 import FormatToolbar, { continueList, formatHotkey } from './FormatToolbar';
+import RequirementsImportModal from './RequirementsImportModal';
 import RichText from './RichText';
 
 interface Props {
@@ -39,6 +46,17 @@ interface Props {
   itemPlural?: string;
   /** One line under the heading explaining how this kind reaches a post. */
   subtitle?: string;
+  /**
+   * EVERY board, of every kind, plus a setter for the whole list.
+   *
+   * Bulk import needs these because one sheet carries AHJ, Utility, Funding
+   * and General rows together — writing it through this tab's own single-kind
+   * setter would drop three quarters of the file. Optional so the mobile view
+   * and the tests can mount this tab without them, which also hides the
+   * import controls there.
+   */
+  allAhjs?: Ahj[];
+  setAllAhjs?: (a: Ahj[]) => void;
 }
 
 const fmt = (iso: string) =>
@@ -71,8 +89,16 @@ export default function AhjTab({
   itemNoun = 'AHJ',
   itemPlural = `${itemNoun}s`,
   subtitle = 'Compose shows a board automatically when the Jurisdiction matches',
+  allAhjs,
+  setAllAhjs,
 }: Props) {
   const author = lockedAuthor ?? settings.lastAuthor ?? settings.authors[0] ?? '';
+
+  const [importOpen, setImportOpen] = useState(false);
+  const [confirmUndo, setConfirmUndo] = useState<string | null>(null);
+  // The newest batch still present in the data. Derived, not stored — a batch
+  // stops existing the moment its last post does.
+  const lastBatch = allAhjs ? listImportBatches(allAhjs)[0] : undefined;
 
   const [globalQuery, setGlobalQuery] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -367,6 +393,26 @@ export default function AhjTab({
         <h1>{heading}</h1>
         <span className="muted">{subtitle}</span>
         <span style={{ flex: 1 }} />
+        {/* Bulk import spans EVERY kind — one sheet carries AHJ, Utility,
+            Funding and General rows — so it is only offered when the parent
+            handed down the full board list and a setter for it. */}
+        {allAhjs && setAllAhjs && (
+          <>
+            {lastBatch && (
+              <button
+                type="button"
+                className="btn secondary"
+                title={`Remove the ${lastBatch.count} rule${lastBatch.count === 1 ? '' : 's'} added by the last import`}
+                onClick={() => setConfirmUndo(lastBatch.batchId)}
+              >
+                Undo last import
+              </button>
+            )}
+            <button type="button" className="btn secondary" onClick={() => setImportOpen(true)}>
+              Bulk import
+            </button>
+          </>
+        )}
         <button
           type="button"
           className="btn secondary"
@@ -879,6 +925,57 @@ export default function AhjTab({
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {importOpen && allAhjs && setAllAhjs && (
+        <RequirementsImportModal
+          boards={allAhjs}
+          onClose={() => setImportOpen(false)}
+          onImport={({ plan }) => {
+            const batchId = crypto.randomUUID();
+            const now = new Date().toISOString();
+            setAllAhjs(
+              applyRequirementsImport(allAhjs, plan, { by: author, now, batchId, newId: () => crypto.randomUUID() }),
+            );
+            setImportOpen(false);
+            const n = plan.counts.newRules;
+            toast(`Imported ${n} rule${n === 1 ? '' : 's'} across ${plan.entries.length} entr${plan.entries.length === 1 ? 'y' : 'ies'}.`);
+          }}
+        />
+      )}
+
+      {confirmUndo && allAhjs && setAllAhjs && (
+        <div className="modal-overlay" onClick={() => setConfirmUndo(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3>Undo this import?</h3>
+            <p className="muted">
+              This removes the <b>{countImportBatch(allAhjs, confirmUndo)}</b> rule
+              {countImportBatch(allAhjs, confirmUndo) === 1 ? '' : 's'} that import added. A rule anyone has edited
+              since is kept, and nothing written by hand is touched.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="btn secondary" onClick={() => setConfirmUndo(null)}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => {
+                  const { boards, removed, keptEdited } = undoImportBatch(allAhjs, confirmUndo);
+                  setAllAhjs(boards);
+                  setConfirmUndo(null);
+                  toast(
+                    keptEdited > 0
+                      ? `Removed ${removed}; kept ${keptEdited} that had been edited.`
+                      : `Removed ${removed} imported rule${removed === 1 ? '' : 's'}.`,
+                  );
+                }}
+              >
+                Undo the import
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
