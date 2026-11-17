@@ -645,6 +645,76 @@ App-mounting tests lean or this resurfaces.
 
 ---
 
+## Items 14–17 — Requirements bulk import + wall fit (2026-11-17)
+
+Aboud's spec: ~265 collected rules against a board that could only add one at
+a time. Three findings reshaped it before any code:
+
+- **Aliases were already built.** `Ahj.aliases` exists and `matchAhj` already
+  checks them (`lib/ahj.ts:59`). Only the match report was new.
+- **The General board already exists and is deliberately NEVER posted** —
+  `requirementSections` loops `['ahj','utility','funding']` only. Item 2 is a
+  decision to reverse, not a feature to add. **Still unanswered** — see below.
+- **Per-rule fields were the real dependency.** Items 1, 3, 5 and 6 all read
+  or write them, so they landed first.
+
+| # | Commit | What |
+|---|---|---|
+| 14 | `f42bdfa` | Per-rule fields, category grouping, superseded hiding |
+| 15 | `d89b8e2` | Bulk import: CSV/XLSX/paste, preview, dedupe, batch undo |
+| 16 | `05ef66e` | Export (CSV/XLSX) + match report |
+| 17 | `5f02b08` | Battery wall-fit from the elevation template |
+
+**No server change was needed for any of it** — `PostSchema`/`AhjSchema` in
+`ahjs.mts` are already `.loose()`, so the new post fields pass through the PUT
+untouched. That is the 37-hour `.strict()` lesson paying off.
+
+**The contract held throughout is about absence.** A post written before these
+fields has no category and no status and must reach Compose exactly as it
+always did: `status` absent means `current`; a board with no categories yields
+one unlabelled group; all three renderers print that case byte-identically.
+The existing wording-pinned tests in `template.test.ts` and
+`sfSubmission.test.ts` prove it — untouched, still passing.
+
+**Two bugs the real-.xlsx test caught that hand-built grids could not:**
+1. Aliases were collected *inside* the status gate, so an alias on an entry's
+   first row vanished whenever that row was "To confirm" — i.e. **"CNP"
+   quietly stops matching CenterPoint**. Aliases describe the board, not the
+   rule; now gathered from every valid row before any status filtering.
+2. A Current row whose twin was held back by status must still import. Status
+   filters *before* dedupe, so a skipped row never consumes its twin's slot —
+   same ordering, same reason, as the lender gate in `sfWorkbook`.
+
+**Wall fit is deliberately conservative.** Body 23.57" is exact; the gap is
+rounded up from the drawn 3.76"/3.97" to a flat 4", so `wallNeeded()` returns
+51.14"/78.71" against the template's 50.90"/78.44". A test pins that it is
+always *above* the drawn run and within 0.33" — erring toward "needs more
+wall" is the safe direction for a fit check.
+
+Gate: **82 files / 1514 tests**, 0 failures, `tsc` clean, `eslint` clean
+across `src`.
+
+### Not built, and why
+
+- **Phase 4** (`POST /api/requirements/import`, per-user API tokens) — would
+  collide with Aboud's in-flight `guard.ts` work. Also a NEW auth mechanism:
+  the app authenticates with one shared `API_PATH_TOKEN` today.
+- **ETag / 304 conditional GET** (~240 GB/month) — same collision; it touches
+  the exact GET handlers being edited.
+- **General board → all jobs** — needs Aboud's decision. The board holds 4
+  posts; post 3 ("make sure the designers point out…") is written to the SOW
+  engineer, not an installer. Recommendation: **new board, leave General
+  alone**. ~40 lines would otherwise reach every Slack post and SF handoff.
+- **Compose skeleton** — Compose has never had one and only `UsersTab` uses
+  `Skeleton.tsx`. Judgment call: the house rule targets screens that wait on
+  the network, and Compose hydrates synchronously from localStorage, so there
+  is no flash to cover. Logged rather than built.
+- **Full equipment-row wall fit** — needs the inverter / 125A load-centre /
+  200A meter / AC-disconnect widths, plus questions 5–8 in
+  `_STUDY_equipment_widths_dxf.md`.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify
