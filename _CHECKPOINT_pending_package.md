@@ -1,4 +1,23 @@
-# Pending feature package — NOT DEPLOYED
+# Pending feature package — EMPTY, everything below is SHIPPED
+
+> **2026-11-19: item 18 SHIPPED** in deploy `6afe18f4b4a8888ef9f98abd` on his
+> "deploy". Backups `_versions/v46-live-backup-2026-11-19-predeploy/` and
+> `v47-…-postdeploy/` — **all 5 stores byte-identical**. Verified on prod:
+> published deploy is `6afe18f4…` (context production), bundle
+> `index-Bbw6apvd.js` contains `alu-banner` and **no `changeme`**, site 200,
+> functions 403 to unauthorized callers (both `/.netlify/functions/records`
+> and a wrong `/api/<token>/` path). `main` pushed (`375564c`).
+>
+> **⚠ CORRECTION — items 12–17 were ALREADY LIVE before this deploy.** They
+> say "PENDING" below and that is WRONG: a production deploy went out on
+> **2026-11-17 20:27 UTC — `6afcb8a284167b7266288970`** (bracketed by the
+> `v43`/`v44` backups, whose "postdeploy" name is the only trace that was
+> left) and nobody updated this file. Verified by `getSite` →
+> `published_deploy` plus marker strings in the live bundle (`Pre-Design
+> status` ×5, `Export board`). So this deploy shipped **the aluminum banner
+> and nothing else** — prod was exactly `bcbebed`. Lesson: record the deploy
+> id in this file at deploy time, not after; the backup folder name is not a
+> record.
 
 > Aboud 2026-11-06: "dont deploy btw, we will save this, do a package of
 > features, then we deploy."
@@ -715,7 +734,7 @@ across `src`.
 
 ---
 
-## 18. Aluminum wiring banner RESTORED (2026-11-19) ✅ done, tested — PENDING
+## 18. Aluminum wiring banner RESTORED (2026-11-19) ✅ SHIPPED `6afe18f4`
 
 **Ask:** "where did the aluminum requirment gone?" → "give me everything back
 as it was." Straight reversal of item 5's sub-ask 2.
