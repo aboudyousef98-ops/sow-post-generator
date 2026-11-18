@@ -715,6 +715,53 @@ across `src`.
 
 ---
 
+## 18. Aluminum wiring banner RESTORED (2026-11-19) ✅ done, tested — PENDING
+
+**Ask:** "where did the aluminum requirment gone?" → "give me everything back
+as it was." Straight reversal of item 5's sub-ask 2.
+
+**History, so this stops looping:**
+
+| Date | What |
+|---|---|
+| 2026-10-20 | Built from Othman's 509-row xlsx — commit `118a4e9`, deploy `6ad7b41917cb6c0342c3113d` |
+| 2026-11-15 | Removed — "not relatable", commit `bbda487`, live in deploy `6afa1986` |
+| 2026-11-19 | **Restored, identical** — this item |
+
+**Change (2 files).** Nothing was rebuilt: only the render call had been
+deleted in November, so the dataset, matcher, generator script and
+`.alu-banner` CSS were all still in place and untouched.
+- `src/components/ComposeTab.tsx` — `matchAluminum` import, `const aluMatch`,
+  and the `{aluMatch && <div className="alu-banner">…}` block back under the
+  Jurisdiction field. **Code lines are byte-identical to `bbda487^`** (verified
+  by diff); only the comment carries the new restore note.
+- `src/components/ComposeTab.aluminum.test.tsx` — back to the original two
+  tests (banner shows / clears off-list; stance never reaches the preview).
+  It had been rewritten in November to pin the REMOVAL, which is why nothing
+  flagged the banner as missing for four days.
+
+**Restored as it was, deliberately — not the quieter version.** It fires for
+**every** matched jurisdiction including the 157 "Allowed per NEC" and 193
+"Unknown — call city" rows, and stays **display-only** (never appended to the
+post, no approval checkbox — a test pins that). The filter-to-restricted-only
+option was offered and he chose everything back; do not re-litigate.
+
+**Pre-change state** backed up to `_versions/v45-pre-aluminum-restore-2026-11-19/`
+(ComposeTab.tsx + the removal-pinning test), alongside the 2026-10-20
+`v20-aluminum-warning/`.
+
+**Gate green:** `vitest run --no-file-parallelism` → **83 files, 1538 tests**,
+all passing (aluminum pair 9/9 on their own). `tsc --noEmit` clean,
+`eslint src netlify --max-warnings 0` clean, `vite build` ok,
+`check:nosecrets` ok, and `alu-banner` + "Aluminum wiring" confirmed present
+in `dist/assets/index-*.js`.
+
+**Still open (unchanged by this):** if Salesforce ever carries the stance on
+its jurisdictions object, the lookup can switch source without touching the
+banner.
+
+---
+
 ## Blocking the deploy
 
 1. Live-data backup is **mandatory** before and after — pull all Netlify

@@ -9,6 +9,7 @@ import { metroCityName, nearestMetro, type Metro } from '../lib/geo';
 import { fileToDataUrl, ImageTooLargeError } from '../lib/image';
 import { titleCaseName } from '../lib/nameCase';
 import { boardsOfKind, livePosts, matchAhj } from '../lib/ahj';
+import { matchAluminum } from '../lib/aluminumWiring';
 import { sfNotesSections } from '../lib/sfNotes';
 import { APPROVAL_FIELD, matchedBoard } from '../lib/template';
 import { extractedToFields, installWeekday, mergeSfFields, parseSfText } from '../lib/parser';
@@ -248,6 +249,9 @@ export default function ComposeTab({
   // Utility / Funding / General boards, and a utility named "Harris" must not
   // match a Jurisdiction of "Harris".
   const ahjMatch = matchAhj(record.sf.jurisdiction, boardsOfKind(ahjs ?? [], 'ahj'));
+  // Aluminum wiring stance from Othman's static list — independent of the
+  // (hand-maintained) AHJ boards above, read-only, matched the same way.
+  const aluMatch = matchAluminum(record.sf.jurisdiction);
   // Salesforce notes (Scheduling Alerts! + AHJ/utility requirements) from the
   // board row this customer matches — mirrored there by Import from Salesforce.
   // Display-only, never posted (Aboud 2026-10-21: "for us to read").
@@ -716,12 +720,16 @@ export default function ComposeTab({
               onChange={(e) => setSf({ jurisdiction: e.target.value }, 'jurisdiction')}
             />
           </label>
-          {/* Aluminum wiring banner REMOVED (Aboud 2026-11-15: "remove the
-              warning that is popped in yellow, it presents in each compose and
-              it is not relatable"). It fired for every listed jurisdiction
-              with the same generic sentence, so it read as noise. The list and
-              matcher stay in lib/aluminumWiring.ts in case a quieter surface
-              is ever wanted. Pinned by ComposeTab.aluminum.test.tsx. */}
+          {/* Aluminum wiring stance (Aboud 2026-10-20): shows for EVERY listed
+              jurisdiction — his call — and is display-only, never posted.
+              Removed 2026-11-15 as noise, RESTORED 2026-11-19 on his "give me
+              everything back as it was" — unchanged from the 2026-10-20 form,
+              including the "Allowed per NEC" rows. */}
+          {aluMatch && (
+            <div className="alu-banner">
+              <strong>⚠ Aluminum wiring — {aluMatch.name}:</strong> {aluMatch.requirement}
+            </div>
+          )}
           {/* Utility. Until now this was filled ONLY by the Salesforce
               extractor, with no way to set it by hand. It already drives the
               automatic disconnect duration — a TNMP utility means 4–6 h
