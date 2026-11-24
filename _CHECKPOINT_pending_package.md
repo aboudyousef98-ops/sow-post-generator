@@ -901,7 +901,25 @@ County (14 jobs). Gates: 1594 vitest · tsc · eslint · build · nosecrets gree
 
 ---
 
-## 2026-11-24 — SVT Compose rework + Design-Feedback process checks (PENDING deploy)
+## 2026-11-24 — SHIPPED ✅ deploy `6b05beda4d12a83b675dccfd`
+
+Package below (A–D) went to production on 2026-11-24 on Aboud's "finish
+everything and deploy". Deploy id **`6b05beda4d12a83b675dccfd`** (state ready,
+`getSite.published_deploy` confirms), via `netlify deploy --build --prod`.
+- **Backup-first protocol followed.** Pre: `_versions/v48-live-backup-2026-11-24-predeploy/`
+  (records 530, board 582 projects / 4462 activity, ahjs 84, users 7, extrawork 1).
+  Post: `_versions/v49-live-backup-2026-11-24-postdeploy/`. **All five stores
+  byte-identical pre↔post** — no data change during the window.
+- **Live verification:** site 200; functions 403 to unauthorized callers; bundle
+  `index-DKZ4IpuE.js` has **no `changeme`**; markers present — "Polish a message" ×2,
+  "Does the homeowner have a preferred location", "master template" ×2,
+  "Equipment width"; removed markers gone — "Cost impact" subhead 0, "Ruled out —
+  considered" 0.
+- **Still to eyeball on the live site:** the ✉️ message-polisher AI *quality*
+  (persona), which can't be tested off localhost.
+- **Team NOT yet told** about this package (biggest Compose change in a while).
+
+## 2026-11-24 — SVT Compose rework + Design-Feedback process checks (SHIPPED above)
 
 From Aboud's SVT Compose notes + a follow-up for the Design Feedback card.
 **Not deployed** — banked for the next package. Gates all green (1598 vitest ·
