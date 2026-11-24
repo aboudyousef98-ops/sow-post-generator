@@ -64,6 +64,18 @@ export function rewrite(items: PolishItem[], mode: RewriteMode = 'polish'): Prom
   return post<RewriteResponse>('rewrite', { items, mode });
 }
 
+/**
+ * Polish a whole free-text message (Aboud 2026-11-24, the "Polish a message"
+ * button). Unlike `rewrite`, this is NOT per-bullet — the message is sent and
+ * returned intact, carrying the SOW-team writing persona (`mode: 'message'`).
+ * The `id` is a required-by-schema placeholder; the server returns it unchanged
+ * and we read the single polished string back.
+ */
+export async function polishMessage(text: string): Promise<string> {
+  const res = await post<RewriteResponse>('rewrite', { items: [{ id: 'design', text }], mode: 'message' });
+  return res.items[0]?.text ?? '';
+}
+
 export interface ExtractedFields {
   recordTitle: string | null;
   customerName: string | null;

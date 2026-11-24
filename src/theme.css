@@ -2011,6 +2011,27 @@ table.list tr.row:hover {
   font-size: 12px;
 }
 
+/* ---- Polish a message — scratch panel (Aboud 2026-11-24) ----------------- */
+
+.msg-polisher {
+  margin-top: 10px;
+}
+
+.msg-polisher-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.msg-polisher-head h3 {
+  margin: 0;
+}
+
+.msg-polisher-out {
+  background: var(--surface-2, #f6f7f9);
+}
+
 /* ---- Manual edit of the post (Aboud, 2026-09-30) ------------------------- */
 
 .preview-head-actions {

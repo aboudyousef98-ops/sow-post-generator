@@ -33,9 +33,11 @@ describe('rewrite mode (spec/10 §11.2)', () => {
     expect(RewriteRequest.parse(ok).mode).toBe('polish');
   });
 
-  it('accepts both modes', () => {
+  it('accepts all three modes', () => {
     expect(RewriteRequest.parse({ ...ok, mode: 'rewrite' }).mode).toBe('rewrite');
     expect(RewriteRequest.parse({ ...ok, mode: 'polish' }).mode).toBe('polish');
+    // 'message' (Aboud 2026-11-24) — the whole-message polisher.
+    expect(RewriteRequest.parse({ ...ok, mode: 'message' }).mode).toBe('message');
   });
 
   it('rejects an unknown mode', () => {

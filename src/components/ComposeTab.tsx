@@ -26,6 +26,7 @@ import OutputColumn from './OutputColumn';
 import SvtCard from './SvtCard';
 import WireCheckRow from './WireCheckRow';
 import DesignQaRow from './DesignQaRow';
+import MessagePolisher from './MessagePolisher';
 
 /**
  * Which compose the form shows (Aboud 2026-11-15): the full SOW scope, or the
@@ -88,6 +89,9 @@ export default function ComposeTab({
     error?: string;
   }>({ busy: false });
   const [extractState, setExtractState] = useState<{ busy: boolean; error?: string; thumb?: string }>({ busy: false });
+  // "Polish a message" scratch panel (Aboud 2026-11-24) — a free-text polisher,
+  // independent of the record, toggled from the AI-actions row.
+  const [showMsgPolish, setShowMsgPolish] = useState(false);
   const [dropped, setDropped] = useState<Partial<Record<PolishKey, string[]>>>({});
   // Set when the AI returned a different number of bullets than we sent it.
   const [bulletDrift, setBulletDrift] = useState<Partial<Record<PolishKey, { from: number; to: number }>>>({});
@@ -482,6 +486,17 @@ export default function ComposeTab({
             '🦜 هري ابو روي'
           )}
         </button>
+        {/* Scratch message polisher (Aboud 2026-11-24): a free-text rewrite with
+            the SOW-team persona, independent of the Compose boxes. */}
+        <button
+          type="button"
+          className="btn secondary"
+          aria-expanded={showMsgPolish}
+          onClick={() => setShowMsgPolish((v) => !v)}
+          title="Paste a rough Slack/Teams message and get a professional version to copy"
+        >
+          ✉️ Polish a message
+        </button>
         {polishState.ms !== undefined && polishState.busy === false && (
           <span className="muted">Polished ✓ {(polishState.ms / 1000).toFixed(1)}s</span>
         )}
@@ -494,6 +509,7 @@ export default function ComposeTab({
           </button>
         </div>
       )}
+      {showMsgPolish && <MessagePolisher aiAvailable={aiAvailable} onClose={() => setShowMsgPolish(false)} />}
     </>
   );
 

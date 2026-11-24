@@ -955,3 +955,26 @@ Replaced "does the HO agree with OUR location?" with a HO-first decision tree:
   (new), `src/components/SvtCard.tsx`, `src/components/DesignQaRow.tsx` (new),
   `src/components/ComposeTab.tsx`. Tests updated/added in the matching files
   plus `src/lib/designQa.test.ts` (new).
+
+### D. "Polish a message" button (SOW-team writing persona)
+Third AI button in the Compose actions row (next to Polish / هري ابو روي):
+**✉️ Polish a message**. Toggles a scratch panel (`MessagePolisher.tsx`) —
+paste a rough Slack/Teams message → professional SOW-team version → Copy.
+Independent of the record (never reads/writes a draft, can't touch a live post).
+- A NEW `mode: 'message'` on `/api/<token>/rewrite` — a WHOLE-message rewrite
+  that SKIPS the per-bullet split (the persona restructures: thanks-first
+  feedback, bold-label bullets, keeps mate/habeeb/Salam Team, one-paragraph on
+  request, keeps MPU/FSU/BOS/4-0 AL/sonnen etc., HO→homeowner). Prompt
+  `MESSAGE_SYSTEM_PROMPT` in `rewrite.mts`; temp 0.4, maxTokens 2000.
+- Client: `polishMessage(text)` in `src/lib/api.ts` (carrier id `design`,
+  server returns it unchanged). 3000-char ceiling reused.
+- **⚠ AI output is LIVE-ONLY** — localhost can't test the model (his rule).
+  Deterministic parts are unit-tested (`MessagePolisher.test.tsx`, schema mode
+  accepts 'message'); the persona QUALITY must be eyeballed on the deploy URL
+  before trusting it.
+- Files: `netlify/functions/lib/rewriteSchema.ts`, `netlify/functions/rewrite.mts`,
+  `src/lib/api.ts`, `src/components/MessagePolisher.tsx` (new),
+  `src/components/ComposeTab.tsx`, `src/theme.css`. Tests:
+  `src/components/MessagePolisher.test.tsx` (new), `rewriteSchema.test.ts`.
+
+Gates after D: 1603 vitest · tsc · eslint · vite build · nosecrets green.

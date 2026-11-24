@@ -94,6 +94,31 @@ Three rough items stay THREE separate items — never combined into a paragraph:
 IN:  {"items":[{"id":"0","text":"tag wrong on sheet PV-2"},{"id":"1","text":"missing expansion unit in one line"},{"id":"2","text":"HO must know before we drill"}]}
 OUT: {"items":[{"id":"0","text":"The tag on sheet PV-2 is incorrect."},{"id":"1","text":"The expansion unit is missing from the one-line."},{"id":"2","text":"The homeowner must be informed before drilling."}]}`;
 
+// Message system prompt (Aboud 2026-11-24) — the "Polish a message" button.
+// A WHOLE-MESSAGE rewriter carrying the SOW-team writing persona, unlike the
+// two modes above: it restructures freely (thanks-first feedback, bold-label
+// bullets, keeps the friendly words), so it must NOT go through the per-bullet
+// line-preserving split. Transport is still the JSON {items:[{id,text}]} shape
+// callOpenAiJson expects — exactly one item in, one item out, same id.
+const MESSAGE_SYSTEM_PROMPT = `You are the writing assistant for a member of the SOW (Scope of Work) team at a residential solar and battery installation company in Texas (regions: DFW, HOU, Corpus Christi, McAllen/RGV). They review elevation drawings and BOS/BOM, give feedback to designers and subcontractors, write project notes for installers and CLR agents, and coordinate with teammates on Salesforce (SF).
+
+You will receive a JSON object with an "items" array holding EXACTLY ONE item, with an "id" and a "text". The "text" is a rough message the user wrote — possibly broken English, shorthand, or mixed Arabic and English. Rewrite it into clear, professional, respectful English.
+
+Return a JSON object with an "items" array holding EXACTLY ONE item, the SAME "id", whose "text" is ONLY the polished message — ready to copy and paste. No preamble, no explanation, no notes about what you changed. The "text" MAY contain newlines and simple markdown (bold with *asterisks*, "- " bullets).
+
+Keep these facts and terms EXACTLY as given — never change numbers, names, or technical terms, and never add technical claims the user did not make:
+MPU, FSU, FTP, MSP, MDP, ATS, BOS, BOM, SF, CLR agent, PE, WH, B2B (back-to-back), expansion unit, gateway, gutter box, junction box, LB/LR condulet, SCH 40/80 PVC, 4/0 AL, #4 Cu, SER, Polycam, Duracell, sonnen (lowercase), 45°/90° elbows. Write "HO" as "homeowner".
+
+Style rules:
+1. Write it as a normal Slack/Teams message, not an email, unless the user asks for an email.
+2. Keep the user's friendly words exactly: "mate", "brother", "habeeb", "wallah nar", "Salam Team".
+3. Keep every fact, number, name and technical term exactly. Do not add technical claims the user did not make.
+4. Use proper notation: 10" x 10" x 24", 45° elbows, 4–6 hours, 36" clearance, 120 ft.
+5. For feedback to designers or subcontractors, START with thanks or praise, then list the points politely. Call them "feedback" or "points", never "updates" or "issues".
+6. When there are several items, use bullet or numbered points with short **bold labels**. If the user asks for "one paragraph", return exactly one paragraph instead.
+7. Translate any Arabic or mixed-language input into professional English with the same meaning.
+8. Keep explanations out of the output. Return only the polished message.`;
+
 export default async (req: Request): Promise<Response> => {
   const started = Date.now();
   const cfg = readGuardConfig(process.env);
@@ -112,6 +137,35 @@ export default async (req: Request): Promise<Response> => {
   const model = process.env.OPENAI_MODEL_TEXT || 'gpt-4o-mini';
 
   const mode = parsed.data.mode;
+
+  // Message mode (Aboud 2026-11-24) is the odd one out: a WHOLE-message rewrite
+  // that is MEANT to restructure, so it skips the per-bullet split entirely —
+  // the message goes to the model intact and comes back as one polished string.
+  if (mode === 'message') {
+    try {
+      const raw = await callOpenAiJson({
+        apiKey,
+        model,
+        schemaName: 'polished_message',
+        schema: REWRITE_JSON_SCHEMA,
+        temperature: 0.4,
+        maxTokens: 2000,
+        messages: [
+          { role: 'system', content: MESSAGE_SYSTEM_PROMPT },
+          { role: 'user', content: JSON.stringify({ items: parsed.data.items, mode }) },
+        ],
+      });
+      const out = LineResponse.safeParse(raw);
+      if (!out.success || out.data.items.length === 0)
+        return jsonResponse(502, { error: 'AI returned unexpected shape', openai: 'schema mismatch' }, cors);
+      console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: 'rewrite', ms: Date.now() - started, model, mode, items: parsed.data.items.length }));
+      return jsonResponse(200, { items: out.data.items, model, ms: Date.now() - started }, cors);
+    } catch (err) {
+      const msg = err instanceof OpenAiError ? err.openaiMessage : 'AI request failed';
+      return jsonResponse(502, { error: 'AI request failed', openai: msg.slice(0, 500) }, cors);
+    }
+  }
+
   // A full rewrite needs room to rephrase; the copy-edit must not drift.
   const temperature = mode === 'rewrite' ? 0.3 : 0.1;
   const systemPrompt = mode === 'rewrite' ? REWRITE_SYSTEM_PROMPT : POLISH_SYSTEM_PROMPT;

@@ -46,8 +46,10 @@ export const RewriteRequest = z
   .object({
     items: z.array(RequestItem).min(1).max(POLISH_KEYS.length),
     // Optional and defaulted so a stale client that omits it keeps the old
-    // behaviour instead of failing (spec/10 §11.2).
-    mode: z.enum(['polish', 'rewrite']).optional().default('polish'),
+    // behaviour instead of failing (spec/10 §11.2). 'message' (Aboud 2026-11-24)
+    // is the whole-message polisher — a different, non-bulleted path in
+    // rewrite.mts that carries the SOW-team writing persona.
+    mode: z.enum(['polish', 'rewrite', 'message']).optional().default('polish'),
   })
   .strict()
   .refine((v) => new Set(v.items.map((i) => i.id)).size === v.items.length, {
