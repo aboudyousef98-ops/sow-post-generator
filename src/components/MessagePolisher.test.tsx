@@ -32,6 +32,16 @@ describe('MessagePolisher', () => {
     expect(polishMessageMock).toHaveBeenCalledWith('salam team, elevation missing expansion unit');
   });
 
+  it('lets the user edit the polished text before copying', async () => {
+    polishMessageMock.mockResolvedValue('Polished output.');
+    open();
+    fireEvent.change(screen.getByLabelText(/Your message/i), { target: { value: 'rough' } });
+    fireEvent.click(screen.getByRole('button', { name: /Polish this message/i }));
+    const out = await screen.findByLabelText(/Polished/i);
+    fireEvent.change(out, { target: { value: 'Polished output, tweaked.' } });
+    expect((out as HTMLTextAreaElement).value).toBe('Polished output, tweaked.');
+  });
+
   it('will not call the AI for an empty message', () => {
     open();
     expect((screen.getByRole('button', { name: /Polish this message/i }) as HTMLButtonElement).disabled).toBe(true);

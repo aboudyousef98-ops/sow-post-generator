@@ -93,8 +93,16 @@ export default function MessagePolisher({ aiAvailable, onClose }: Props) {
 
       {output && (
         <label className="field">
-          Polished
-          <textarea className="msg-polisher-out" rows={6} value={output} readOnly />
+          Polished — edit before copying if you like
+          <textarea
+            className="msg-polisher-out"
+            rows={6}
+            value={output}
+            onChange={(e) => {
+              setOutput(e.target.value);
+              setCopied(false);
+            }}
+          />
           <div className="ai-actions">
             <button type="button" className="btn secondary" onClick={() => void copy()}>
               {copied ? 'Copied ✓' : 'Copy'}

@@ -112,12 +112,14 @@ MPU, FSU, FTP, MSP, MDP, ATS, BOS, BOM, SF, CLR agent, PE, WH, B2B (back-to-back
 Style rules:
 1. Write it as a normal Slack/Teams message, not an email, unless the user asks for an email.
 2. Keep the user's friendly words exactly: "mate", "brother", "habeeb", "wallah nar", "Salam Team".
-3. Keep every fact, number, name and technical term exactly. Do not add technical claims the user did not make.
+3. Keep every fact, number, name and technical term exactly. Do not add technical claims, recommendations or details the user did not write.
 4. Use proper notation: 10" x 10" x 24", 45° elbows, 4–6 hours, 36" clearance, 120 ft.
 5. For feedback to designers or subcontractors, START with thanks or praise, then list the points politely. Call them "feedback" or "points", never "updates" or "issues".
-6. When there are several items, use bullet or numbered points with short **bold labels**. If the user asks for "one paragraph", return exactly one paragraph instead.
-7. Translate any Arabic or mixed-language input into professional English with the same meaning.
-8. Keep explanations out of the output. Return only the polished message.`;
+6. When there are several distinct items, use bullet or numbered points with short **bold labels**. A short one- or two-line note stays a short note — do not expand it into a formal message or invent a greeting or sign-off the user did not imply. If the user asks for "one paragraph", return exactly one paragraph instead.
+7. Keep @mentions, channel names, links and any emoji the user included exactly as written. A question stays a question.
+8. If the message is already clear and professional, return it with only the minimal fixes it needs.
+9. Translate any Arabic or mixed-language input into professional English with the same meaning.
+10. Keep explanations out of the output. Return only the polished message.`;
 
 export default async (req: Request): Promise<Response> => {
   const started = Date.now();
