@@ -791,3 +791,110 @@ banner.
 
 - Rebecca Post is live at "New project" with Hamzah's special-order Cu SER
   wire request (Slack, Nov 3) un-actioned.
+
+---
+
+## 2026-11-23 — Updates links + bold fix, and Group B board features (items 1–13, 19)
+
+Built in response to the 20-item bot-integration brief. Sequencing decision
+(Aboud, this session): **A + B now on one draft; the bot API (items 14–18, 20)
+is the NEXT checkpoint for review before the first server-side auth goes live.**
+
+Draft deployed (deploy-preview context): `6b042534a2632c3d867f3e39`
+Draft URL: https://6b042534a2632c3d867f3e39--sow-post-generator.netlify.app
+Health gate: `/api/<token>/health` → `"store":"sowpost-test"` ✓ (prod store untouched)
+Gates: 1568 vitest pass · tsc clean · eslint 0 warnings · build OK · check:nosecrets OK
+
+### Group A — Updates panel links + bold (items 1–4)
+- `src/lib/richText.ts`: link tokenizer lifted BEFORE the `*_~` mark scanner —
+  bare `http(s)` URLs, Slack `<url|label>` and `<url>`; trailing sentence
+  punctuation + URL-internal `_`/`*` preserved. `renderMarksHtml` emits
+  `<a target=_blank rel=noopener>` (Slack-paste parity). Bold-open relaxed to
+  "not whitespace" so `*#text*` bolds; close unchanged, so `2*3`/`PV_MOD_01`
+  stay literal.
+- `src/components/RichText.tsx`: anchor render (rel="noopener noreferrer").
+- `src/components/FormatToolbar.tsx`: 🔗 Link button inserts `<url|label>`,
+  selects the `url` token. Applies to every composer (Updates panel + edit).
+
+### Group B — board features (items 5–13, 19)
+- 5 fuzzy duplicate: `findSimilarProjects`/`nameSimilarity` (board.ts, pure,
+  no dep). Warning now names the match ("Looks like …"); "Add anyway" unchanged.
+- 6 unrated+install-soon: `isUnratedInstallSoon` + `filters.unratedInstallSoon`
+  + toolbar toggle + hollow-amber dot.
+- 7 one-click undo: `reversePatch` (board.ts, conflict-safe) + ↩ Undo per
+  change in ActivityModal → `revertActivity` (reuses applyPatch, stays logged).
+- 8 coordinator load: `coordinatorLoads` (active + Pre-Design-not-Done), "n/3"
+  badge in the coordinator cell.
+- 9 days-in-status: `statusChangedAt`/`daysInStatus` (from activity), chip in
+  the status cell.
+- 10 filter-on chip: `anyFilterActive` + "Filter on — clear" chip.
+- 11 stability: `boardSignature`; `applyServerBoard` returns the same object
+  when a poll brings nothing new → no re-render, scroll/dropdown survive.
+- 12 batch id: `BoardActivity.batchId`/`source`; shown in bulk + import toasts.
+- 13 fields: `BoardProject.sourceUrl`/`requestedBy` (optional); editable in the
+  Updates panel header (Source renders ↗).
+- 19 data hooks: `td[data-column-id]` on every cell; `data-testid="updates-panel"`.
+
+Tests: `src/lib/boardExtras.test.ts` (new, 22 pins) + richText/FormatToolbar
+pins + 3 BoardTab UI pins. All new fields are optional/loose-schema → no
+migration; `schemaVersion` stays 1.
+
+### NEXT (Group C — items 14–18, 20): the bot API
+Design is `_PLAN_bot_api_and_team_scale.md` §2A–2B. Awaiting Aboud's go on the
+honest-team token model before it lands on a draft. Deliverables for that
+checkpoint: endpoint list + token-generation steps (token value never in chat).
+
+---
+
+## 2026-11-23 (cont.) — Group C: the bot API (items 14–18, 20) SHIPPED to draft
+
+"do both" → built the full API including the configurable webhook, on the
+honest-team token model. Draft `6b042f9faf9fd03d9b791632`, store `sowpost-test`
+(gate confirmed). Live end-to-end tested with a real token (minted + revoked
+during the test). Gates: 1590 vitest · tsc · eslint(src+netlify) · build ·
+nosecrets — all green.
+
+### Backend (new)
+- `netlify/functions/lib/botAuth.ts` — bearer tokens: `sow_live_<32B>`, SHA-256
+  stored (value shown once), display prefix, live role re-check (demote/archive
+  kills the token). `mergeTokens` id/updatedAt. +8 tests.
+- `netlify/functions/lib/botBoard.ts` — label/name resolution, section
+  precedence, daysInStatus, Compose records join (address/install), fuzzy
+  dedupe (server copy of nameSimilarity), conflict-safe `reverseFromActivity`.
+  +7 tests.
+- `netlify/functions/lib/store.ts` — `getSowpostStoreStrong()` (strong read
+  consistency). The API path uses it so a just-minted token authenticates NOW
+  and a revoke bites immediately (default eventual consistency failed this live).
+- `tokens.mts` — GET list / POST generate / POST revoke (browser lane).
+- `botconfig.mts` — GET/PUT webhook config; secret write-only (GET → hasSecret).
+- `bot.mts` — `/api/bot/v1/*` bearer router: board, projects/:id, requirements,
+  match-report (inputs-only — full scoring is a documented follow-up), changes
+  (read); create (409 fuzzy dup unless force), patch (by name, permission-checked),
+  updates, changes/:batchId/revert (write). Idempotency-Key dedupe + HMAC webhook.
+- `botdocs.mts` — public `/api/docs` HTML (no token values).
+- `netlify.toml` — redirects: `/api/bot/*`, `/api/:token/tokens`,
+  `/api/:token/botconfig`, `/api/docs`.
+
+### UI (new)
+- `src/lib/api.ts` — list/generate/revoke token + get/put botconfig clients. +7 tests.
+- `src/components/UsersTab.tsx` — admin-only "Generate API token" (one-time
+  reveal + copy + revoke list). Token value never logged.
+- `src/components/SettingsTab.tsx` — admin-only "Bot API webhook" section.
+
+### Known limitations (for Aboud)
+- `/match-report` serves inputs only (requirements + project count); porting the
+  full client match scoring server-side is the one remaining follow-up.
+- Honest-team: the token-generation endpoint can't PROVE the caller is an admin
+  (no server login yet). Mitigated: admin-only UI, logged, listable, revocable.
+  Long-term fix = §2F real login.
+- Smoke-test projects ("API Smoke Test ZZZ", "Idem One", "Revert Debug QQQ")
+  were left in the sowpost-test store by the live test — test store only.
+
+### 2026-11-23 (cont.) — match-report full scoring (the last follow-up)
+Ported `src/lib/requirementsExport.matchReport` + its ahj helpers to
+`netlify/functions/lib/botMatch.ts` (+4 tests). `GET /api/bot/v1/match-report`
+now returns `{ report: { gaps, blank, checked } }` — the jurisdictions/utilities
+with no board, grouped by value worst-first. Docs page updated. Verified live
+on draft `6b043781c6572d2dbe710028`: 475 checked, 86 gaps, top = Fort Bend
+County (14 jobs). Gates: 1594 vitest · tsc · eslint · build · nosecrets green.
+**Group C is now complete with no remaining follow-ups.**

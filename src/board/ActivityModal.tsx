@@ -33,10 +33,13 @@ const initials = (n: string) =>
 export default function ActivityModal({
   project,
   activity,
+  onRevert,
   onClose,
 }: {
   project: BoardProject;
   activity: BoardActivity[];
+  /** Undo one logged field change (item 7). Omit for a read-only log. */
+  onRevert?: (entry: BoardActivity) => void;
   onClose: () => void;
 }) {
   const entries = activity.filter((a) => a.projectId === project.id);
@@ -79,6 +82,16 @@ export default function ActivityModal({
                 <span className="act-when nowrap" title={new Date(e.at).toLocaleString()}>
                   {relativeTime(e.at)}
                 </span>
+                {onRevert && changes.length > 0 && (
+                  <button
+                    type="button"
+                    className="act-undo"
+                    title="Undo this change (skips any field edited since)"
+                    onClick={() => onRevert(e)}
+                  >
+                    ↩ Undo
+                  </button>
+                )}
               </div>
             );
           })}

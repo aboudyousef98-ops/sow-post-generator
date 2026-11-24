@@ -46,8 +46,10 @@ import {
   activityEntry,
   activityForPatch,
   autoSortOn,
+  cancelledStatusIds,
   cleanName,
-  findDuplicate,
+  fieldLabel,
+  findSimilarProjects,
   isOutOfScopeLabel,
   isPredesignLabel,
   isReviewLabel,
@@ -56,6 +58,7 @@ import {
   newProject,
   nextPrefs,
   patchProject,
+  reversePatch,
   withPredesignDefault,
   type LinkedPosts,
   type ProjectPatch,
@@ -74,10 +77,15 @@ import {
   NO_FILTERS,
   agingState,
   agingTitle,
+  anyFilterActive,
   bandMove,
+  coordinatorLoads,
+  daysInStatus,
   groupProjects,
   installDateOf,
+  installSoonTitle,
   isPresetActive,
+  isUnratedInstallSoon,
   idsBetween,
   selectedRows,
   sortByPreDesignStatus,
@@ -570,6 +578,9 @@ function BodyInner({
         key={cell.id}
         className={cell.column.id === 'name' ? 'board-sticky' : ''}
         style={{ width: `calc(var(--col-${cell.column.id}-size) * 1px)` }}
+        // Stable hook for the browser-driven bot (item 19) — the cell it needs
+        // to read/click is `td[data-column-id="status"]` inside the row.
+        data-column-id={cell.column.id}
       >
         {flexRender(cell.column.columnDef.cell, cell.getContext())}
       </td>
@@ -1193,8 +1204,21 @@ export default function BoardTab({
     [board.labels, installByProject, updateCountById],
   );
 
+  // Cancelled status ids — a cancelled project is parked, so it never raises
+  // the attention nudges (stale/overdue dot, install-soon / 0★), unlike the
+  // other out-of-scope statuses which still do (Aboud 2026-11-24, "gate
+  // Cancelled only"). Section routing is handled separately by splitSections.
+  const cancelledIds = useMemo(() => cancelledStatusIds(board.labels), [board.labels]);
+  const isCancelled = (p: BoardProject): boolean => !!p.statusId && cancelledIds.has(p.statusId);
+
   const agingFor = (p: BoardProject): AgingState =>
-    agingState(p, installByProject.get(p.id) ?? null, today);
+    isCancelled(p) ? 'none' : agingState(p, installByProject.get(p.id) ?? null, today);
+
+  /** coordinator name → {load, cap} — active + Pre-Design-not-Done (item 8). */
+  const coordinatorLoadMap = useMemo(
+    () => coordinatorLoads(board.projects, board.labels),
+    [board.projects, board.labels],
+  );
 
   // ---- column permissions (Aboud 2026-11-15) --------------------------------
 
@@ -1442,13 +1466,18 @@ export default function BoardTab({
     const cur = boardRef.current;
     const now = new Date().toISOString();
     const ids = new Set(rows.map((r) => r.id));
+    // One id for the whole batch, stamped on every entry it writes (item 12,
+    // Aboud 2026-11-23) — shown in the toast and the key the revert API reverses.
+    const batchId = crypto.randomUUID();
+    const tag = (e: BoardActivity): BoardActivity => ({ ...e, batchId, source: 'bulk' });
     // Per ROW, not once for the batch: a row that already carries a Pre-Design
     // sub-status must keep it while its neighbours get the default.
     const patchFor = (p: BoardProject) => withPredesignDefault(p, patch, cur.labels);
     const entries = rows
       .map((r) => activityForPatch(r, patchFor(r), me, cur.labels))
-      .filter((e): e is BoardActivity => Boolean(e));
-    const posts = (withUpdates ?? []).map((u) => activityEntry(u.projectId, me, 'update-post', undefined, now));
+      .filter((e): e is BoardActivity => Boolean(e))
+      .map(tag);
+    const posts = (withUpdates ?? []).map((u) => tag(activityEntry(u.projectId, me, 'update-post', undefined, now)));
     let updates = cur.updates ?? [];
     for (const u of withUpdates ?? []) updates = putUpdate(updates, u);
     setBoard({
@@ -1459,7 +1488,7 @@ export default function BoardTab({
     });
     const field = Object.keys(patch)[0] as keyof BoardProject;
     const previous = rows.map((r) => ({ id: r.id, value: r[field] }));
-    toast(`${rows.length} project${rows.length === 1 ? '' : 's'} → ${describe}.`, {
+    toast(`${rows.length} project${rows.length === 1 ? '' : 's'} → ${describe}. · batch ${batchId.slice(0, 8)}`, {
       label: 'Undo',
       // Undo puts the FIELD back and leaves any gate explanation posted. That
       // is deliberate: the note is a record of what someone knew at the time,
@@ -1608,6 +1637,9 @@ export default function BoardTab({
   const runImport = ({ plan, restoreArchived }: ImportRequest) => {
     const cur = boardRef.current;
     const now = new Date().toISOString();
+    // One batch id for the whole import (item 12), stamped on its activity and
+    // shown in the toast / reversible by the API's revert.
+    const batchId = crypto.randomUUID();
     const projects = [...cur.projects];
     const activity: BoardActivity[] = [];
     const createdIds: string[] = [];
@@ -1676,14 +1708,15 @@ export default function BoardTab({
       return;
     }
 
-    setBoard({ ...cur, projects, activity: [...activity, ...cur.activity] });
+    const tagged = activity.map((e) => ({ ...e, batchId, source: 'import' as const }));
+    setBoard({ ...cur, projects, activity: [...tagged, ...cur.activity] });
     setImportOpen(false);
 
     const parts = [`Imported ${createdIds.length} project${createdIds.length === 1 ? '' : 's'}`];
     if (phaseBefore.length) parts.push(`${phaseBefore.length} moved phase`);
     if (notesBefore.length) parts.push(`${notesBefore.length} notes updated`);
     if (restoredIds.length) parts.push(`${restoredIds.length} restored`);
-    toast(`${parts.join(' · ')}.`, {
+    toast(`${parts.join(' · ')}. · batch ${batchId.slice(0, 8)}`, {
       label: 'Undo',
       fn: () => {
         const back = boardRef.current;
@@ -1710,14 +1743,43 @@ export default function BoardTab({
     });
   };
 
+  /**
+   * One-click undo of a logged change (item 7). Conflict-safe: reversePatch
+   * only touches fields the row still shows the logged `new` value for, so an
+   * undo never clobbers a newer edit. Reuses applyPatch, so the undo is itself
+   * logged — the history stays append-only.
+   */
+  const revertActivity = (entry: BoardActivity) => {
+    const live = boardRef.current.projects.find((p) => p.id === entry.projectId);
+    if (!live) return;
+    const { patch, conflicts } = reversePatch(entry, live, boardRef.current.labels);
+    const fields = Object.keys(patch);
+    if (fields.length === 0) {
+      toast(
+        conflicts.length
+          ? 'Nothing to undo — the row has already moved on since this change.'
+          : 'This change can’t be undone automatically.',
+      );
+      return;
+    }
+    if (refuseIfBlocked(patch)) return;
+    applyPatch(live, patch);
+    const names = fields.map((f) => fieldLabel(f)).join(', ');
+    const extra = conflicts.length ? ` · ${conflicts.length} skipped (changed since)` : '';
+    toast(`Reverted ${names}${extra}.`);
+  };
+
   const create = (force: boolean) => {
     const name = cleanName(addName);
     if (!name) return;
     const cur = boardRef.current;
     if (!force) {
-      const dup = findDuplicate(cur.projects, name);
-      if (dup) {
-        setDuplicate(dup);
+      // Fuzzy, not just exact (Aboud 2026-11-23, item 5): "antony torres" must
+      // warn on an existing "Anthony S Torres". Advisory — "Add anyway" calls
+      // create(true). Best match drives the inline warning.
+      const matches = findSimilarProjects(cur.projects, name);
+      if (matches.length) {
+        setDuplicate(matches[0].project);
         return;
       }
     }
@@ -1782,10 +1844,27 @@ export default function BoardTab({
             (!filters.dateTo || p.designedDate <= filters.dateTo)
           : true,
       )
+      // "Hide cancelled" (Aboud 2026-11-24): drop cancelled rows, which only
+      // appear in Out of SOW scope. Default off.
+      .filter((p) => (filters.hideCancelled ? !(p.statusId && cancelledIds.has(p.statusId)) : true))
       // "Needs attention": install date passed, or untouched for STALE_DAYS.
-      .filter((p) => (filters.staleOnly ? agingState(p, installByProject.get(p.id) ?? null, today) !== 'none' : true))
+      // Cancelled rows are parked — never flagged as needing attention.
+      .filter((p) =>
+        filters.staleOnly
+          ? !(p.statusId && cancelledIds.has(p.statusId)) &&
+            agingState(p, installByProject.get(p.id) ?? null, today) !== 'none'
+          : true,
+      )
+      // "Unrated + installing soon" (item 6): no rating and install within 7
+      // days — but never for a cancelled project.
+      .filter((p) =>
+        filters.unratedInstallSoon
+          ? !(p.statusId && cancelledIds.has(p.statusId)) &&
+            isUnratedInstallSoon(p, installByProject.get(p.id) ?? null, today)
+          : true,
+      )
       .sort((a, b) => b.position - a.position);
-  }, [board.projects, filters, me, installByProject, today]);
+  }, [board.projects, filters, me, installByProject, today, cancelledIds]);
 
   // Per-column value filters (Aboud 2026-10-18).
   const visible = useMemo(
@@ -2042,6 +2121,11 @@ export default function BoardTab({
         enableResizing: false,
         cell: ({ row }) => {
           const state = agingFor(row.original);
+          const install = installByProject.get(row.original.id) ?? null;
+          // Unrated + installing within 7 days (item 6) — a distinct amber
+          // marker that a job is about to install with no SOW effort sized. The
+          // louder `overdue`/`stale` aging wins the single dot slot.
+          const soon = state === 'none' && !isCancelled(row.original) && isUnratedInstallSoon(row.original, install, today);
           return (
             <span className="board-select-cell">
               <input
@@ -2052,13 +2136,19 @@ export default function BoardTab({
                   setSelected((s) => ({ ...s, [row.original.id]: e.target.checked }))
                 }
               />
-              {state !== 'none' && (
+              {state !== 'none' ? (
                 <span
                   className={`board-aging-dot ${state}`}
-                  title={agingTitle(state, row.original, installByProject.get(row.original.id) ?? null, today)}
-                  aria-label={agingTitle(state, row.original, installByProject.get(row.original.id) ?? null, today)}
+                  title={agingTitle(state, row.original, install, today)}
+                  aria-label={agingTitle(state, row.original, install, today)}
                 />
-              )}
+              ) : soon ? (
+                <span
+                  className="board-aging-dot install-soon"
+                  title={installSoonTitle(install, today)}
+                  aria-label={installSoonTitle(install, today)}
+                />
+              ) : null}
             </span>
           );
         },
@@ -2126,14 +2216,27 @@ export default function BoardTab({
         maxSize: 800,
         accessorFn: (p) => p.coordinator || undefined,
         sortUndefined: 'last',
-        cell: ({ row }) => (
-          <PersonCell
-            value={row.original.coordinator}
-            authors={authors}
-            me={me}
-            onPick={(coordinator) => applyPatch(row.original, { coordinator })}
-          />
-        ),
+        cell: ({ row }) => {
+          const load = row.original.coordinator ? coordinatorLoadMap.get(row.original.coordinator) : undefined;
+          return (
+            <div className="board-coord-cell">
+              <PersonCell
+                value={row.original.coordinator}
+                authors={authors}
+                me={me}
+                onPick={(coordinator) => applyPatch(row.original, { coordinator })}
+              />
+              {load && (
+                <span
+                  className={`board-coord-load${load.load > load.cap ? ' over' : ''}`}
+                  title={`${row.original.coordinator}: ${load.load} active / Pre-Design project${load.load === 1 ? '' : 's'} (daily cap ${load.cap})`}
+                >
+                  {load.load}/{load.cap}
+                </span>
+              )}
+            </div>
+          );
+        },
       },
       {
         // Who is reviewing the installation (Aboud 2026-11-03). Same picker as
@@ -2165,6 +2268,7 @@ export default function BoardTab({
         accessorFn: (p) => labelSortValue(board.labels, p.statusId),
         sortUndefined: 'last',
         cell: ({ row }) => (
+          <div className="board-status-cell">
           <LabelCell
             labels={board.labels}
             columnKey="status"
@@ -2203,6 +2307,18 @@ export default function BoardTab({
             }}
             onEditLabels={() => setEditLabels('status')}
           />
+          {(() => {
+            // "Days in status" (item 9) — measured from the newest status
+            // change in the activity log, creation date as the fallback.
+            const d = daysInStatus(board.activity, row.original, today);
+            if (d == null || d < 1) return null;
+            return (
+              <span className="board-days-in-status" title={`${d} day${d === 1 ? '' : 's'} in this status`}>
+                {d}d
+              </span>
+            );
+          })()}
+          </div>
         ),
       },
       {
@@ -2352,7 +2468,7 @@ export default function BoardTab({
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh
     // when the data they RENDER changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board.labels, authors, me, isAdmin, postsByProject, installByProject, updateCountById, openReqCountById, today, selected, allShownSelected, someShownSelected],
+    [board.labels, board.activity, authors, me, isAdmin, postsByProject, installByProject, updateCountById, openReqCountById, coordinatorLoadMap, today, cancelledIds, selected, allShownSelected, someShownSelected],
   );
 
   // Reconciled every render: a saved order from an older release must not hide
@@ -2552,6 +2668,19 @@ export default function BoardTab({
             Column filters on — clear
           </button>
         )}
+        {/* Same idea for the standard filters (Mine / coordinator / status /
+            date / stale / unrated-soon): one obvious chip, always reachable,
+            so a narrowed board never reads as missing data (item 10). */}
+        {anyFilterActive(filters) && (
+          <button
+            type="button"
+            className="btn small board-colfilter-clear"
+            onClick={() => setFilters(NO_FILTERS)}
+            title="Clear every filter"
+          >
+            Filter on — clear
+          </button>
+        )}
         <span style={{ flex: 1 }} />
         <button type="button" className="btn primary" onClick={() => addRef.current?.focus()}>
           + New project
@@ -2647,10 +2776,26 @@ export default function BoardTab({
           </button>
           <button
             type="button"
+            className={`btn small secondary ${filters.unratedInstallSoon ? 'board-filter-on' : ''}`}
+            title="Unrated projects installing within the next 7 days"
+            onClick={() => setFilters({ ...filters, unratedInstallSoon: !filters.unratedInstallSoon })}
+          >
+            Unrated + install soon
+          </button>
+          <button
+            type="button"
             className={`btn small secondary ${filters.showArchived ? 'board-filter-on' : ''}`}
             onClick={() => setFilters({ ...filters, showArchived: !filters.showArchived })}
           >
             Show archived
+          </button>
+          <button
+            type="button"
+            className={`btn small secondary ${filters.hideCancelled ? 'board-filter-on' : ''}`}
+            title="Hide cancelled projects from Out of SOW scope"
+            onClick={() => setFilters({ ...filters, hideCancelled: !filters.hideCancelled })}
+          >
+            Hide cancelled
           </button>
           <span className={`board-date-range ${filters.dateFrom || filters.dateTo ? 'on' : ''}`}>
             <span className="muted">Designed</span>
@@ -2854,7 +2999,7 @@ export default function BoardTab({
           />
           {duplicate && (
             <span className="board-dup-warn">
-              Already on the board{dupStatus ? ` · ${dupStatus}` : ''}
+              Looks like “{duplicate.name}”{dupStatus ? ` · ${dupStatus}` : ''}
               {duplicate.coordinator ? ` · ${duplicate.coordinator}` : ''}
               <button type="button" className="btn small secondary" onClick={openDuplicate}>
                 Open it
@@ -3192,6 +3337,13 @@ export default function BoardTab({
           isAdmin={isAdmin}
           onPut={putUpdateOnBoard}
           onPutRequests={putRequests}
+          onPatchProject={(patch) => {
+            // Patch the LIVE row, never the panel's snapshot — otherwise a
+            // field a teammate changed while the panel was open would be
+            // reverted by this write (applyPatch spreads the project it is given).
+            const live = boardRef.current.projects.find((p) => p.id === updatesFor.id);
+            if (live) applyPatch(live, patch);
+          }}
           onClose={() => setUpdatesFor(null)}
         />
       )}
@@ -3208,7 +3360,12 @@ export default function BoardTab({
       )}
 
       {activityFor && (
-        <ActivityModal project={activityFor} activity={board.activity} onClose={() => setActivityFor(null)} />
+        <ActivityModal
+          project={activityFor}
+          activity={board.activity}
+          onRevert={revertActivity}
+          onClose={() => setActivityFor(null)}
+        />
       )}
       {exportOpen && (
         <div className="modal-overlay" onClick={() => setExportOpen(false)}>

@@ -12,6 +12,14 @@ const spanNodes = (spans: Span[]) =>
     for (const m of s.marks) {
       node = m === 'bold' ? <strong>{node}</strong> : m === 'italic' ? <em>{node}</em> : <s>{node}</s>;
     }
+    // A link wraps outermost — href is http(s)-only (see tokenizeLinks).
+    if (s.link) {
+      node = (
+        <a href={s.link} target="_blank" rel="noopener noreferrer">
+          {node}
+        </a>
+      );
+    }
     return <Fragment key={i}>{node}</Fragment>;
   });
 

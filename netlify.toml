@@ -84,6 +84,31 @@
   to = "/.netlify/functions/extrawork"
   status = 200
 
+# Bot API (Aboud 2026-11-23) — the BEARER lane. A splat, because the router
+# inside bot.mts handles /api/bot/v1/<anything>. The :token rules above never
+# match these (they are 4+ segments), so order is not load-bearing.
+[[redirects]]
+  from = "/api/bot/*"
+  to = "/.netlify/functions/bot"
+  status = 200
+
+# API-token management + webhook config, both browser-facing (Origin+token).
+[[redirects]]
+  from = "/api/:token/tokens"
+  to = "/.netlify/functions/tokens"
+  status = 200
+
+[[redirects]]
+  from = "/api/:token/botconfig"
+  to = "/.netlify/functions/botconfig"
+  status = 200
+
+# Public API docs page (no token values).
+[[redirects]]
+  from = "/api/docs"
+  to = "/.netlify/functions/botdocs"
+  status = 200
+
 # SPA fallback — must stay last.
 [[redirects]]
   from = "/*"

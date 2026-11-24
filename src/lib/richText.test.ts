@@ -21,6 +21,19 @@ describe('parseSpans — inline marks', () => {
   it('nests different marks', () => {
     expect(parseSpans('*_both_*')).toEqual([{ text: 'both', marks: ['bold', 'italic'] }]);
   });
+
+  it('opens bold when a non-letter follows the * (e.g. #)', () => {
+    // Regression (Aboud 2026-11-23): `*#text*` used to stay literal because the
+    // open side demanded a word char right after the `*`. The CLOSE side is
+    // unchanged — it still needs a word char before the closing `*`, so the
+    // `t` in "text" closes it.
+    expect(parseSpans('*#4 panel*')).toEqual([{ text: '#4 panel', marks: ['bold'] }]);
+    expect(parseSpans('see *#text* ok')).toEqual([
+      { text: 'see ', marks: [] },
+      { text: '#text', marks: ['bold'] },
+      { text: ' ok', marks: [] },
+    ]);
+  });
 });
 
 describe('parseSpans — what engineers actually type must survive', () => {
@@ -106,6 +119,71 @@ describe('renderMarksHtml — the Slack clipboard payload', () => {
 
   it('closes a list when the kind changes', () => {
     expect(renderMarksHtml('• a\n1. b')).toBe('<ul><li>a</li></ul><ol><li>b</li></ol>');
+  });
+});
+
+describe('parseSpans — links', () => {
+  it('lifts a bare http(s) URL into a link span', () => {
+    expect(parseSpans('see https://polycam.com/x now')).toEqual([
+      { text: 'see ', marks: [] },
+      { text: 'https://polycam.com/x', marks: [], link: 'https://polycam.com/x' },
+      { text: ' now', marks: [] },
+    ]);
+  });
+
+  it('shows only the label for a Slack <url|label> link', () => {
+    expect(parseSpans('<https://slack.com/archives/1|the thread>')).toEqual([
+      { text: 'the thread', marks: [], link: 'https://slack.com/archives/1' },
+    ]);
+  });
+
+  it('accepts a bare Slack <url> wrap', () => {
+    expect(parseSpans('<https://a.co/b>')).toEqual([
+      { text: 'https://a.co/b', marks: [], link: 'https://a.co/b' },
+    ]);
+  });
+
+  it('gives trailing sentence punctuation back to the prose', () => {
+    expect(parseSpans('open https://a.co/b.')).toEqual([
+      { text: 'open ', marks: [] },
+      { text: 'https://a.co/b', marks: [], link: 'https://a.co/b' },
+      { text: '.', marks: [] },
+    ]);
+    expect(parseSpans('(https://a.co/b)')).toEqual([
+      { text: '(', marks: [] },
+      { text: 'https://a.co/b', marks: [], link: 'https://a.co/b' },
+      { text: ')', marks: [] },
+    ]);
+  });
+
+  it('leaves a typed <b> or "voltage < 600" alone', () => {
+    expect(parseSpans('<b>').every((s) => !s.link)).toBe(true);
+    expect(parseSpans('voltage < 600V').every((s) => !s.link)).toBe(true);
+  });
+
+  it('a URL underscore is never mistaken for italic', () => {
+    const spans = parseSpans('https://a.co/pv_mod_01');
+    expect(spans).toEqual([{ text: 'https://a.co/pv_mod_01', marks: [], link: 'https://a.co/pv_mod_01' }]);
+  });
+});
+
+describe('renderMarksHtml — links in the Slack payload', () => {
+  it('emits a safe anchor for a bare URL', () => {
+    expect(renderMarksHtml('go https://a.co/b')).toBe(
+      '<div>go <a href="https://a.co/b" target="_blank" rel="noopener">https://a.co/b</a></div>',
+    );
+  });
+
+  it('uses the label for a Slack link', () => {
+    expect(renderMarksHtml('<https://a.co/b|docs>')).toBe(
+      '<div><a href="https://a.co/b" target="_blank" rel="noopener">docs</a></div>',
+    );
+  });
+
+  it('escapes the href and label', () => {
+    expect(renderMarksHtml('<https://a.co/?x="1"&y=2|a&b>')).toBe(
+      '<div><a href="https://a.co/?x=&quot;1&quot;&amp;y=2" target="_blank" rel="noopener">a&amp;b</a></div>',
+    );
   });
 });
 

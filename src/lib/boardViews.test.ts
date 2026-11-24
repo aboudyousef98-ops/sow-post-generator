@@ -85,6 +85,18 @@ describe('splitSections', () => {
     expect(completed.map((r) => r.id)).toEqual(['e']);
   });
 
+  it('routes the seeded Cancelled status to Out of SOW scope', () => {
+    const rows = [
+      p({ id: 'a', statusId: 'status-working' }),
+      p({ id: 'c', statusId: 'status-cancelled' }),
+      p({ id: 'e', statusId: 'status-done' }),
+    ];
+    const { active, outOfScope, completed } = splitSections(rows, labels);
+    expect(active.map((r) => r.id)).toEqual(['a']);
+    expect(outOfScope.map((r) => r.id)).toEqual(['c']);
+    expect(completed.map((r) => r.id)).toEqual(['e']);
+  });
+
   it('matches the default names case- and space-insensitively', () => {
     const odd = [{ ...hold, id: 'x', name: '  hOlD ' }];
     const { active, outOfScope } = splitSections([p({ id: 'a', statusId: 'x' })], [...labels, ...odd]);

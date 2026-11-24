@@ -3,10 +3,13 @@ import type { BoardLabel, BoardProject, BoardState } from '../board/types';
 import {
   activityForPatch,
   autoSortOn,
+  cancelledStatusIds,
   cleanName,
   defaultLabel,
   emptyBoard,
   findDuplicate,
+  isCancelledLabel,
+  isOutOfScopeLabel,
   isPredesignLabel,
   labelTextColor,
   labelsFor,
@@ -44,16 +47,18 @@ describe('labelTextColor', () => {
 });
 
 describe('seed labels', () => {
-  it('seeds 4 status + 2 phase + 4 pre-design, New project is the default', () => {
+  it('seeds 5 status + 2 phase + 4 pre-design, New project is the default', () => {
     const labels = seedLabels();
     // Status order is the PIPELINE RANK the always-ordered board sorts by, so
     // work in progress leads and untouched work trails (Aboud 2026-11-05).
     // Pre-Design joined 2026-11-15 (the SVT collab taskforce), ranked just
-    // before the live board's "Installation Review" (180).
+    // before the live board's "Installation Review" (180). Cancelled joined
+    // 2026-11-24, ranked 950 (terminal, trails the pipeline, before "New").
     expect(labelsFor(labels, 'status').map((l) => l.name)).toEqual([
       'Working on it',
       'Done',
       'Pre-Design',
+      'Cancelled',
       'New project',
     ]);
     expect(labelsFor(labels, 'phase').map((l) => l.name)).toEqual(['Design', 'Schedule']);
@@ -70,6 +75,22 @@ describe('seed labels', () => {
     // independent, which is the whole point of "new project at last".
     expect(defaultLabel(labels, 'status')?.name).toBe('New project');
     expect(labels.find((l) => l.name === 'Done')?.isDone).toBe(true);
+  });
+
+  it('seeds Cancelled as a neutral-grey status that routes to Out of SOW scope', () => {
+    const labels = seedLabels();
+    const cancelled = labels.find((l) => l.id === 'status-cancelled');
+    expect(cancelled?.name).toBe('Cancelled');
+    expect(cancelled?.color).toBe('#808080'); // neutral grey from LABEL_PALETTE
+    expect(cancelled?.isDone).toBe(false);
+    expect(cancelled?.isDefault).toBe(false);
+    // Routes to Out of SOW scope on the name default, like Hold/Sonnen.
+    expect(isOutOfScopeLabel(cancelled)).toBe(true);
+    // ...and is recognised as cancelled (the narrower flag-muting check).
+    expect(isCancelledLabel(cancelled)).toBe(true);
+    expect(cancelledStatusIds(labels)).toEqual(new Set(['status-cancelled']));
+    // 'Done' and 'Hold' are NOT cancelled — the narrow check must not widen.
+    expect(isCancelledLabel(labels.find((l) => l.id === 'status-done'))).toBe(false);
   });
 
   it('the Pre-Design seeds can be archived if the team retires them (not system labels)', () => {
@@ -95,7 +116,7 @@ describe('seed labels', () => {
     );
     const merged = mergeBoard({ ...base, labels: renamed }, emptyBoard());
     expect(merged.labels.find((l) => l.id === 'status-done')?.name).toBe('Shipped');
-    expect(merged.labels.filter((l) => l.columnKey === 'status')).toHaveLength(4);
+    expect(merged.labels.filter((l) => l.columnKey === 'status')).toHaveLength(5);
   });
 });
 
@@ -245,8 +266,8 @@ describe('BoardState shape', () => {
     const b: BoardState = emptyBoard();
     expect(b.projects).toEqual([]);
     expect(b.activity).toEqual([]);
-    // 4 status + 2 phase + 4 pre-design sub-status (2026-11-15).
-    expect(b.labels.length).toBe(10);
+    // 5 status + 2 phase + 4 pre-design sub-status (Cancelled added 2026-11-24).
+    expect(b.labels.length).toBe(11);
   });
 });
 

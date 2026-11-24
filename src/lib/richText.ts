@@ -16,6 +16,12 @@ export type Mark = 'bold' | 'italic' | 'strike';
 export interface Span {
   text: string;
   marks: Mark[];
+  /**
+   * If set, this span is a hyperlink and `text` is its (already Slack-unwrapped)
+   * label. Only ever an http/https URL — see `tokenizeLinks`, which is the only
+   * producer — so it is safe to drop straight into an href without a scheme check.
+   */
+  link?: string;
 }
 
 export type LineKind = 'bullet' | 'number' | 'check' | 'check-done' | 'plain';
@@ -38,11 +44,22 @@ const DELIM: Record<string, Mark> = { '*': 'bold', _: 'italic', '~': 'strike' };
 const isWord = (c: string | undefined) => c !== undefined && /[\p{L}\p{N}_]/u.test(c);
 
 /**
+ * A mark may OPEN before any non-space, non-same-delimiter character — Slack's
+ * real rule is "not followed by whitespace", not "followed by a letter". This
+ * is why `*#4 panel*` renders bold even though a `#` follows the `*` (Aboud
+ * 2026-11-23). Literals like `2*3`, `PV_MOD_01` and `3/4" * 2` stay safe
+ * because the OPEN side still requires a boundary BEFORE the delimiter
+ * (`!isWord(prev)`), which those all fail.
+ */
+const canOpenBefore = (c: string | undefined, delim: string) =>
+  c !== undefined && !/\s/.test(c) && c !== delim;
+
+/**
  * Split one line into marked spans. Single pass, no nesting of the same mark:
  * an unclosed delimiter is just a literal character, which is what Slack does
  * and what keeps `2*3` and `PV_MOD_01` intact.
  */
-export function parseSpans(text: string): Span[] {
+function parseMarks(text: string): Span[] {
   const spans: Span[] = [];
   // `since` is how many spans existed when the mark opened, so a mark that
   // wrapped an inner mark still counts as having content: in `*_both_*` the
@@ -81,7 +98,7 @@ export function parseSpans(text: string): Span[] {
 
     // Candidate open: preceded by a boundary, followed by real content, and a
     // matching close must actually exist later on this line.
-    if (!isWord(prev) && isWord(next) && hasClose(text, i, c)) {
+    if (!isWord(prev) && canOpenBefore(next, c) && hasClose(text, i, c)) {
       flush();
       open.push({ mark, char: c, since: spans.length });
       continue;
@@ -106,6 +123,88 @@ function hasClose(text: string, from: number, char: string): boolean {
   return false;
 }
 
+// Links. Two shapes, http/https only — deliberately NOT www./mailto:, to keep
+// clear of the part numbers and conduit callouts the mark rules already guard:
+//   1. Slack explicit: `<https://x|label>` → the label shows, href is the URL.
+//      Also bare `<https://x>` (Slack wraps pasted URLs like this).
+//   2. A raw URL anywhere in the text: `https://x`.
+// A `<...>` is only a link when its contents start with http(s):// — so a typed
+// `<b>` or `voltage < 600` is left alone and still escapes to literal text.
+const LINK_RE = /<(https?:\/\/[^\s<>|]+)(?:\|([^<>]*))?>|(https?:\/\/[^\s<>]+)/g;
+
+/**
+ * A raw URL swallows trailing sentence punctuation it should not own — the dot
+ * in "see https://x." or the paren in "(https://x)". Peel those back off so
+ * they render as the prose they are, not part of the link.
+ */
+function trimUrlTail(url: string): { href: string; tail: string } {
+  let href = url;
+  let tail = '';
+  for (;;) {
+    const last = href[href.length - 1];
+    if (last && '.,;:!?\'"'.includes(last)) {
+      tail = last + tail;
+      href = href.slice(0, -1);
+      continue;
+    }
+    if (last === ')' && !href.includes('(')) {
+      tail = last + tail;
+      href = href.slice(0, -1);
+      continue;
+    }
+    if (last === ']' && !href.includes('[')) {
+      tail = last + tail;
+      href = href.slice(0, -1);
+      continue;
+    }
+    break;
+  }
+  return { href, tail };
+}
+
+type LinkSeg = { str: string } | { href: string; label: string };
+
+/** Split a line into alternating plain-text and link segments. */
+function tokenizeLinks(text: string): LinkSeg[] {
+  const segs: LinkSeg[] = [];
+  let last = 0;
+  let m: RegExpExecArray | null;
+  LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(text))) {
+    const pre = text.slice(last, m.index);
+    if (m[1]) {
+      // Slack <url|label> (label optional).
+      if (pre) segs.push({ str: pre });
+      const label = (m[2] ?? '').trim() || m[1];
+      segs.push({ href: m[1], label });
+      last = LINK_RE.lastIndex;
+    } else {
+      // Raw URL — give any trailing punctuation back to the following text.
+      const { href, tail } = trimUrlTail(m[3]);
+      if (pre) segs.push({ str: pre });
+      segs.push({ href, label: href });
+      last = LINK_RE.lastIndex - tail.length;
+      LINK_RE.lastIndex = last;
+    }
+  }
+  if (last < text.length) segs.push({ str: text.slice(last) });
+  return segs;
+}
+
+/**
+ * Split one line into spans. Links are lifted out FIRST — before the `*_~` mark
+ * scanner ever sees them — so a URL's own punctuation can never be mistaken for
+ * a mark, and a link's label is not re-parsed.
+ */
+export function parseSpans(text: string): Span[] {
+  const out: Span[] = [];
+  for (const seg of tokenizeLinks(text)) {
+    if ('str' in seg) out.push(...parseMarks(seg.str));
+    else out.push({ text: seg.label, marks: [], link: seg.href });
+  }
+  return out;
+}
+
 /** Parse a whole note into lines. Blank lines are preserved as empty plain lines. */
 export function parseRich(text: string): Line[] {
   return text.split('\n').map((raw) => {
@@ -126,17 +225,26 @@ export function parseRich(text: string): Line[] {
 
 /** Does this text use any of our marks? Lets callers skip the renderer entirely. */
 export function hasFormatting(text: string): boolean {
-  return parseRich(text).some((l) => l.kind !== 'plain' || l.spans.some((s) => s.marks.length));
+  return parseRich(text).some(
+    (l) => l.kind !== 'plain' || l.spans.some((s) => s.marks.length || s.link),
+  );
 }
 
 const esc = (s: string) =>
   s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+/** As `esc`, plus the double-quote — for a value going inside an HTML attribute. */
+const escAttr = (s: string) => esc(s).replace(/"/g, '&quot;');
 
 const TAG: Record<Mark, string> = { bold: 'strong', italic: 'em', strike: 's' };
 
 function spansHtml(spans: Span[]): string {
   return spans
-    .map((s) => s.marks.reduce((inner, m) => `<${TAG[m]}>${inner}</${TAG[m]}>`, esc(s.text)))
+    .map((s) => {
+      const inner = s.marks.reduce((acc, m) => `<${TAG[m]}>${acc}</${TAG[m]}>`, esc(s.text));
+      return s.link
+        ? `<a href="${escAttr(s.link)}" target="_blank" rel="noopener">${inner}</a>`
+        : inner;
+    })
     .join('');
 }
 

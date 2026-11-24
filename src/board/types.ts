@@ -113,6 +113,19 @@ export interface BoardProject {
   /** Manual order key; defaults to creation epoch ms → newest on top. */
   position: number;
   /**
+   * Where the project came from — a Slack permalink to the CLR's request
+   * (Aboud 2026-11-23). OPTIONAL, same no-migration contract as `reviewer`:
+   * rows written before this date have no such field. Set by hand, by the
+   * bot's "+ New project from Slack" flow, or by the API's POST /projects.
+   */
+  sourceUrl?: string;
+  /**
+   * Who asked for the project (Aboud 2026-11-23) — free text (a CLR name), not
+   * a roster handle, so it is never resolved against Users. OPTIONAL, same
+   * contract as `sourceUrl`.
+   */
+  requestedBy?: string;
+  /**
    * Salesforce notes (Scheduling Alerts! + AHJ/utility requirements), mirrored
    * from the .xlsx export by Import from Salesforce and shown read-only on
    * Compose (Aboud 2026-10-21). OPTIONAL on purpose — rows written before this
@@ -146,6 +159,16 @@ export interface BoardActivity {
   action: 'create' | 'update' | 'archive' | 'restore' | 'delete' | 'update-post' | 'update-edit' | 'update-delete';
   /** key → old/new. Label/person values are stored as display strings. */
   changes?: Record<string, { old: string; new: string }>;
+  /**
+   * Groups every row touched by one bulk action (import, bulk Set status, an
+   * API batch) under a single id (Aboud 2026-11-23). OPTIONAL — a single-cell
+   * edit has none. Shown in the "done" toast and the key `POST
+   * /changes/:batchId/revert` (API checkpoint) reverses. Element schemas are
+   * `.loose()`, so this passes the strict top-level board schema untouched.
+   */
+  batchId?: string;
+  /** How the change was made: a hand edit (absent), a bulk UI action, or the API. */
+  source?: 'bulk' | 'import' | 'api';
   at: string;
 }
 

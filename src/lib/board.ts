@@ -83,6 +83,15 @@ export function seedLabels(): BoardLabel[] {
     // theirs, not a bracket. The section flag rides the name default
     // (isPredesignLabel), so there is no boolean to migrate.
     soft('status-predesign', 'status', 'Pre-Design', '#66CCFF', 175, false),
+    // Cancelled (Aboud 2026-11-24): a terminal, out-of-scope state. Unlike
+    // Hold/Sonnen/ENPHASE it ships as a seed so it exists on fresh installs,
+    // in neutral grey (#808080, from LABEL_PALETTE). It routes to Out of SOW
+    // scope on its NAME default (OUT_OF_SCOPE_DEFAULT_NAMES), the same contract
+    // as the team-created parked statuses — no stored boolean to migrate.
+    // Ranked 950: a terminal state trails the pipeline but still before the
+    // "New project" bracket; cancelled rows live in their own section, so the
+    // rank only orders Group-by-Status, never the active board.
+    mk('status-cancelled', 'status', 'Cancelled', '#808080', 950, false, false),
     mk('status-new', 'status', 'New project', '#579BFC', 999, true, false),
     mk('phase-design', 'phase', 'Design', '#A25DDC', 10, false, false),
     mk('phase-schedule', 'phase', 'Schedule', '#0086C0', 20, false, false),
@@ -105,7 +114,7 @@ export function seedLabels(): BoardLabel[] {
  * (which bumps updatedAt), so a deliberate choice always beats this list —
  * same contract as a rename beating a re-seed.
  */
-const OUT_OF_SCOPE_DEFAULT_NAMES = new Set(['hold', 'sonnen', 'enphase']);
+const OUT_OF_SCOPE_DEFAULT_NAMES = new Set(['hold', 'sonnen', 'enphase', 'cancelled', 'canceled']);
 
 /**
  * True when a status label means "parked, not our scope".
@@ -123,6 +132,26 @@ export function isOutOfScopeLabel(label: BoardLabel | undefined): boolean {
 /** Ids of every out-of-scope status label — the set BoardTab splits rows with. */
 export function outOfScopeStatusIds(labels: BoardLabel[]): Set<string> {
   return new Set(labels.filter(isOutOfScopeLabel).map((l) => l.id));
+}
+
+/**
+ * "Cancelled" status labels (Aboud 2026-11-24). This is a NARROWER check than
+ * out-of-scope: it exists only so the attention nudges — install-soon / 0★ /
+ * the stale aging dot — can be suppressed for a cancelled project WITHOUT
+ * touching Hold/Sonnen/ENPHASE, which still raise those flags today. Routing
+ * to Out of SOW scope already rides the out-of-scope name default, so this does
+ * NOT drive the section split. Matches 'Cancelled'/'Canceled' case-insensitively.
+ */
+const CANCELLED_DEFAULT_NAMES = new Set(['cancelled', 'canceled']);
+
+export function isCancelledLabel(label: BoardLabel | undefined): boolean {
+  if (!label || label.columnKey !== 'status') return false;
+  return CANCELLED_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
+}
+
+/** Ids of every cancelled status label — the set that mutes the attention flags. */
+export function cancelledStatusIds(labels: BoardLabel[]): Set<string> {
+  return new Set(labels.filter(isCancelledLabel).map((l) => l.id));
 }
 
 /**
@@ -272,6 +301,32 @@ function newerPrefs(a: BoardPrefs | undefined, b: BoardPrefs | undefined): Board
   return b.updatedAt > a.updatedAt ? b : a;
 }
 
+/**
+ * A cheap content fingerprint of a board: every id with its updatedAt, plus
+ * the prefs stamp and the activity head/length. Two boards with equal
+ * signatures are identical under the LWW merge, so a poll that brings nothing
+ * new can be dropped WITHOUT a re-render — which is what stops the 15 s poll
+ * resetting scroll and closing an open dropdown mid-edit (Aboud 2026-11-23,
+ * item 11). Order-independent (ids are sorted).
+ */
+export function boardSignature(b: BoardState): string {
+  const ids = (xs?: { id: string; updatedAt: string }[]) =>
+    (xs ?? [])
+      .map((x) => `${x.id}@${x.updatedAt}`)
+      .sort()
+      .join(',');
+  return [
+    ids(b.projects),
+    ids(b.labels),
+    ids(b.updates),
+    ids(b.automations),
+    ids(b.requests),
+    ids(b.columnPerms),
+    `act:${b.activity.length}:${b.activity[0]?.id ?? ''}`,
+    `prefs:${b.prefs?.updatedAt ?? ''}`,
+  ].join('|');
+}
+
 // ---- projects ---------------------------------------------------------------
 
 /** Trim + collapse inner whitespace — what actually gets saved as the name. */
@@ -294,6 +349,99 @@ export function findDuplicate(projects: BoardProject[], name: string): BoardProj
   const key = nameKey(name);
   if (!key) return undefined;
   return liveProjects(projects).find((p) => nameKey(p.name) === key);
+}
+
+// ---- fuzzy duplicate detection (Aboud 2026-11-23) ---------------------------
+// `findDuplicate` only catches an exact normalized match; "antony torres" vs
+// "Anthony S Torres" slips through and the team ends up with two rows for one
+// job. This is a token-set similarity: normalize, split into word tokens, and
+// score each token of the shorter name against its best counterpart in the
+// longer one — so a dropped middle initial does not penalize, and a one-letter
+// variant ("antony"≈"anthony") still reads as the same person. Pure JS, no
+// dependency. ADVISORY only: a warning with an "add anyway", never a block
+// (house rule: no Required).
+
+function normalizeName(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function nameTokens(s: string): string[] {
+  return normalizeName(s).split(' ').filter(Boolean);
+}
+
+/** Levenshtein distance — short strings (names) only. */
+function editDistance(a: string, b: string): number {
+  if (a === b) return 0;
+  const m = a.length;
+  const n = b.length;
+  if (!m) return n;
+  if (!n) return m;
+  let prev = Array.from({ length: n + 1 }, (_, i) => i);
+  let cur = new Array<number>(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    cur[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      cur[j] = Math.min(cur[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost);
+    }
+    [prev, cur] = [cur, prev];
+  }
+  return prev[n];
+}
+
+/** 0..1 similarity of two tokens (1 = identical). */
+function tokenSim(a: string, b: string): number {
+  const len = Math.max(a.length, b.length);
+  return len ? 1 - editDistance(a, b) / len : 1;
+}
+
+/**
+ * 0..1 similarity of two names. Each token of the shorter name is matched to
+ * its best counterpart in the longer name and the scores averaged, so order
+ * and a dropped middle initial do not matter.
+ */
+export function nameSimilarity(a: string, b: string): number {
+  const ta = nameTokens(a);
+  const tb = nameTokens(b);
+  if (!ta.length || !tb.length) return 0;
+  const [short, long] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+  let sum = 0;
+  for (const t of short) {
+    let best = 0;
+    for (const u of long) best = Math.max(best, tokenSim(t, u));
+    sum += best;
+  }
+  return sum / short.length;
+}
+
+export interface NameMatch {
+  project: BoardProject;
+  score: number;
+}
+
+/** Below this, two names are treated as different people. Tuned on the
+ * antony/Anthony pair (≈0.93) staying in, John Smith/Jane Doe staying out. */
+export const DUPLICATE_THRESHOLD = 0.82;
+
+/**
+ * Live rows whose name is similar enough to warn on, best match first. An
+ * exact normalized match scores 1 and is included. Advisory only.
+ */
+export function findSimilarProjects(
+  projects: BoardProject[],
+  name: string,
+  threshold: number = DUPLICATE_THRESHOLD,
+): NameMatch[] {
+  if (!nameTokens(name).length) return [];
+  return liveProjects(projects)
+    .map((project) => ({ project, score: nameSimilarity(name, project.name) }))
+    .filter((m) => m.score >= threshold)
+    .sort((a, b) => b.score - a.score);
 }
 
 export function newProject(
@@ -323,7 +471,7 @@ export type ProjectPatch = Partial<
   Pick<
     BoardProject,
     | 'name' | 'coordinator' | 'reviewer' | 'statusId' | 'phaseId' | 'preDesignStatusId' | 'designedDate'
-    | 'rating' | 'position' | 'sfNotes' | 'sfNotesAt' | 'archivedAt' | 'deletedAt'
+    | 'rating' | 'position' | 'sfNotes' | 'sfNotesAt' | 'sourceUrl' | 'requestedBy' | 'archivedAt' | 'deletedAt'
   >
 >;
 
@@ -398,6 +546,8 @@ const FIELD_LABELS: Record<string, string> = {
   designedDate: 'Designed date',
   rating: 'Rating',
   sfNotes: 'Salesforce notes',
+  sourceUrl: 'Source',
+  requestedBy: 'Requested by',
 };
 
 export function fieldLabel(key: string): string {
@@ -431,6 +581,65 @@ export function activityForPatch(
   }
   if (Object.keys(changes).length === 0) return null;
   return { id: crypto.randomUUID(), projectId: before.id, actor, action: 'update', changes, at: now };
+}
+
+// ---- one-click undo of a logged change (Aboud 2026-11-23, item 7) -----------
+
+const DASH = '—';
+
+/** Resolve a field's logged DISPLAY value back to a storable value, or
+ * `undefined` when it can't be (a renamed/archived label, an sfNotes summary). */
+function resolveFieldValue(key: string, display: string, labels: BoardLabel[]): { value: unknown } | undefined {
+  if (key === 'statusId' || key === 'phaseId' || key === 'preDesignStatusId') {
+    if (display === DASH) return { value: null };
+    const col: LabelColumnKey = key === 'statusId' ? 'status' : key === 'phaseId' ? 'phase' : 'predesign';
+    const match = labels.find((l) => l.columnKey === col && l.name === display);
+    return match ? { value: match.id } : undefined; // a rename makes it unresolvable → skipped
+  }
+  if (key === 'rating') {
+    if (display === DASH) return { value: null };
+    const n = parseInt(display, 10);
+    return n >= 1 && n <= 5 ? { value: n } : undefined;
+  }
+  if (key === 'coordinator' || key === 'reviewer') return { value: display === DASH ? '' : display };
+  if (key === 'name' || key === 'requestedBy' || key === 'sourceUrl') return { value: display === DASH ? '' : display };
+  if (key === 'designedDate') return { value: display === DASH ? null : display };
+  return undefined; // sfNotes (summary only) and anything a newer client logs
+}
+
+export interface ReverseResult {
+  patch: ProjectPatch;
+  /** Fields the row has moved on from since (not reverted — would clobber a newer edit). */
+  conflicts: string[];
+  /** Fields whose old value could not be rebuilt (e.g. a label renamed since). */
+  skipped: string[];
+}
+
+/**
+ * Build the patch that undoes one logged `update` entry — field by field,
+ * conflict-safe: a field is only reverted when the row still shows the value
+ * the entry set (`new`), so an undo never clobbers a later edit by someone
+ * else. A multi-field (bulk) entry reverts every field it still can.
+ */
+export function reversePatch(entry: BoardActivity, project: BoardProject, labels: BoardLabel[]): ReverseResult {
+  const patch: ProjectPatch = {};
+  const conflicts: string[] = [];
+  const skipped: string[] = [];
+  if (entry.action !== 'update' || !entry.changes) return { patch, conflicts, skipped };
+  for (const [key, { old, new: nw }] of Object.entries(entry.changes)) {
+    const curDisplay = displayValue(key as keyof ProjectPatch, (project as unknown as Record<string, unknown>)[key], labels);
+    if (curDisplay !== nw) {
+      conflicts.push(key);
+      continue;
+    }
+    const resolved = resolveFieldValue(key, old, labels);
+    if (!resolved) {
+      skipped.push(key);
+      continue;
+    }
+    (patch as Record<string, unknown>)[key] = resolved.value;
+  }
+  return { patch, conflicts, skipped };
 }
 
 // ---- Compose ↔ Board link (read-only from the board's side) -----------------

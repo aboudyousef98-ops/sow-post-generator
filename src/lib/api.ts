@@ -247,6 +247,98 @@ export async function putSharedExtraWork(entries: ExtraWorkEntry[]): Promise<Ext
   return Array.isArray(json.entries) ? json.entries : entries;
 }
 
+// ---- Bot API: tokens + webhook config (Netlify Functions behind /api) ------
+// Admin-only. A generated token's full secret is returned ONCE by
+// generateApiToken and is unrecoverable afterwards — never log it. The server
+// only ever echoes a short `prefix` for display; the webhook secret is never
+// returned at all, only `hasSecret`.
+
+export interface ApiTokenDisplay {
+  id: string;
+  prefix: string;
+  username: string;
+  label?: string;
+  createdAt: string;
+  lastUsedAt?: string;
+  revokedAt?: string;
+}
+
+export interface BotConfigView {
+  enabled: boolean;
+  webhookUrl: string;
+  events: string[];
+  hasSecret: boolean;
+  updatedAt: string;
+  updatedBy: string;
+}
+
+function tokensPath(): string {
+  return `/api/${TOKEN}/tokens`;
+}
+
+function botConfigPath(): string {
+  return `/api/${TOKEN}/botconfig`;
+}
+
+export async function listApiTokens(): Promise<ApiTokenDisplay[]> {
+  const res = await fetch(tokensPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { tokens?: ApiTokenDisplay[] };
+  if (!Array.isArray(json.tokens)) throw { status: 502, message: 'Bad tokens response' } satisfies ApiError;
+  return json.tokens;
+}
+
+/** Mint a token for `username`. The returned `token` is the full secret — show it ONCE. */
+export async function generateApiToken(username: string, label?: string): Promise<{ token: string; record: ApiTokenDisplay }> {
+  const res = await fetch(tokensPath(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, label }),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  return (await res.json()) as { token: string; record: ApiTokenDisplay };
+}
+
+export async function revokeApiToken(id: string): Promise<{ record: ApiTokenDisplay }> {
+  const res = await fetch(tokensPath(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action: 'revoke', id }),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  return (await res.json()) as { record: ApiTokenDisplay };
+}
+
+export async function getBotConfig(): Promise<BotConfigView> {
+  const res = await fetch(botConfigPath());
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { config?: BotConfigView };
+  if (!json.config) throw { status: 502, message: 'Bad botconfig response' } satisfies ApiError;
+  return json.config;
+}
+
+/**
+ * Patch the bot webhook config. Omitting `webhookSecret` keeps the stored
+ * secret; `''` clears it. The server never returns the secret — only `hasSecret`.
+ */
+export async function putBotConfig(patch: {
+  enabled?: boolean;
+  webhookUrl?: string;
+  webhookSecret?: string;
+  events?: string[];
+  updatedBy?: string;
+}): Promise<BotConfigView> {
+  const res = await fetch(botConfigPath(), {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) throw { status: res.status, message: `HTTP ${res.status}` } satisfies ApiError;
+  const json = (await res.json()) as { config?: BotConfigView };
+  if (!json.config) throw { status: 502, message: 'Bad botconfig response' } satisfies ApiError;
+  return json.config;
+}
+
 export interface HealthResponse {
   ok: boolean;
   hasKey: boolean;

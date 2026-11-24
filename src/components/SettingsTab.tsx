@@ -5,7 +5,8 @@
 // fixedTags ∪ authors ∪ designers, live Slack phrase preview, and Data rows
 // with a two-step inline "Clear all" confirm.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { getBotConfig, putBotConfig, type BotConfigView } from '../lib/api';
 import { downloadExport, readImportFile } from '../lib/dataio';
 import { defaultSettings } from '../lib/storage';
 import type { Ahj, PostRecord, Region, Settings } from '../types';
@@ -45,6 +46,13 @@ const PHRASES: [keyof Settings['defaults'], string][] = [
   ['homeowner', 'Homeowner Feedback'],
 ];
 
+// The two webhook events the Bot API can emit (item 18). Kept in one place so
+// the checkboxes and the save payload can't drift.
+const BOT_EVENTS: [string, string][] = [
+  ['project.created', 'Project created'],
+  ['project.status_changed', 'Project status changed'],
+];
+
 function initials(name: string): string {
   return name
     .split(/\s+/)
@@ -60,6 +68,56 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
   const [input, setInput] = useState('');
   const [clearArmed, setClearArmed] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+
+  // Bot API webhook (item 18). The stored secret is never sent back by the
+  // server — only `hasSecret`. The secret input is write-only: blank on save
+  // keeps the existing secret, a typed value replaces it.
+  const [botConfig, setBotConfig] = useState<BotConfigView | null>(null);
+  const [botLoaded, setBotLoaded] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [botEnabled, setBotEnabled] = useState(false);
+  const [botUrl, setBotUrl] = useState('');
+  const [botSecret, setBotSecret] = useState('');
+  const [botEvents, setBotEvents] = useState<string[]>([]);
+  const [botSaving, setBotSaving] = useState(false);
+
+  useEffect(() => {
+    getBotConfig()
+      .then((cfg) => {
+        setBotConfig(cfg);
+        setBotEnabled(cfg.enabled);
+        setBotUrl(cfg.webhookUrl);
+        setBotEvents(cfg.events);
+        setBotLoaded('ok');
+      })
+      .catch(() => setBotLoaded('error'));
+  }, []);
+
+  const toggleBotEvent = (event: string) =>
+    setBotEvents((prev) => (prev.includes(event) ? prev.filter((e) => e !== event) : [...prev, event]));
+
+  const saveBotConfig = async () => {
+    setBotSaving(true);
+    try {
+      const patch: { enabled: boolean; webhookUrl: string; events: string[]; webhookSecret?: string } = {
+        enabled: botEnabled,
+        webhookUrl: botUrl.trim(),
+        events: botEvents,
+      };
+      // Only send the secret when the admin typed one — blank keeps the stored one.
+      if (botSecret) patch.webhookSecret = botSecret;
+      const cfg = await putBotConfig(patch);
+      setBotConfig(cfg);
+      setBotEnabled(cfg.enabled);
+      setBotUrl(cfg.webhookUrl);
+      setBotEvents(cfg.events);
+      setBotSecret('');
+      toast('Bot API webhook saved.');
+    } catch {
+      toast('Could not save the webhook settings — check the connection and try again.');
+    } finally {
+      setBotSaving(false);
+    }
+  };
 
   const patch = (p: Partial<Settings>) => {
     setSettings({ ...settings, ...p });
@@ -101,6 +159,7 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
     ['sv2-rosters', 'Rosters', String(ROSTERS.reduce((n, [k]) => n + settings[k].length, 0))],
     ['sv2-leads', 'Region leads', String(Object.values(settings.regionLead).filter(Boolean).length)],
     ['sv2-phrases', 'Default phrases', String(PHRASES.length)],
+    ['sv2-botapi', 'Bot API', ''],
     ['sv2-data', 'Data', ''],
   ];
 
@@ -269,6 +328,63 @@ export default function SettingsTab({ settings, setSettings, records, setRecords
                 </div>
               </div>
             </div>
+          </section>
+
+          <section id="sv2-botapi" className="sv2-card">
+            <div className="sv2-card-head">
+              <h3>Bot API webhook</h3>
+              <span>Push project events to an external bot. Mint per-user tokens in Admin → Users.</span>
+            </div>
+            {botLoaded === 'loading' && <p className="sv2-roster-hint">Loading…</p>}
+            {botLoaded === 'error' && (
+              <p className="sv2-roster-hint">Could not load the webhook settings — check the connection and reload.</p>
+            )}
+            {botLoaded === 'ok' && (
+              <div className="sv2-botapi">
+                <label className="sv2-bot-toggle">
+                  <input type="checkbox" checked={botEnabled} onChange={(e) => setBotEnabled(e.target.checked)} />
+                  Enabled
+                </label>
+                <label>
+                  Webhook URL
+                  <input
+                    type="url"
+                    placeholder="https://bot.example.com/hooks/sow"
+                    value={botUrl}
+                    onChange={(e) => setBotUrl(e.target.value)}
+                  />
+                </label>
+                <label>
+                  Webhook secret{' '}
+                  <span className="sv2-arrow">{botConfig?.hasSecret ? 'secret is set' : 'no secret set'}</span>
+                  <input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={botConfig?.hasSecret ? 'Leave blank to keep the current secret' : 'Optional signing secret'}
+                    value={botSecret}
+                    onChange={(e) => setBotSecret(e.target.value)}
+                  />
+                </label>
+                <div className="sv2-bot-events">
+                  <span className="sv2-roster-label">Events</span>
+                  {BOT_EVENTS.map(([event, label]) => (
+                    <label key={event} className="sv2-bot-event">
+                      <input
+                        type="checkbox"
+                        checked={botEvents.includes(event)}
+                        onChange={() => toggleBotEvent(event)}
+                      />
+                      {label} <code>{event}</code>
+                    </label>
+                  ))}
+                </div>
+                <div>
+                  <button className="sv2-btn" disabled={botSaving} onClick={() => void saveBotConfig()}>
+                    {botSaving ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </div>
+            )}
           </section>
 
           <section id="sv2-data" className="sv2-card">

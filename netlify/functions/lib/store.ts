@@ -25,3 +25,15 @@ export function sowpostStoreName(env: Record<string, string | undefined> = proce
 export function getSowpostStore(env: Record<string, string | undefined> = process.env) {
   return getStore(sowpostStoreName(env));
 }
+
+/**
+ * Same store, but with STRONG read consistency (Aboud 2026-11-23). The default
+ * is eventual: a read right after a write may hit a replica that has not caught
+ * up — which is fine for the board (polling reconciles) but fatal for the bot
+ * API, where a token minted a second ago must authenticate NOW and a revoke
+ * must bite immediately. Strong reads cost a little more; the auth path is low
+ * volume, so it is the right trade.
+ */
+export function getSowpostStoreStrong(env: Record<string, string | undefined> = process.env) {
+  return getStore({ name: sowpostStoreName(env), consistency: 'strong' });
+}

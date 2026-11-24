@@ -2,7 +2,7 @@
 // (_STUDY_board_benchmark.md Tier 1). Pure functions only: BoardTab owns the
 // state, this file owns the rules so they can be tested without a DOM.
 
-import type { BoardLabel, BoardProject, LabelColumnKey } from '../board/types';
+import type { BoardActivity, BoardLabel, BoardProject, LabelColumnKey } from '../board/types';
 import {
   labelById,
   labelsFor,
@@ -28,6 +28,18 @@ export interface Filters {
   dateTo: string;
   /** Only rows the aging rule flags — pairs with the Needs-attention preset. */
   staleOnly: boolean;
+  /**
+   * Only rows that are unrated AND install within the next INSTALL_SOON_DAYS
+   * (Aboud 2026-11-23) — the "a job is about to install and nobody has sized
+   * the SOW effort" risk.
+   */
+  unratedInstallSoon: boolean;
+  /**
+   * Drop cancelled projects from the board entirely (Aboud 2026-11-24). They
+   * only surface in Out of SOW scope, so this clears them from that section.
+   * Default off.
+   */
+  hideCancelled: boolean;
 }
 
 export const NO_FILTERS: Filters = {
@@ -40,7 +52,26 @@ export const NO_FILTERS: Filters = {
   dateFrom: '',
   dateTo: '',
   staleOnly: false,
+  unratedInstallSoon: false,
+  hideCancelled: false,
 };
+
+/** True when any filter is narrowing the board — drives the "Filter on" chip. */
+export function anyFilterActive(f: Filters): boolean {
+  return (
+    f.search.trim() !== '' ||
+    f.mine ||
+    f.showArchived ||
+    f.staleOnly ||
+    f.unratedInstallSoon ||
+    f.hideCancelled ||
+    f.dateFrom !== '' ||
+    f.dateTo !== '' ||
+    f.coordinators.length > 0 ||
+    f.statusIds.length > 0 ||
+    f.phaseIds.length > 0
+  );
+}
 
 // ---- install date (READ-ONLY mirror of the linked post) ---------------------
 
@@ -93,6 +124,112 @@ export function agingTitle(state: AgingState, project: BoardProject, installIso:
   if (state === 'overdue') return `Install date passed ${daysSince(installIso ?? '', todayIso)} day(s) ago`;
   if (state === 'stale') return `No change in ${daysSince(project.updatedAt, todayIso)} days`;
   return '';
+}
+
+// ---- unrated + installing soon (Aboud 2026-11-23, item 6) -------------------
+
+export const INSTALL_SOON_DAYS = 7;
+
+/**
+ * A row that has no rating yet AND whose install date is today or within the
+ * next `withinDays` days. `daysSince(install, today)` is negative for a future
+ * install, so "soon" is the band `[-withinDays, 0]` — an install already in the
+ * past is `overdue`, a different (louder) problem, and is not flagged here.
+ */
+export function isUnratedInstallSoon(
+  project: BoardProject,
+  installIso: string | null,
+  todayIso: string,
+  withinDays: number = INSTALL_SOON_DAYS,
+): boolean {
+  if (project.rating != null) return false;
+  if (!installIso) return false;
+  const d = daysSince(installIso, todayIso);
+  return d <= 0 && d >= -withinDays;
+}
+
+export function installSoonTitle(installIso: string | null, todayIso: string): string {
+  if (!installIso) return '';
+  const d = -daysSince(installIso, todayIso); // days until install
+  const when = d === 0 ? 'today' : d === 1 ? 'tomorrow' : `in ${d} days`;
+  return `Not rated — installs ${when}`;
+}
+
+// ---- days in status (Aboud 2026-11-23, item 9) ------------------------------
+
+/**
+ * When a project last entered its current status, read from the activity log
+ * (the newest `update` entry whose changes touched `statusId`). Null when the
+ * log has no status change for it — the row has been in one status since it was
+ * created, or the entry was evicted past the 5,000-entry cap.
+ */
+export function statusChangedAt(activity: BoardActivity[], projectId: string): string | null {
+  let best: string | null = null;
+  for (const a of activity) {
+    if (a.projectId !== projectId) continue;
+    if (a.action === 'update' && a.changes && 'statusId' in a.changes && (!best || a.at > best)) best = a.at;
+  }
+  return best;
+}
+
+/**
+ * Whole days the project has sat in its current status. Falls back to the
+ * creation date when the log has no status change (documented as a fallback so
+ * a number is always shown). Null only when neither date is parseable.
+ */
+export function daysInStatus(activity: BoardActivity[], project: BoardProject, todayIso: string): number | null {
+  const at = statusChangedAt(activity, project.id) ?? project.createdAt;
+  if (!at) return null;
+  return daysSince(at, todayIso);
+}
+
+// ---- coordinator load (Aboud 2026-11-23, item 8) ----------------------------
+
+export interface CoordinatorLoad {
+  /** Active rows + Pre-Design rows that are not Done, assigned to this person. */
+  load: number;
+  /** The daily assignment ceiling (the bot's "max 3 per coordinator"). */
+  cap: number;
+}
+
+/** The bot assigns at most this many projects per coordinator per day. */
+export const COORDINATOR_DAILY_CAP = 3;
+
+/** Pre-Design sub-status ids that count as finished (by id or by the name "Done"). */
+function predesignDoneIds(labels: BoardLabel[]): Set<string> {
+  return new Set(
+    labels
+      .filter((l) => l.columnKey === 'predesign' && (l.id === 'predesign-done' || l.name.trim().toLowerCase() === 'done'))
+      .map((l) => l.id),
+  );
+}
+
+/**
+ * Per-coordinator workload: active rows plus Pre-Design rows that are not yet
+ * Done. Unassigned ('') is skipped. Deleted/archived rows are excluded. The
+ * cap is the same on every entry; the UI shows it as "Anas 2/3".
+ */
+export function coordinatorLoads(
+  projects: BoardProject[],
+  labels: BoardLabel[],
+  cap: number = COORDINATOR_DAILY_CAP,
+): Map<string, CoordinatorLoad> {
+  const live = projects.filter((p) => !p.deletedAt && !p.archivedAt);
+  const sections = splitSections(live, labels);
+  const doneIds = predesignDoneIds(labels);
+  const counts = new Map<string, number>();
+  const bump = (name: string) => {
+    const n = name.trim();
+    if (!n) return;
+    counts.set(n, (counts.get(n) ?? 0) + 1);
+  };
+  for (const p of sections.active) bump(p.coordinator);
+  for (const p of sections.preDesign) {
+    if (!(p.preDesignStatusId && doneIds.has(p.preDesignStatusId))) bump(p.coordinator);
+  }
+  const out = new Map<string, CoordinatorLoad>();
+  for (const [name, load] of counts) out.set(name, { load, cap });
+  return out;
 }
 
 // ---- board sections ---------------------------------------------------------
@@ -349,6 +486,8 @@ export function isPresetActive(filters: Filters, preset: ViewPreset): boolean {
     filters.mine === target.mine &&
     filters.showArchived === target.showArchived &&
     filters.staleOnly === target.staleOnly &&
+    filters.unratedInstallSoon === target.unratedInstallSoon &&
+    filters.hideCancelled === target.hideCancelled &&
     filters.dateFrom === target.dateFrom &&
     filters.dateTo === target.dateTo &&
     same(filters.coordinators, target.coordinators) &&

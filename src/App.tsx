@@ -26,7 +26,7 @@ import {
   putSharedRecords,
 } from './lib/api';
 import { boardsOfKind, mergeAhjs, replaceKind } from './lib/ahj';
-import { linkedPosts, mergeBoard } from './lib/board';
+import { boardSignature, linkedPosts, mergeBoard } from './lib/board';
 import { isoToUs, todayIso } from './lib/dates';
 import { designStamp } from './lib/designStamp';
 import { mergeExtraWork } from './lib/extraWork';
@@ -318,6 +318,11 @@ export default function App({ session, onLogout, onSessionChange }: AppProps = {
   const applyServerBoard = useCallback((server: Partial<BoardState>) => {
     setBoardState((cur) => {
       const merged = mergeBoard(cur, server);
+      // A poll that brings nothing new must NOT replace the board object:
+      // a fresh identity re-runs every memo and rebuilds the column defs,
+      // which resets scroll and closes an open dropdown mid-edit (item 11,
+      // Aboud 2026-11-23). Returning `cur` lets React bail out of the render.
+      if (boardSignature(merged) === boardSignature(cur)) return cur;
       saveBoard(merged);
       return merged;
     });

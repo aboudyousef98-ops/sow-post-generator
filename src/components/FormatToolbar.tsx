@@ -109,6 +109,23 @@ export default function FormatToolbar({ taRef, value, onChange, label }: Props) 
     commit(merged, from, Math.max(from, selEnd + delta));
   };
 
+  /**
+   * Insert a Slack link skeleton `<url|label>` and select the `url` token so
+   * the user types/pastes the address straight over it. If text is selected it
+   * becomes the label; otherwise a `label` placeholder is used. No dialog — the
+   * box always shows the literal markup, same as every other control here.
+   */
+  const insertLink = () => {
+    const ta = taRef.current;
+    if (!ta) return;
+    const s = ta.selectionStart;
+    const e = ta.selectionEnd;
+    const label = value.slice(s, e) || 'label';
+    const snippet = `<url|${label}>`;
+    const next = value.slice(0, s) + snippet + value.slice(e);
+    commit(next, s + 1, s + 4); // select the "url" token
+  };
+
   /** Tick / untick the checkbox on the caret's line. */
   const toggleDone = () => {
     const ta = taRef.current;
@@ -139,6 +156,8 @@ export default function FormatToolbar({ taRef, value, onChange, label }: Props) 
       <B on={() => toggleLeader('bullet')} title="Bulleted list">•</B>
       <B on={() => toggleLeader('number')} title="Numbered list">1.</B>
       <B on={toggleDone} title="Checkbox">☐</B>
+      <span className="fmt-sep" />
+      <B on={insertLink} title="Link">🔗</B>
     </div>
   );
 }

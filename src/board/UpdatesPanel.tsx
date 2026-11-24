@@ -14,6 +14,7 @@ import RichText from '../components/RichText';
 import { relativeTime } from '../lib/dates';
 import { newRequest, parseSlackPaste, resolveRequest } from '../lib/requests';
 import { deleteUpdate, editUpdate, newReply, newUpdate, threadRoots } from '../lib/updates';
+import type { ProjectPatch } from '../lib/board';
 import type { BoardProject, ProjectRequest, ProjectUpdate, UpdateKind } from './types';
 
 const KIND_BADGE: Partial<Record<UpdateKind, string>> = {
@@ -39,6 +40,7 @@ export default function UpdatesPanel({
   isAdmin,
   onPut,
   onPutRequests,
+  onPatchProject,
   onClose,
 }: {
   project: BoardProject;
@@ -51,6 +53,9 @@ export default function UpdatesPanel({
   onPut: (u: ProjectUpdate) => void;
   /** Upsert requests in one board write. */
   onPutRequests: (items: ProjectRequest[]) => void;
+  /** Patch a scalar field on the project (Source / Requested by). Optional so
+   * read-only mounts can omit it. */
+  onPatchProject?: (patch: ProjectPatch) => void;
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState('');
@@ -59,6 +64,10 @@ export default function UpdatesPanel({
   const [replyTo, setReplyTo] = useState<string | null>(null);
   const [replyDraft, setReplyDraft] = useState('');
   const [reqDraft, setReqDraft] = useState('');
+  // Source (Slack permalink) + Requested by (item 13). Local, seeded from the
+  // project, committed on blur/Enter so every keystroke is not a board write.
+  const [reqBy, setReqBy] = useState(project.requestedBy ?? '');
+  const [src, setSrc] = useState(project.sourceUrl ?? '');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const editRef = useRef<HTMLTextAreaElement>(null);
   const replyRef = useRef<HTMLTextAreaElement>(null);
@@ -73,6 +82,21 @@ export default function UpdatesPanel({
     setReplyDraft('');
     setReqDraft('');
   }, [project.id]);
+
+  // Seed the Source / Requested-by inputs from whatever the live row carries.
+  useEffect(() => {
+    setReqBy(project.requestedBy ?? '');
+    setSrc(project.sourceUrl ?? '');
+  }, [project.id, project.requestedBy, project.sourceUrl]);
+
+  const commitReqBy = () => {
+    const v = reqBy.trim();
+    if (v !== (project.requestedBy ?? '')) onPatchProject?.({ requestedBy: v || undefined });
+  };
+  const commitSrc = () => {
+    const v = src.trim();
+    if (v !== (project.sourceUrl ?? '')) onPatchProject?.({ sourceUrl: v || undefined });
+  };
 
   // Escape closes the panel — it is non-modal, so this is the keyboard way out.
   useEffect(() => {
@@ -205,13 +229,53 @@ export default function UpdatesPanel({
   );
 
   return (
-    <aside className="upd-panel" aria-label={`Project panel — ${project.name}`}>
+    <aside className="upd-panel" aria-label={`Project panel — ${project.name}`} data-testid="updates-panel">
       <div className="upd-panel-head">
         <h3>{project.name}</h3>
         <button type="button" className="upd-panel-x" aria-label="Close" title="Close (Esc)" onClick={onClose}>
           ✕
         </button>
       </div>
+
+      {/* Where the project came from and who asked for it (item 13). Editable
+          in place; Source renders a ↗ link when it is a URL. */}
+      {onPatchProject && (
+        <div className="upd-panel-meta">
+          <label className="upd-meta-field">
+            <span className="muted">Requested by</span>
+            <input
+              value={reqBy}
+              placeholder="—"
+              aria-label="Requested by"
+              onChange={(e) => setReqBy(e.target.value)}
+              onBlur={commitReqBy}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') e.stopPropagation();
+              }}
+            />
+          </label>
+          <label className="upd-meta-field">
+            <span className="muted">Source</span>
+            <input
+              value={src}
+              placeholder="Slack link…"
+              aria-label="Source link"
+              onChange={(e) => setSrc(e.target.value)}
+              onBlur={commitSrc}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+                if (e.key === 'Escape') e.stopPropagation();
+              }}
+            />
+            {project.sourceUrl && /^https?:\/\//.test(project.sourceUrl) && (
+              <a className="upd-meta-link" href={project.sourceUrl} target="_blank" rel="noopener noreferrer" title="Open source">
+                ↗
+              </a>
+            )}
+          </label>
+        </div>
+      )}
 
       <div className="upd-panel-scroll">
         {/* Slack requests — the designers' asks for THIS project. Resolving is

@@ -4,7 +4,14 @@
 // machine a few seconds later.
 
 import { useCallback, useEffect, useState } from 'react';
-import { fetchSharedUsers, putSharedUsers } from '../lib/api';
+import {
+  fetchSharedUsers,
+  generateApiToken,
+  listApiTokens,
+  putSharedUsers,
+  revokeApiToken,
+  type ApiTokenDisplay,
+} from '../lib/api';
 import {
   activeUsers,
   findUser,
@@ -51,6 +58,13 @@ export default function UsersTab({ session, toast }: Props) {
   const [curPw, setCurPw] = useState('');
   const [newPw, setNewPw] = useState('');
 
+  // Bot API tokens (admin-only, item 14). The full secret is only ever held in
+  // `newToken` — shown once in the modal, then dropped. Never logged.
+  const isAdmin = session.role === 'admin';
+  const [tokens, setTokens] = useState<ApiTokenDisplay[]>([]);
+  const [tokensLoaded, setTokensLoaded] = useState<'loading' | 'ok' | 'error'>('loading');
+  const [newToken, setNewToken] = useState<{ token: string; record: ApiTokenDisplay } | null>(null);
+
   useEffect(() => {
     fetchSharedUsers()
       .then((users) => {
@@ -60,6 +74,52 @@ export default function UsersTab({ session, toast }: Props) {
       })
       .catch(() => setLoaded('error'));
   }, []);
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    try {
+      listApiTokens()
+        .then((list) => {
+          setTokens(list);
+          setTokensLoaded('ok');
+        })
+        .catch(() => setTokensLoaded('error'));
+    } catch {
+      setTokensLoaded('error');
+    }
+  }, [isAdmin]);
+
+  const generateToken = async (username: string) => {
+    try {
+      const made = await generateApiToken(username);
+      setNewToken(made);
+      // Prepend so the newest sits at the top of the list immediately.
+      setTokens((prev) => [made.record, ...prev.filter((t) => t.id !== made.record.id)]);
+      setTokensLoaded('ok');
+      toast(`Created an API token for ${username}.`);
+    } catch {
+      toast('Could not create the token — check the connection and try again.');
+    }
+  };
+
+  const revokeToken = async (id: string) => {
+    try {
+      const { record } = await revokeApiToken(id);
+      setTokens((prev) => prev.map((t) => (t.id === id ? record : t)));
+      toast('Token revoked.');
+    } catch {
+      toast('Could not revoke the token — check the connection and try again.');
+    }
+  };
+
+  const copyToken = async (value: string) => {
+    try {
+      await navigator.clipboard.writeText(value);
+      toast('Token copied to the clipboard.');
+    } catch {
+      toast('Could not copy — select the field and copy it manually.');
+    }
+  };
 
   /** Optimistic local update + push; the server's merged roster wins on return. */
   const push = useCallback(
@@ -346,6 +406,11 @@ export default function UsersTab({ session, toast }: Props) {
                         <button className="btn small secondary" onClick={() => setResetFor(u.username)}>
                           Reset password
                         </button>
+                        {isAdmin && (
+                          <button className="btn small secondary" onClick={() => void generateToken(u.username)}>
+                            API token
+                          </button>
+                        )}
                         <button className="btn small danger" onClick={() => setConfirmRemove(u.username)}>
                           Remove
                         </button>
@@ -358,6 +423,61 @@ export default function UsersTab({ session, toast }: Props) {
           </table>
         )}
       </div>
+
+      {isAdmin && (
+        <div className="card">
+          <h3>API tokens</h3>
+          <p className="field-hint" style={{ maxWidth: 'none' }}>
+            Bot / integration tokens. Use the “API token” button on a team member above to mint one for them.
+            The full value is shown once at creation and cannot be retrieved afterwards — copy it then.
+          </p>
+          {tokensLoaded === 'loading' && <p>Loading tokens…</p>}
+          {tokensLoaded === 'error' && <p>Could not load the tokens — check the connection and reload.</p>}
+          {tokensLoaded === 'ok' &&
+            (tokens.length === 0 ? (
+              <p className="field-hint" style={{ maxWidth: 'none' }}>
+                No tokens yet.
+              </p>
+            ) : (
+              <table className="users-table">
+                <thead>
+                  <tr>
+                    <th>Token</th>
+                    <th>User</th>
+                    <th>Label</th>
+                    <th>Created</th>
+                    <th>Last used</th>
+                    <th aria-label="actions" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {tokens.map((t) => (
+                    <tr key={t.id}>
+                      <td>
+                        <code>{t.prefix}…</code>
+                      </td>
+                      <td>{t.username}</td>
+                      <td>{t.label || '—'}</td>
+                      <td>{fmtDate(t.createdAt)}</td>
+                      <td>{t.lastUsedAt ? fmtDate(t.lastUsedAt) : '—'}</td>
+                      <td className="users-actions">
+                        {t.revokedAt ? (
+                          <span className="field-hint" style={{ margin: 0 }}>
+                            Revoked {fmtDate(t.revokedAt)}
+                          </span>
+                        ) : (
+                          <button className="btn small danger" onClick={() => void revokeToken(t.id)}>
+                            Revoke
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ))}
+        </div>
+      )}
 
       <div className="card">
         <h3>Add a team member</h3>
@@ -412,6 +532,43 @@ export default function UsersTab({ session, toast }: Props) {
           </button>
         </form>
       </div>
+
+      {newToken && (
+        <div className="modal-overlay" onClick={() => setNewToken(null)}>
+          <div className="modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ fontSize: 18, textTransform: 'none', letterSpacing: 0 }}>
+              API token for {newToken.record.username}
+            </h3>
+            <p className="field-hint warn" style={{ maxWidth: 'none', margin: 0 }}>
+              Copy this now — it will not be shown again. Store it somewhere safe; anyone with it can call the API as
+              this user.
+            </p>
+            <div className="token-reveal">
+              <input
+                type="text"
+                readOnly
+                aria-label="API token"
+                value={newToken.token}
+                onFocus={(e) => e.currentTarget.select()}
+              />
+              <button className="btn small primary" onClick={() => void copyToken(newToken.token)}>
+                Copy
+              </button>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn secondary" onClick={() => setNewToken(null)}>
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
+}
+
+/** Short, local date for the token table — created / last used / revoked. */
+function fmtDate(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
 }

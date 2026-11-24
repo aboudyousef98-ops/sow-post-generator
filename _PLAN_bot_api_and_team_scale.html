@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SOW Tool — Bot API &amp; Team-Scale Plan (2026-11-20)</title>
+<style>
+  :root{
+    --ink:#1a2332; --mut:#5a6578; --line:#e3e7ee; --bg:#fafbfd; --card:#ffffff;
+    --accent:#e8710a; --navy:#16324f; --ok:#1a7f4b; --warn:#8a6d00; --warnbg:#fff8dc;
+    --bad:#b3261e; --badbg:#fdeceb; --okbg:#e9f6ef; --chipbg:#eef2f7;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.55 "Segoe UI",system-ui,-apple-system,sans-serif}
+  main{max-width:960px;margin:0 auto;padding:32px 24px 80px}
+  h1{font-size:26px;line-height:1.25;margin:0 0 4px;color:var(--navy)}
+  h2{font-size:20px;margin:0;color:var(--navy)}
+  h3{font-size:16px;margin:20px 0 6px}
+  .sub{color:var(--mut);margin:0 0 24px}
+  section{background:var(--card);border:1px solid var(--line);border-radius:10px;
+    padding:20px 24px;margin:0 0 20px}
+  .sec-head{display:flex;align-items:baseline;gap:10px;border-bottom:1px solid var(--line);
+    padding-bottom:10px;margin-bottom:12px}
+  .sec-num{font-weight:700;color:var(--accent);font-size:14px;white-space:nowrap}
+  ul,ol{margin:6px 0 12px;padding-left:22px}
+  li{margin:3px 0}
+  code{background:var(--chipbg);border-radius:4px;padding:1px 5px;
+    font:13px/1.4 Consolas,ui-monospace,monospace}
+  pre{background:#0f1b2d;color:#dce6f5;border-radius:8px;padding:12px 14px;overflow-x:auto;
+    font:13px/1.5 Consolas,ui-monospace,monospace}
+  table{border-collapse:collapse;width:100%;margin:10px 0 14px;font-size:14px}
+  th,td{border:1px solid var(--line);padding:6px 10px;text-align:left;vertical-align:top}
+  th{background:var(--chipbg);font-weight:600}
+  .pill{display:inline-block;font-size:12px;font-weight:700;border-radius:999px;
+    padding:2px 10px;white-space:nowrap}
+  .pill.rec{background:var(--okbg);color:var(--ok)}
+  .pill.no{background:var(--badbg);color:var(--bad)}
+  .pill.later{background:var(--chipbg);color:var(--mut)}
+  .pill.bug{background:var(--badbg);color:var(--bad)}
+  .callout{border-left:4px solid var(--accent);background:#fff6ee;border-radius:0 8px 8px 0;
+    padding:10px 14px;margin:12px 0}
+  .callout.warn{border-color:var(--warn);background:var(--warnbg)}
+  .callout.bad{border-color:var(--bad);background:var(--badbg)}
+  .callout.ok{border-color:var(--ok);background:var(--okbg)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:720px){.grid2{grid-template-columns:1fr}}
+  .diagram{display:flex;flex-direction:column;gap:8px;margin:12px 0}
+  .lane{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .node{border:1.5px solid var(--navy);border-radius:8px;padding:6px 12px;background:#fff;
+    font-size:13px;font-weight:600}
+  .node.new{border-color:var(--accent);color:var(--accent)}
+  .node.store{border-style:dashed}
+  .arrow{color:var(--mut);font-weight:700}
+  .toc{columns:2;column-gap:28px;font-size:14px}
+  .toc a{color:var(--navy);text-decoration:none}
+  .toc a:hover{text-decoration:underline}
+  .kbd{color:var(--mut);font-size:13px}
+  .tag{font-size:11px;font-weight:700;letter-spacing:.4px;color:var(--mut);text-transform:uppercase}
+  footer{color:var(--mut);font-size:13px;text-align:center;margin-top:28px}
+</style>
+</head>
+<body>
+<main>
+
+<h1>SOW Operational Tool — the growth plan</h1>
+<p class="sub">Bot API · Installation Review parity · Notifications redesign · Extra-work privacy
+&nbsp;—&nbsp; audit + options briefing, 2026-11-20. Companion file:
+<code>_PLAN_bot_api_and_team_scale.md</code> (the execution plan). Nothing here is built yet; your
+decisions are in <a href="#decisions">§9</a>.</p>
+
+<section id="toc">
+  <div class="sec-head"><span class="sec-num">§0</span><h2>Contents</h2></div>
+  <div class="toc">
+    <p><a href="#insight">1 · The one insight</a><br>
+    <a href="#today">2 · How the system works today</a><br>
+    <a href="#bot">3 · The Bot API (your 8 items)</a><br>
+    <a href="#review">4 · Installation Review parity</a></p>
+    <p><a href="#notif">5 · Notifications + desktop pop-ups</a><br>
+    <a href="#extra">6 · Extra-work privacy (Khaled)</a><br>
+    <a href="#phases">7 · Build order &amp; draft safety</a><br>
+    <a href="#rejected">8 · What I looked at and rejected</a><br>
+    <a href="#decisions">9 · Your 7 decisions</a></p>
+  </div>
+</section>
+
+<section id="insight">
+  <div class="sec-head"><span class="sec-num">§1</span><h2>The one insight that shapes everything</h2></div>
+  <p><strong>All four asks collide on the same missing piece: the server does not know who is calling it.</strong></p>
+  <ul>
+    <li>Every function checks only two things: the request came from an allowed <em>origin</em> (a browser
+      header any program can fake) and the shared path token — which ships inside the public JS bundle and is
+      documented in the code itself as "not a secret".</li>
+    <li>Admin vs member is checked <em>only in the browser</em>. The server never reads a role.</li>
+    <li><code>GET /users</code> hands every caller the whole roster <em>including password salts and
+      hashes</em> — because login verification happens in the browser.</li>
+    <li>"Last updated by" is free text the client sends. Anyone can write as anyone.</li>
+  </ul>
+  <div class="callout">
+    <strong>Consequence:</strong> the bot can't authenticate (item 1 of your spec), extra-work privacy can't
+    be enforced, and notifications can't be targeted — <em>for the same reason</em>. So the plan builds
+    <strong>one</strong> server-side identity mechanism (per-user API tokens) and lets all four features ride it.
+    That turns four separate projects into one foundation + four thin layers.
+  </div>
+</section>
+
+<section id="today">
+  <div class="sec-head"><span class="sec-num">§2</span><h2>How the system works today (audit result)</h2></div>
+
+  <div class="diagram">
+    <div class="lane"><span class="node">Browser (React SPA)</span><span class="arrow">⟷ 15s poll, whole blobs</span>
+      <span class="node">12 Netlify Functions</span><span class="arrow">⟷ merge + etag CAS</span>
+      <span class="node store">Netlify Blobs: board · records · users · ahjs · extrawork</span></div>
+    <div class="lane"><span class="node">SOW Bot (Grok, real browser)</span><span class="arrow">⟶ clicks the UI like a human — no API lane exists</span></div>
+  </div>
+
+  <ul>
+    <li><strong>Storage model:</strong> whole-collection GET / whole-collection PUT with a server-side merge —
+      newer <code>updatedAt</code> wins per row, deletes are tombstones, 5 retry rounds on write conflict.
+      <em>Useful discovery:</em> PUT-ting a single project already upserts just that row — the bot API can be a
+      thin documented wrapper over this, not a storage rewrite.</li>
+    <li><strong>Audit log already exists:</strong> every board edit writes a
+      <code>{field, old, new, who, when}</code> activity entry — append-only and immutable on the server,
+      capped at 5,000. Your item 4 (history + undo) extends this instead of inventing a new log.</li>
+    <li><strong>Cost problem, measured:</strong> the 15-second poll downloads the full board —
+      <strong>847&nbsp;KB per poll ≈ 170&nbsp;GB/month</strong>. The ETag fix (server says "nothing changed",
+      304, ~0 bytes) is fully designed and was deferred only because it collided with work that is now
+      committed. It should ride in this package.</li>
+    <li><strong>No cron, no webhooks, no push</strong> — the server only ever answers; it never initiates.</li>
+    <li><strong>The bot already left fingerprints:</strong> the automations system has an
+      <code>exceptActors</code> option that exists <em>because</em> sow_bot's new rows kept auto-assigning
+      themselves to it. The board-export CSV was built "for the bot's two standing jobs". The app is already
+      half-aware of the bot — this plan makes it a first-class citizen.</li>
+  </ul>
+
+  <div class="callout warn"><strong>Two facts that change your spec slightly:</strong>
+    ① <em>Address</em> is not on board rows (it lives on Compose records) and <em>install date</em> is derived
+    from records — the read API will join records server-side and return them read-only.
+    ② "Section" (Pre-Design / Review / …) is not a field — it's derived from flags on status labels, so the
+    API accepts/returns section and status <em>by name</em> and resolves ids internally. The bot never sees uuids.
+  </div>
+</section>
+
+<section id="bot">
+  <div class="sec-head"><span class="sec-num">§3</span><h2>The Bot API — your 8 items, mapped to this codebase</h2></div>
+
+  <h3>Item 1 — the token (the foundation)</h3>
+  <ul>
+    <li><code>Authorization: Bearer sow_live_&lt;random&gt;</code> on new <code>/api/bot/v1/*</code> routes.
+      A valid token replaces the Origin check (machines have no Origin header) — this is <em>more</em> secure
+      than today's lane, not less.</li>
+    <li>Token shown <strong>once</strong> at creation (Admin → Users → "Generate API token"); stored only as a
+      SHA-256 digest; the UI shows <code>sow_live_…ab4c</code>; revocable per token; the user's live role is
+      re-checked on every request, so archiving sow_bot kills its token instantly.</li>
+    <li>Every write through the token is attributed <strong>server-side</strong> as "SOW Bot - Aboud" — the
+      first attribution in the app that a client cannot fake.</li>
+  </ul>
+
+  <h3>Items 2–3 — read &amp; write endpoints</h3>
+  <table>
+    <tr><th>Endpoint</th><th>What it does</th></tr>
+    <tr><td><code>GET /api/bot/v1/board?section=&amp;status=&amp;coordinator=</code></td>
+      <td>Filtered projects with resolved names, stars, coordinator, install date (from records),
+      <strong>days-in-status</strong> (computed from the activity log; falls back to last-updated when history
+      is past the 5,000 cap — the response says which). Honours ETag → a no-change poll costs ~0 bytes.</td></tr>
+    <tr><td><code>GET /api/bot/v1/projects/:id</code></td><td>One row + its full Updates thread + its activity slice.</td></tr>
+    <tr><td><code>GET /api/bot/v1/requirements</code> · <code>/match-report</code></td>
+      <td>The requirements boards; the match report's pure computation moves server-side (it's already a pure function).</td></tr>
+    <tr><td><code>POST /api/bot/v1/projects</code></td>
+      <td>Create with <code>coordinator: null</code> honoured, <code>sourceUrl</code> + <code>requestedBy</code>
+      stored (item 5), and a <strong>fuzzy duplicate check</strong>: "antony torres" vs "Anthony S Torres"
+      scores ≥85 and returns <code>409 {duplicates:[…]}</code> unless <code>force: true</code>. Advisory
+      philosophy, same as the rest of the app.</td></tr>
+    <tr><td><code>PATCH /api/bot/v1/projects/:id</code></td>
+      <td>Status / pre-design status / coordinator <em>by name</em>; returns the changed row; stale-data
+      conflict → 409 instead of a silent lost write.</td></tr>
+    <tr><td><code>POST /api/bot/v1/projects/:id/updates</code></td><td>Note authored as the token user, with Slack permalink.</td></tr>
+  </table>
+
+  <h3>Item 4 — audit + one-call undo</h3>
+  <ul>
+    <li>Every bot write carries a <code>batchId</code> and lands in the existing activity log tagged
+      <code>source:'api'</code>. Bulk calls return the batchId.</li>
+    <li><code>POST /api/bot/v1/changes/:batchId/revert</code> — reverses the logged old→new values,
+      <strong>skips any field a human changed since</strong> (reported as conflicts, never overwritten), and
+      logs the revert itself. This is the safety valve that makes an admin bot acceptable.</li>
+    <li><code>Idempotency-Key</code> support: a retried bulk call returns the original result instead of
+      double-writing (webhooks and bots retry — the handlers must shrug).</li>
+    <li><code>GET /api/bot/v1/changes?since=</code> — the change feed. This also quietly replaces item 6 for
+      a bot that can't receive webhooks (see <a href="#decisions">decision 4</a>).</li>
+  </ul>
+
+  <h3>Items 7–8 — UI hooks &amp; docs</h3>
+  <ul>
+    <li>Rows already carry <code>data-project-id</code>. We add <code>data-column-id</code> on cells,
+      <code>data-section</code> on section wrappers, a testid on the Updates panel, and an
+      <code>aria-label</code> sweep on icon-only buttons. Research consensus: accessibility-tree-readable UI +
+      stable testids is exactly what browser agents (Grok Bot, Claude-in-Chrome) key on — and it helps human
+      screen-reader users for free. Zero behavior change.</li>
+    <li><code>/api/docs</code>: a static page listing every endpoint with a curl example using a
+      <code>$SOW_BOT_TOKEN</code> placeholder. No real token ever appears anywhere.</li>
+  </ul>
+
+  <div class="callout ok"><strong>Bot pain points → resolved:</strong> scheduled jobs with no browser stop
+  using stale CSVs (read API) · no stable selectors → testids · no batch id → batchId on every bulk call ·
+  duplicates → fuzzy 409 · re-render mis-clicks → stable selectors survive re-renders (full churn reduction is
+  a separate, later effort).</div>
+</section>
+
+<section id="review">
+  <div class="sec-head"><span class="sec-num">§4</span><h2>Installation Review — table parity</h2></div>
+  <p>Good news: when Pre-Design became a full table (item 12), the Active table's features were extracted into
+  a reusable <code>FullTable</code> component, and Installation Review was left on the light table
+  <em>deliberately</em>, with a note saying "say the word if you want them too". You just said the word.</p>
+  <ul>
+    <li><strong>Effort: small.</strong> ~20 production lines in 2 files + ~100 test lines — wire the review
+      table to the same component and options Pre-Design uses. It gains: drag-to-move columns, resize grips,
+      per-column filters, select-all, draggable rows, grouping. It already shares the column layout; it just
+      couldn't <em>author</em> it.</li>
+    <li><strong>The one change the team will notice:</strong> review rows stop re-sorting newest-first and
+      keep their manual order — the same one-time reorder Pre-Design had. Goes in the deploy note.</li>
+    <li><strong>Separate decision:</strong> a review <em>sub-status</em> column (Working on it / Done / … like
+      Pre-Design) is a ~220-line medium job across 6 files. Recommendation: parity now, sub-status only if the
+      team asks.</li>
+    <li><span class="pill bug">found</span> Mobile has <strong>no Installation Review section at all</strong>
+      (pre-existing gap). Cheap to add while in there — your call (decision 2).</li>
+  </ul>
+</section>
+
+<section id="notif">
+  <div class="sec-head"><span class="sec-num">§5</span><h2>Notifications — what's broken, the options, the plan</h2></div>
+
+  <h3>What the audit found</h3>
+  <ul>
+    <li>The bell <strong>stores nothing</strong> — it recomputes a view over board history on every render.
+      Read-state is one timestamp in one browser's localStorage (survives logout; two tabs disagree; your
+      laptop and desktop never agree).</li>
+    <li><span class="pill bug">bug</span> <strong>Delete notifications can never appear</strong> — the project
+      is tombstoned in the same write, and the bell drops events for deleted projects. Nobody is ever told a
+      project was deleted.</li>
+    <li><span class="pill bug">bug</span> <strong>Clicking a notification never opens what it points at</strong>
+      — the routing is wired in the bell and thrown away one level up. It just scrolls the board.</li>
+    <li><strong>No targeting:</strong> everything is broadcast to all five of you — yet
+      <strong>reviewer assignment produces no notification at all</strong> ("nothing tells Omar his row
+      changed"), and Slack-captured requests are invisible to the bell.</li>
+    <li><strong>No bell on mobile. No delivery with the tab closed.</strong> And it all rides the 847&nbsp;KB/15s poll.</li>
+  </ul>
+
+  <h3>Options compared (research: GitHub + web, 2026 state)</h3>
+  <table>
+    <tr><th>Option</th><th>Verdict</th><th>Why</th></tr>
+    <tr><td>Novu (self-hosted)</td><td><span class="pill no">no</span></td>
+      <td>Needs MongoDB + Redis + worker containers on an always-on server — we have none.</td></tr>
+    <tr><td>Novu cloud / MagicBell / Knock</td><td><span class="pill no">no</span></td>
+      <td>Free tiers cap at 3 team members or ~1k deliveries, then cliff to ~$250/mo. External dependency for
+      ~50 notifications/day is the wrong trade.</td></tr>
+    <tr><td>react-hot-toast / sonner</td><td><span class="pill later">partial</span></td>
+      <td>Toasts only — in-session feedback, not a notification system.</td></tr>
+    <tr><td><strong>Roll our own on the existing poll + Blobs + browser Notification API</strong></td>
+      <td><span class="pill rec">recommended</span></td>
+      <td>The 15s poll already detects changes; desktop pop-ups need zero new infrastructure while a tab is
+      open (even minimized); a Blobs-backed inbox and Web Push are clean later phases. $0.</td></tr>
+  </table>
+
+  <h3>The phased plan</h3>
+  <ul>
+    <li><strong>N1 (this package): fix + target + pop up.</strong> Fix the delete and click-through bugs;
+      notify on reviewer and pre-design-status changes and on Slack requests; add an
+      <strong>All | Mine</strong> toggle (Mine = projects where you're coordinator/reviewer, or replies to
+      you); per-user read-state, cross-tab sync; mount the bell on mobile; and an
+      <strong>"Enable desktop notifications"</strong> button — browsers require the permission ask to come
+      from a click, and one notification per project replaces the previous (no spam stack). Known Windows
+      gotcha documented in-app: Focus Assist silently swallows banners.</li>
+    <li><strong>N1 rider — the ETag fix.</strong> Cuts ~170&nbsp;GB/month and makes faster polls affordable,
+      which is what makes notifications timely. It was only ever deferred for a collision that no longer exists.</li>
+    <li><strong>N2 (later): a persisted per-user inbox</strong> (Blobs store) — per-item read/unread synced
+      across devices, deletable notifications, and an inbox the bot API can write to.</li>
+    <li><strong>N3 (only if needed): Web Push</strong> — delivery with the browser closed. Feasible on
+      Netlify-only (research-verified: push is a stateless HTTP POST, no always-on server needed; service
+      worker + VAPID keys + one function). iOS requires Add-to-Home-Screen. Decide after living with N1.</li>
+  </ul>
+</section>
+
+<section id="extra">
+  <div class="sec-head"><span class="sec-num">§6</span><h2>Extra-work privacy — Khaled sees only his own</h2></div>
+
+  <div class="callout bad"><strong>Live bug found during the audit, independent of Khaled:</strong> on
+  <em>mobile</em>, any member can tap a teammate in the Team list and read their complete extra-work log,
+  export it to Excel, and open the overtime-pay calculator for them. The admin guard that desktop has was
+  never added to the mobile screen. This gets fixed regardless of every other decision.</div>
+
+  <ul>
+    <li><strong>Today:</strong> the server sends everyone's entries to every client; members see team totals,
+      the payroll summary table, and whole-team exports. All "members can't open others' logs" logic is
+      client-side cosmetics — and on mobile even that is missing.</li>
+    <li><strong>Layer 1 — ship now (client):</strong> one filter at the single seam where the data enters the
+      UI. Members' Extra Work screen becomes: <em>their own</em> log, totals, and export — the sidebar roster,
+      payroll table, print block, team Excel and copy-summary all disappear for members in one move. Admins
+      unchanged. Same honest-team model as the rest of the app.</li>
+    <li><strong>Layer 2 — same package (server):</strong> the bot-token lane gives the server its first real
+      identity; the extrawork function gains ownership checks on that lane, written once and ready for humans.</li>
+    <li><strong>Honest ceiling, stated plainly:</strong> until humans also log in server-side, someone
+      technical with DevTools can still fetch the raw data. Layer 1 solves the actual requirement —
+      colleagues not seeing colleagues' compensation data in the UI. The full fix is the identity work in
+      §7 of the .md (in-house server login, or the already-drafted Supabase migration) — a separate decision,
+      after this package.</li>
+  </ul>
+</section>
+
+<section id="phases">
+  <div class="sec-head"><span class="sec-num">§7</span><h2>Build order, draft safety, testing</h2></div>
+  <div class="diagram">
+    <div class="lane">
+      <span class="node">C · Review parity</span><span class="arrow">+</span>
+      <span class="node">E1 · Extra-work filter + mobile fix</span><span class="arrow">→</span>
+      <span class="node new">A · Identity lane (tokens)</span><span class="arrow">→</span>
+      <span class="node new">B · Bot API + docs</span><span class="arrow">→</span>
+      <span class="node">D · Notifications N1 + ETag</span><span class="arrow">→</span>
+      <span class="node">E2 · Server ownership checks</span>
+    </div>
+  </div>
+  <ul>
+    <li><strong>One draft, one package.</strong> Everything lands in <code>_CHECKPOINT_pending_package.md</code>
+      per the package rule; production deploys only on your "yalla deploy", backup-first.</li>
+    <li><strong>Draft safety gate:</strong> deploy with <code>netlify deploy --build --context deploy-preview</code>
+      so the draft resolves <code>BLOBS_STORE_NAME=sowpost-test</code> — a plain
+      <code>netlify deploy --build</code> resolves <em>production</em> env on this laptop and would point the
+      draft at the <strong>live store</strong>. Then the hard check you specified:
+      <code>GET &lt;draft&gt;/api/&lt;token&gt;/health</code> must answer
+      <code>"store": "sowpost-test"</code> — anything else is a full stop.</li>
+    <li><strong>Gate:</strong> full vitest suite (1,538 tests today, sequential), tsc, eslint, build,
+      no-secrets — plus new pins: token round-trip + revoke, the antony/Anthony dedupe fixture,
+      revert-with-conflict, the 304 path, member-visibility on desktop <em>and</em> the mobile regression.</li>
+    <li><strong>Constraints honoured:</strong> no behavior change for humans except the announced review sort
+      and the (intended) member extra-work view; existing rows untouched; no migration; no Required fields;
+      no production deploy without you.</li>
+  </ul>
+</section>
+
+<section id="rejected">
+  <div class="sec-head"><span class="sec-num">§8</span><h2>What I looked at and rejected (so you don't have to)</h2></div>
+  <table>
+    <tr><th>Idea</th><th>Why not</th></tr>
+    <tr><td>Notification SaaS (Novu/Knock/MagicBell)</td><td>Server requirements or $250/mo cliffs; roll-your-own is ~$0 at this scale (§5).</td></tr>
+    <tr><td>Webhook-first bot integration (your item 6)</td><td>The bot is a browser on a VM — it likely can't <em>receive</em> HTTP. The change-feed endpoint gives it the same thing by cheap polling. Webhook stays designed + parked (decision 4).</td></tr>
+    <tr><td>Storing "days in status" as a field</td><td>Derived data goes stale; computed from the activity log with a documented fallback instead.</td></tr>
+    <tr><td>New uuid-based API for statuses/sections</td><td>The bot locates things by visible text today; the API speaks names and resolves ids internally.</td></tr>
+    <tr><td>Rebuilding the audit log</td><td>One already exists (append-only, immutable, capped) — it gets batch ids and server-authored entries, not a replacement.</td></tr>
+    <tr><td>Hard-blocking duplicates</td><td>House rule: advisory, never Required. 409 + <code>force</code> flag.</td></tr>
+    <tr><td>Pulling the full login rework into this package</td><td>The token lane is forward-compatible with both futures (in-house login / Supabase). Deciding it now would stall the bot work.</td></tr>
+  </table>
+</section>
+
+<section id="decisions">
+  <div class="sec-head"><span class="sec-num">§9</span><h2>Your 7 decisions — everything else proceeds without you</h2></div>
+  <table>
+    <tr><th>#</th><th>Question</th><th>My recommendation</th></tr>
+    <tr><td>1</td><td>Review sub-status column (like Pre-Design's) — now or later?</td><td>Parity now, sub-status only if the team asks (+220 lines).</td></tr>
+    <tr><td>2</td><td>Add Installation Review to the mobile board while in there?</td><td>Yes — cheap, closes a documented gap.</td></tr>
+    <tr><td>3</td><td>Extra-work: client filter now + server checks on the token lane — enough short-term?</td><td>Yes; full login rework is a separate later decision.</td></tr>
+    <tr><td>4</td><td>Webhook (item 6): can the bot actually receive an HTTP POST anywhere?</td><td>If unknown → park it; bot polls <code>GET /changes?since=</code> (free with item 4 + ETag).</td></tr>
+    <tr><td>5</td><td>Bot token scope: admin (as you set the user) or member-scoped?</td><td>Member-scoped write token is safer; revert exists either way. Your call.</td></tr>
+    <tr><td>6</td><td>ETag/304 fix riding in this package?</td><td><strong>Yes</strong> — ~170 GB/month, and it makes notifications timely.</td></tr>
+    <tr><td>7</td><td>Desktop notifications opt-in per user via an Enable button?</td><td>Yes (browsers force a click-gesture prompt anyway).</td></tr>
+  </table>
+  <p class="kbd">Reply with the numbers, e.g. "1 parity only · 2 yes · 3 yes · 4 park · 5 member · 6 yes · 7 yes"
+  — then I build the whole package on the draft and hand you the draft URL, the endpoint list, and the
+  token-generation steps. Token values never in chat.</p>
+</section>
+
+<footer>Prepared by Claude · 2026-11-20 · sources: 4-pass code audit with file:line evidence (see the .md) +
+web research on Grok agents, notification libraries, Web Push on serverless, fuzzy matching, and API-key patterns.</footer>
+
+</main>
+</body>
+</html>

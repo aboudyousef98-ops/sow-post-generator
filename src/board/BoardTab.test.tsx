@@ -123,8 +123,10 @@ describe('BoardTab', () => {
     addProject('Martha Thompson');
     addProject('martha  THOMPSON');
 
-    expect(screen.getByText(/Already on the board/)).toBeTruthy();
-    expect(screen.getAllByText(/Martha Thompson/i)).toHaveLength(1); // not created yet
+    expect(screen.getByText(/Looks like/)).toBeTruthy();
+    // Only the existing row carries the name as a button — the warning echoes
+    // it in a span, so target the row button to prove nothing was created yet.
+    expect(screen.getAllByRole('button', { name: 'Martha Thompson' })).toHaveLength(1);
 
     fireEvent.click(screen.getByRole('button', { name: 'Add anyway' }));
     expect(screen.getAllByText('martha THOMPSON').length + screen.getAllByText('Martha Thompson').length).toBe(2);
@@ -853,7 +855,8 @@ describe('BoardTab — Tier 1', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
 
     // Both landed in Completed projects, so neither is on the main board.
-    expect(toasts.at(-1)!.text).toBe('2 projects → Done.');
+    // (The toast now carries a batch id — item 12 — so match the prefix.)
+    expect(toasts.at(-1)!.text).toContain('2 projects → Done.');
     expect(screen.queryByText('Martha Thompson')).toBeNull();
     expect(screen.queryByText('Patrick Lingwall')).toBeNull();
     expect(screen.getByText('Carla Nunez')).toBeTruthy();
@@ -873,7 +876,7 @@ describe('BoardTab — Tier 1', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Set coordinator/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Mohammad Refai' }));
-    expect(toasts.at(-1)!.text).toBe('3 projects → Mohammad Refai.');
+    expect(toasts.at(-1)!.text).toContain('3 projects → Mohammad Refai.');
     expect(screen.queryByText('3 selected')).toBeNull(); // selection cleared after applying
   });
 
@@ -911,7 +914,7 @@ describe('BoardTab — Tier 1', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
-    expect(toasts.at(-1)!.text).toBe('1 project → Done.');
+    expect(toasts.at(-1)!.text).toContain('1 project → Done.');
   });
 
   // REVERSED on 2026-10-17. This used to assert that filtering a selected row
@@ -942,7 +945,7 @@ describe('BoardTab — Tier 1', () => {
     fireEvent.click(screen.getByRole('button', { name: /Set status/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     // Both — the hidden Patrick included. This is the actual bug fix.
-    expect(toasts.at(-1)!.text).toBe('2 projects → Done.');
+    expect(toasts.at(-1)!.text).toContain('2 projects → Done.');
   });
 
 
@@ -1847,5 +1850,53 @@ describe('Pre-Design hides archived rows, like Active Projects', () => {
     fireEvent.click(screen.getByText('Show archived'));
     expect(within(pdCard()).getByText('TEST - Grok CLR Request')).toBeTruthy();
     expect(screen.getByText('Archived Active')).toBeTruthy();
+  });
+});
+
+// ---- 2026-11-23 board features (items 5, 6, 8, 10) --------------------------
+
+describe('BoardTab — 2026-11-23 features', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    toasts.length = 0;
+    opened.length = 0;
+    vi.stubGlobal('ResizeObserver', RO);
+  });
+  afterEach(() => {
+    cleanup();
+    vi.unstubAllGlobals();
+  });
+
+  const board = (projects: BoardProject[]): BoardState => ({ ...emptyBoard(), projects });
+
+  it('item 5: a fuzzy near-miss name warns, and Add anyway forces it', () => {
+    render(<Harness initial={board([boardProject('Anthony S Torres', 'p1')])} />);
+    addProject('antony torres');
+    expect(screen.getByText(/Looks like/)).toBeTruthy();
+    // Echoed in the warning (plus the existing row) — proves the match is named.
+    expect(screen.getAllByText(/Anthony S Torres/).length).toBeGreaterThanOrEqual(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Add anyway' }));
+    // Forced: the new row's name button now exists alongside the original.
+    expect(screen.getByRole('button', { name: 'antony torres' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Anthony S Torres' })).toBeTruthy();
+  });
+
+  it('item 10: the Filter-on chip appears while My projects is on and clears it', () => {
+    render(<Harness initial={board([boardProject('A Row', 'p1')])} />);
+    expect(screen.queryByText(/Filter on — clear/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'My projects' }));
+    const chip = screen.getByText(/Filter on — clear/);
+    fireEvent.click(chip);
+    expect(screen.queryByText(/Filter on — clear/)).toBeNull();
+  });
+
+  it('item 8: a coordinator load badge shows count / cap', () => {
+    const rows = [
+      { ...boardProject('One', 'p1'), coordinator: 'Omar Rajab', statusId: 'status-working' },
+      { ...boardProject('Two', 'p2'), coordinator: 'Omar Rajab', statusId: 'status-working' },
+    ];
+    render(<Harness initial={board(rows)} />);
+    // Both rows share the coordinator, so each renders the same 2/3 badge.
+    expect(screen.getAllByText('2/3').length).toBe(2);
   });
 });
