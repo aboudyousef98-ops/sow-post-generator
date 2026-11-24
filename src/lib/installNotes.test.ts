@@ -423,6 +423,8 @@ describe('POLISH_KEYS — SVT pre-design boxes (Aboud 2026-11-15)', () => {
       ...POLISH_KEYS.filter((k) => !k.startsWith('svt.')),
       'svt.hoLocation',
       'svt.hoReason',
+      'svt.hoAnalysis',
+      'svt.agreeReason',
       'svt.alt1Location',
       'svt.alt1Reason',
       'svt.alt2Location',

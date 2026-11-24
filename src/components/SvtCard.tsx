@@ -21,19 +21,10 @@ import {
   servicesOf,
   SVT_TEXT_FIELDS,
 } from '../lib/installNotes';
-import {
-  CLEAR_REQUIRED_DEFAULT,
-  COST_DRIVERS,
-  HO_ACTIONS,
-  NOT_REVIEWED,
-  STACK_KWH,
-  SVT_PATHS,
-  wallNeeded,
-} from '../lib/svtPost';
+import { CLEAR_REQUIRED_DEFAULT, HO_ACTIONS, STACK_KWH, SVT_PATHS, wallNeeded } from '../lib/svtPost';
 import { useEffect, useState } from 'react';
 import type {
   ClearEquipment,
-  CostDirection,
   InstallNotes,
   InstallTextField,
   Orientation,
@@ -52,12 +43,6 @@ import NoteBox from './NoteBox';
 const yesNoValue = (v: boolean | undefined) => (v === undefined ? '' : v ? 'yes' : 'no');
 const yesNoParse = (v: string) => (v === '' ? undefined : v === 'yes');
 
-/** hoAgrees is FOUR-state — "unknown" is an answer that prints, '' does not. */
-const hoAgreesValue = (v: boolean | 'unknown' | undefined) =>
-  v === undefined ? '' : v === 'unknown' ? 'unknown' : v ? 'yes' : 'no';
-const hoAgreesParse = (v: string): boolean | 'unknown' | undefined =>
-  v === '' ? undefined : v === 'unknown' ? 'unknown' : v === 'yes';
-
 /** A number box: blank and garbage both mean "not answered". */
 const numParse = (v: string): number | undefined => {
   const t = v.trim();
@@ -70,12 +55,6 @@ const numParse = (v: string): number | undefined => {
 const toggleIn = (list: string[] | undefined, v: string): string[] | undefined => {
   const cur = list ?? [];
   const next = cur.includes(v) ? cur.filter((x) => x !== v) : [...cur, v];
-  return next.length ? next : undefined;
-};
-
-/** Remove one entry, keeping the same empty-is-undefined contract. */
-const dropFrom = (list: string[] | undefined, v: string): string[] | undefined => {
-  const next = (list ?? []).filter((x) => x !== v);
   return next.length ? next : undefined;
 };
 
@@ -145,6 +124,23 @@ export default function SvtCard({
       const polished = r.polished ? { ...r.polished, [key]: undefined } : undefined;
       return { ...r, svt: { ...r.svt, [field]: value }, polished };
     });
+  };
+
+  /**
+   * The HO-first battery flow keeps ONE decided location in the shared
+   * `installNotes.batteryLocation` (what the SOW post and the SF field read),
+   * with no continuous sync layer — the content only moves on an explicit
+   * agree/disagree toggle:
+   *   - agree  → the HO's location IS the decision, so copy it across for the
+   *     full-SOW pre-fill (the SVT post reads svt.hoLocation directly either way);
+   *   - disagree → clear it so the "SOW preferred location" box starts empty for
+   *     the alternative (svt.hoLocation still holds the HO's stated preference).
+   * Both write through setInstallText so the polished copy is invalidated too.
+   */
+  const setSowAgrees = (v: boolean | undefined) => {
+    setSvt({ sowAgrees: v });
+    if (v === true) setInstallText('batteryLocation', 'install.batteryLocation', s.hoLocation ?? '');
+    else if (v === false) setInstallText('batteryLocation', 'install.batteryLocation', '');
   };
 
   /** Chip clicks append a line and invalidate stale polish, like typing does
@@ -279,27 +275,61 @@ export default function SvtCard({
       <h3>Pre-Design analysis</h3>
 
       <div className="install-subhead">Battery location</div>
-      <div className="note-grid">{installBox('batteryLocation', 'Battery location (SOW preferred)', 1)}</div>
       <div className="install-row">
         <label className="field">
-          Homeowner agrees with the proposed location?
-          <select value={hoAgreesValue(s.hoAgrees)} onChange={(e) => setSvt({ hoAgrees: hoAgreesParse(e.target.value) })}>
+          Does the homeowner have a preferred location?
+          <select
+            value={yesNoValue(s.hoHasPreference)}
+            onChange={(e) => setSvt({ hoHasPreference: yesNoParse(e.target.value) })}
+          >
             <option value="">—</option>
             <option value="yes">Yes</option>
-            <option value="no">No</option>
-            <option value="unknown">No stated preference</option>
+            <option value="no">No — no stated preference</option>
           </select>
           <span className="field-hint">
-            No → prints the HO’s preferred location and why it does not work. No stated preference → says we optimised
-            for cost and the installers
+            No → the post says we optimised for cost and the installers. Yes → tell us where, and whether the SOW team
+            agrees
           </span>
         </label>
       </div>
-      {s.hoAgrees === false && (
-        <div className="note-grid">
-          {svtBox('hoLocation', 'HO preferred location', 1)}
-          {svtBox('hoReason', 'Why it does not work', 2)}
-        </div>
+
+      {/* No stated preference: SOW picks the location outright. */}
+      {s.hoHasPreference === false && (
+        <div className="note-grid">{installBox('batteryLocation', 'Battery location (SOW preferred)', 1)}</div>
+      )}
+
+      {/* The homeowner has a preference: capture it, our analysis, then whether
+          the SOW team agrees — the decided location follows from that answer. */}
+      {s.hoHasPreference === true && (
+        <>
+          <div className="note-grid">
+            {svtBox('hoLocation', 'HO preferred location', 1)}
+            {svtBox('hoAnalysis', 'Our analysis of the HO location', 2)}
+          </div>
+          <div className="install-row">
+            <label className="field">
+              Does the SOW team agree with the HO’s location?
+              <select value={yesNoValue(s.sowAgrees)} onChange={(e) => setSowAgrees(yesNoParse(e.target.value))}>
+                <option value="">—</option>
+                <option value="yes">Yes</option>
+                <option value="no">No</option>
+              </select>
+              <span className="field-hint">
+                Yes → the HO’s location is what we install; say why we agree. No → give the SOW preferred location and
+                why the HO’s does not work
+              </span>
+            </label>
+          </div>
+          {s.sowAgrees === true && (
+            <div className="note-grid">{svtBox('agreeReason', 'Why we agree', 2)}</div>
+          )}
+          {s.sowAgrees === false && (
+            <div className="note-grid">
+              {installBox('batteryLocation', 'SOW preferred location', 1)}
+              {svtBox('hoReason', 'Why the HO’s does not work', 2)}
+            </div>
+          )}
+        </>
       )}
       {altCount >= 1 && (
         <div>
@@ -343,51 +373,11 @@ export default function SvtCard({
           Tick all that apply
           <div className="service-ticks">
             {SVT_PATHS.map((p) =>
-              tick(p.field, p.label, s[p.field] ?? false, () =>
-                // Ticking a path as likely drops it from "ruled out" — the two
-                // groups are mutually exclusive, so the contradiction is made
-                // unstorable rather than caught later.
-                setSvt({
-                  [p.field]: !s[p.field] || undefined,
-                  ruledOut: s[p.field] ? s.ruledOut : dropFrom(s.ruledOut, p.field),
-                }),
-              ),
+              tick(p.field, p.label, s[p.field] ?? false, () => setSvt({ [p.field]: !s[p.field] || undefined })),
             )}
           </div>
         </div>
       </div>
-      <div className="install-row">
-        <div className="field tick-field">
-          Ruled out — considered and rejected
-          <div className="service-ticks">
-            {SVT_PATHS.map((p) =>
-              tick(`out-${p.field}`, p.label, (s.ruledOut ?? []).includes(p.field), () =>
-                setSvt({
-                  ruledOut: toggleIn(s.ruledOut, p.field),
-                  // …and the reverse: ruling a path out unticks it as likely.
-                  ...((s.ruledOut ?? []).includes(p.field) ? {} : { [p.field]: undefined }),
-                }),
-              ),
-            )}
-          </div>
-          <span className="field-hint">
-            Saying why an option does not work is what stops the reply asking “could we not just do X?”
-          </span>
-        </div>
-      </div>
-      {(s.ruledOut ?? []).length > 0 && (
-        <div className="install-row">
-          <label className="field" style={{ flex: '1 1 420px' }}>
-            Why those do not work
-            <input
-              type="text"
-              value={s.ruledOutReason ?? ''}
-              placeholder="e.g. only partially external — would still need both attics and a trench"
-              onChange={(e) => setSvt({ ruledOutReason: e.target.value || undefined })}
-            />
-          </label>
-        </div>
-      )}
       <div className="note-grid">{svtBox('pathNotes', 'Path notes', 2)}</div>
 
       <div className="install-subhead">Site conditions</div>
@@ -432,14 +422,6 @@ export default function SvtCard({
             </span>
           </label>
         )}
-        <label className="field">
-          HOA?
-          <select value={yesNoValue(s.hoa)} onChange={(e) => setSvt({ hoa: yesNoParse(e.target.value) })}>
-            <option value="">—</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </label>
         <label className="field">
           Battery stacks sold
           <select
@@ -505,7 +487,7 @@ export default function SvtCard({
           />
         </label>
         <label className="field">
-          Equipment depth (in)
+          Equipment width (in)
           <input
             type="number"
             step="0.1"
@@ -667,53 +649,6 @@ export default function SvtCard({
         </label>
       </div>
 
-      <div className="install-subhead">Cost impact</div>
-      <div className="install-row">
-        <label className="field">
-          Direction
-          <select
-            value={s.costDirection ?? ''}
-            onChange={(e) => setSvt({ costDirection: (e.target.value || undefined) as CostDirection | undefined })}
-          >
-            <option value="">—</option>
-            <option value="adds">Adds cost</option>
-            <option value="saves">Saves cost</option>
-            <option value="neutral">No significant change</option>
-          </select>
-        </label>
-      </div>
-      {s.costDirection && s.costDirection !== 'neutral' && (
-        <>
-          {/* The chips get a row to themselves. Sharing one with a text box
-              squeezed eight of them into a strip too narrow to hold a
-              two-word label, which is what broke them in half. */}
-          <div className="install-row">
-            <div className="field tick-field">
-              Why — tick all that apply
-              <div className="service-ticks">
-                {COST_DRIVERS.map((d) =>
-                  tick(d, d, (s.costDrivers ?? []).includes(d), () =>
-                    setSvt({ costDrivers: toggleIn(s.costDrivers, d) }),
-                  ),
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="install-row">
-            <label className="field" style={{ flex: '1 1 320px' }}>
-              Another driver
-              <input
-                type="text"
-                value={s.costNotes ?? ''}
-                placeholder="e.g. second meter pedestal"
-                onChange={(e) => setSvt({ costNotes: e.target.value || undefined })}
-              />
-              <span className="field-hint">Joins the list above in the sentence</span>
-            </label>
-          </div>
-        </>
-      )}
-
       <div className="install-subhead">Special</div>
       <div className="note-grid">{installBox('specialCases', 'Anything special about this project?', 3)}</div>
 
@@ -756,21 +691,6 @@ export default function SvtCard({
           />
           <span className="field-hint">Joins the list above</span>
         </label>
-      </div>
-
-      <div className="install-subhead">Not covered here</div>
-      <div className="install-row">
-        <div className="field tick-field">
-          Questions this note does not answer
-          <div className="service-ticks">
-            {NOT_REVIEWED.map((x) =>
-              tick(`nr-${x.key}`, x.key, (s.notReviewed ?? []).includes(x.key), () =>
-                setSvt({ notReviewed: toggleIn(s.notReviewed, x.key) }),
-              ),
-            )}
-          </div>
-          <span className="field-hint">Panel fit and production range point at the PR team</span>
-        </div>
       </div>
 
       <div className="install-subhead">The ask</div>

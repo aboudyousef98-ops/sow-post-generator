@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PostRecord } from '../types';
+import { emptyInstallNotes } from './installNotes';
 import { makeRecord } from './__fixtures__/makeRecord';
 import { CLEARANCE_LINE } from './sfSubmission';
 import { hasContent } from './record';
@@ -38,13 +39,14 @@ function svtRecord(overrides: Partial<PostRecord> = {}): PostRecord {
 
 describe('clearance check', () => {
   it('reproduces the Louis Fritz / Garage arithmetic', () => {
-    // "The inverter is 11.9" deep and only 40" of space is available, which
-    // leaves about 28" of clearance" — against the required 36".
+    // "The inverter is 11.9" wide and only 40" of space is available, which
+    // leaves about 28" of clearance" — against the required 36". The measured
+    // dimension is the equipment WIDTH (relabelled from "depth" 2026-11-24).
     const text = buildSvtPostText(
       svtRecord({ svt: { clearEquipment: 'inverter', clearAvailable: 40, clearDepth: 11.9 } }),
     );
     expect(text).toContain(
-      '*Clearance:* The wall has 40" of space and the inverter is 11.9" deep, leaving about 28" — short of the 36" required.',
+      '*Clearance:* The wall has 40" of space and the inverter is 11.9" wide, leaving about 28" — short of the 36" required.',
     );
   });
 
@@ -52,7 +54,7 @@ describe('clearance check', () => {
     const text = buildSvtPostText(
       svtRecord({ svt: { clearEquipment: 'battery', clearAvailable: 50, clearDepth: 12 } }),
     );
-    expect(text).toContain('the battery is 12" deep, leaving about 38" — the 36" requirement is met.');
+    expect(text).toContain('the battery is 12" wide, leaving about 38" — the 36" requirement is met.');
   });
 
   it('exactly the required clearance counts as met', () => {
@@ -67,7 +69,7 @@ describe('clearance check', () => {
 
   it('defaults the equipment word when no piece is picked', () => {
     const text = buildSvtPostText(svtRecord({ svt: { clearAvailable: 40, clearDepth: 10 } }));
-    expect(text).toContain('the equipment is 10" deep');
+    expect(text).toContain('the equipment is 10" wide');
   });
 
   it('one number alone says nothing', () => {
@@ -89,10 +91,10 @@ describe('clearance check', () => {
 
 describe('homeowner has no stated preference', () => {
   it('prints the William Giles sentence', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { hoAgrees: 'unknown' } }));
+    const text = buildSvtPostText(svtRecord({ svt: { hoHasPreference: false } }));
     expect(text).toContain(HO_UNKNOWN_LINE);
     expect(text).not.toContain('prefers a different location');
-    expect(text).not.toContain('agrees with the proposed');
+    expect(text).not.toContain('The SOW team agrees');
   });
 
   it('is distinct from an unanswered question', () => {
@@ -100,15 +102,67 @@ describe('homeowner has no stated preference', () => {
   });
 });
 
+describe('homeowner-first battery flow (2026-11-24)', () => {
+  it('a preference the SOW team agrees with leads with the HO location', () => {
+    const text = buildSvtPostText(
+      svtRecord({
+        svt: {
+          hoHasPreference: true,
+          hoLocation: 'inside the garage',
+          hoAnalysis: 'closest to the main panel',
+          sowAgrees: true,
+          agreeReason: 'shortest conduit run',
+        },
+      }),
+    );
+    expect(text).toContain('Batteries will be installed inside the garage.');
+    expect(text).toContain('This is the homeowner’s preferred location.');
+    expect(text).toContain('Our analysis: closest to the main panel.');
+    expect(text).toContain('The SOW team agrees — shortest conduit run.');
+    expect(text).not.toContain('prefers a different location');
+  });
+
+  it('a preference the SOW team rejects leads with the SOW location', () => {
+    const text = buildSvtPostText(
+      svtRecord({
+        installNotes: { ...emptyInstallNotes(), batteryLocation: 'on the north wall' },
+        svt: {
+          hoHasPreference: true,
+          hoLocation: 'inside the garage',
+          hoAnalysis: 'blocks the water heater access',
+          sowAgrees: false,
+          hoReason: 'no code clearance there',
+        },
+      }),
+    );
+    expect(text).toContain('Batteries will be installed on the north wall.');
+    expect(text).toContain('The homeowner prefers a different location: inside the garage.');
+    expect(text).toContain('Our analysis: blocks the water heater access.');
+    expect(text).toContain('Why it does not work: no code clearance there.');
+  });
+
+  it('a preference with the agreement not yet decided prints the HO line only', () => {
+    const text = buildSvtPostText(
+      svtRecord({ svt: { hoHasPreference: true, hoLocation: 'inside the garage' } }),
+    );
+    expect(text).toContain('The homeowner prefers inside the garage.');
+    expect(text).not.toContain('The SOW team agrees');
+    expect(text).not.toContain('does not work');
+  });
+});
+
 describe('site conditions', () => {
   it('prints the conditions that justify a route', () => {
     const text = buildSvtPostText(
-      svtRecord({ svt: { atticAccessible: true, detachedStructure: true, hoa: false, batteryStacks: 3 } }),
+      svtRecord({ svt: { atticAccessible: true, detachedStructure: true, batteryStacks: 3 } }),
     );
     expect(text).toContain('The attic is accessible, so wires can be routed through it.');
     expect(text).toContain('The property has detached buildings.');
-    expect(text).toContain('HOA: no.');
     expect(text).toContain('Sold with 3 battery stacks (60 kWh).');
+  });
+
+  it('no longer prints an HOA line (removed from the tool 2026-11-24)', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { hoa: false, atticAccessible: true } }))).not.toContain('HOA');
   });
 
   it('one pick writes both the stack count and the kWh', () => {
@@ -225,140 +279,31 @@ describe('attic continuity between structures', () => {
   });
 });
 
-describe('ruled-out paths', () => {
-  // The William Giles round-trip: the note said why the meter wall was best
-  // but never why external-only fails, so the question came back.
-  it('names the rejected paths and why', () => {
+describe('removed sections (2026-11-24)', () => {
+  // "Ruled out", "Not covered here" and "Cost impact" were removed from the
+  // tool. Stored values on old drafts must now print NOTHING — no orphaned
+  // bullet survives the removal.
+  it('a stored ruled-out list prints no "Ruled out" line', () => {
     const text = buildSvtPostText(
-      svtRecord({
-        svt: {
-          pathB2b: true,
-          ruledOut: ['pathExternal', 'pathTrench'],
-          ruledOutReason: 'only partially external — would still need both attics and a trench',
-        },
-      }),
+      svtRecord({ svt: { pathB2b: true, ruledOut: ['pathExternal'], ruledOutReason: 'external-only fails' } }),
     );
-    expect(text).toContain(
-      'Ruled out: External run, Trench (underground) — only partially external — would still need both attics and a trench.',
-    );
+    expect(text).not.toContain('Ruled out');
+    expect(text).not.toContain('external-only fails');
   });
 
-  it('rejected paths with no reason still print', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { ruledOut: ['pathAttic'] } }));
-    expect(text).toContain('Ruled out: Attic run.');
-  });
-
-  it('does not double the period when the writer typed one', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { ruledOut: ['pathAttic'], ruledOutReason: 'no access.' } }));
-    expect(text).toContain('Ruled out: Attic run — no access.');
-    expect(text).not.toContain('access..');
-  });
-
-  it('a path cannot be both likely and ruled out — the tick wins', () => {
-    // SvtCard makes this unstorable, but a hand-edited record must not print
-    // a contradiction either.
-    const text = buildSvtPostText(svtRecord({ svt: { pathAttic: true, ruledOut: ['pathAttic', 'pathTrench'] } }));
-    expect(text).toContain('Attic run.');
-    expect(text).toContain('Ruled out: Trench (underground).');
-    expect(text).not.toContain('Ruled out: Attic run');
-  });
-
-  it('prints inside the conduit path bullet, not its own', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { pathB2b: true, ruledOut: ['pathTrench'] } }));
-    expect(text).toContain('*Most Likely Conduit Path:*');
-    expect(text.indexOf('Ruled out')).toBeGreaterThan(text.indexOf('Most Likely Conduit Path'));
-  });
-
-  it('nothing ruled out prints nothing', () => {
-    expect(buildSvtPostText(svtRecord({ svt: { pathB2b: true } }))).not.toContain('Ruled out');
-  });
-});
-
-describe('scope boundary', () => {
-  // Allie Mullen asked whether SOW checks panel fit and production range.
-  it('groups the items that share a team into one sentence', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit', 'production range'] } }));
-    expect(text).toContain(
-      '*Not Covered Here:* Not covered by this note: panel fit and production range — please check with the PR team.',
+  it('a stored notReviewed list prints no "Not Covered Here" bullet', () => {
+    expect(buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit', 'structural'] } }))).not.toContain(
+      'Not Covered Here',
     );
   });
 
-  it('a single item reads without the list join', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit'] } }));
-    expect(text).toContain('Not covered by this note: panel fit — please check with the PR team.');
-  });
-
-  it('an item with no known team prints without inventing one', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['structural'] } }));
-    expect(text).toContain('Not covered by this note: structural.');
-    expect(text).not.toContain('please check with');
-  });
-
-  it('mixed items split into one line per team', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit', 'structural'] } }));
-    expect(text).toContain('Not covered by this note: panel fit — please check with the PR team.');
-    expect(text).toContain('Not covered by this note: structural.');
-  });
-
-  it('drops a stored item this build no longer offers', () => {
-    expect(buildSvtPostText(svtRecord({ svt: { notReviewed: ['astrology'] } }))).not.toContain('Not Covered Here');
-  });
-
-  it('sits immediately before the ask', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { notReviewed: ['panel fit'], ask: 'goodToGo' } }));
-    expect(text.indexOf('Not Covered Here')).toBeLessThan(text.indexOf('The Ask'));
-  });
-});
-
-describe('cost impact', () => {
-  it('names the direction and the drivers', () => {
+  it('a stored cost direction prints no "Cost Impact" bullet', () => {
     const text = buildSvtPostText(
-      svtRecord({ svt: { costDirection: 'adds', costDrivers: ['long SER run', 'external conduit length'] } }),
+      svtRecord({ svt: { costDirection: 'adds', costDrivers: ['long SER run'], costNotes: 'second meter pedestal' } }),
     );
-    expect(text).toContain('*Cost Impact:* Adds cost — long SER run, external conduit length.');
-  });
-
-  it('saves cost reads the same way', () => {
-    const text = buildSvtPostText(
-      svtRecord({ svt: { costDirection: 'saves', costDrivers: ['external conduit length'] } }),
-    );
-    expect(text).toContain('*Cost Impact:* Saves cost — external conduit length.');
-  });
-
-  it('a direction with no driver still prints', () => {
-    expect(buildSvtPostText(svtRecord({ svt: { costDirection: 'adds' } }))).toContain('*Cost Impact:* Adds cost.');
-  });
-
-  it('neutral is a whole sentence and takes no driver', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { costDirection: 'neutral', costDrivers: ['trenching'] } }));
-    expect(text).toContain('*Cost Impact:* No significant cost change expected.');
-    expect(text).not.toContain('trenching');
-  });
-
-  it('drops a stored driver this build no longer offers', () => {
-    const text = buildSvtPostText(
-      svtRecord({ svt: { costDirection: 'adds', costDrivers: ['long SER run', 'moon rental'] } }),
-    );
-    expect(text).toContain('Adds cost — long SER run.');
-    expect(text).not.toContain('moon rental');
-  });
-
-  it('a typed driver joins the driver list', () => {
-    const text = buildSvtPostText(
-      svtRecord({ svt: { costDirection: 'adds', costDrivers: ['trenching'], costNotes: 'second meter pedestal' } }),
-    );
-    expect(text).toContain('*Cost Impact:* Adds cost — trenching, second meter pedestal.');
-  });
-
-  it('a typed driver alone still names the direction', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { costDirection: 'adds', costNotes: 'second meter pedestal.' } }));
-    expect(text).toContain('*Cost Impact:* Adds cost — second meter pedestal.');
-    expect(text).not.toContain('pedestal..');
-  });
-
-  it('text with no direction is printed rather than lost', () => {
-    const text = buildSvtPostText(svtRecord({ svt: { costNotes: 'second meter pedestal' } }));
-    expect(text).toContain('second meter pedestal.');
+    expect(text).not.toContain('Cost Impact');
+    expect(text).not.toContain('long SER run');
+    expect(text).not.toContain('second meter pedestal');
   });
 });
 
@@ -395,10 +340,12 @@ describe('homeowner actions', () => {
 });
 
 describe('the ask', () => {
-  it('closes with the picked sentence', () => {
-    expect(buildSvtPostText(svtRecord({ svt: { ask: 'goodToGo' } }))).toContain(
-      '*The Ask:* The project is good to go.',
-    );
+  // The closing sentence stays, but the "The Ask" heading was removed from the
+  // post (Aboud 2026-11-24: "remove this wording on the slack post").
+  it('closes with the picked sentence, with no "The Ask" heading', () => {
+    const text = buildSvtPostText(svtRecord({ svt: { ask: 'goodToGo' } }));
+    expect(text).toContain('The project is good to go.');
+    expect(text).not.toContain('The Ask');
     expect(buildSvtPostText(svtRecord({ svt: { ask: 'hoConfirm' } }))).toContain(
       'Please confirm with the homeowner and let us know how they prefer to proceed.',
     );
@@ -412,8 +359,9 @@ describe('the ask', () => {
       svtRecord({ svt: { ask: 'blocked', blockedOn: 'confirmation of 2 vs 3 stacks sold' } }),
     );
     expect(text).toContain(
-      '*The Ask:* Blocked — we need the following before this can be finalized: confirmation of 2 vs 3 stacks sold.',
+      'Blocked — we need the following before this can be finalized: confirmation of 2 vs 3 stacks sold.',
     );
+    expect(text).not.toContain('The Ask');
   });
 
   it('blocked with nothing named falls back to the generic line', () => {
@@ -428,24 +376,22 @@ describe('the ask', () => {
 
   it('prints last, after the homeowner actions', () => {
     const text = buildSvtPostText(svtRecord({ svt: { ask: 'goodToGo', hoActions: ['clear the garage'] } }));
-    expect(text.indexOf('Homeowner Actions')).toBeLessThan(text.indexOf('The Ask'));
+    expect(text.indexOf('Homeowner Actions')).toBeLessThan(text.indexOf('The project is good to go.'));
     expect(text.trimEnd().endsWith('The project is good to go.')).toBe(true);
   });
 
-  it('unanswered prints nothing', () => {
-    expect(buildSvtPostText(svtRecord({ svt: {} }))).not.toContain('The Ask');
+  it('unanswered prints no closing sentence', () => {
+    expect(buildSvtPostText(svtRecord({ svt: {} }))).not.toContain('good to go');
   });
 });
 
 describe('the SF and rich-clipboard versions carry the new bullets', () => {
-  it('SF renders them with dashed underlines', () => {
-    const text = buildSvtSfText(
-      svtRecord({ svt: { clearanceAllMet: true, costDirection: 'adds', ask: 'goodToGo', hoa: true } }),
-    );
-    expect(text).toContain('Site Conditions\n---------------\n- HOA: yes.');
+  it('SF renders them with dashed underlines, ask with no heading', () => {
+    const text = buildSvtSfText(svtRecord({ svt: { clearanceAllMet: true, ask: 'goodToGo' } }));
     expect(text).toContain(`Clearance\n---------\n- ${CLEARANCE_LINE}`);
-    expect(text).toContain('Cost Impact\n-----------\n- Adds cost.');
-    expect(text).toContain('The Ask\n-------\n- The project is good to go.');
+    // The ask closes as a plain line, not a "The Ask" dashed-underline section.
+    expect(text).toContain('The project is good to go.');
+    expect(text).not.toContain('The Ask\n-------');
   });
 
   it('SF nests the homeowner actions under their lead line', () => {

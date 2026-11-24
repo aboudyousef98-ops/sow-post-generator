@@ -8,6 +8,7 @@ import { isoToUs, weekdayName } from './dates';
 import { batteryAnalysisLines, conduitRunLines, installNoteLines } from './installNotes';
 import { effectiveText, noteLines, punctuate } from './noteText';
 import { wireFeedbackLine } from './wireMaterial';
+import { designQaLines } from './designQa';
 
 /**
  * A feedback note's bullet lines: polished when available+enabled, else raw;
@@ -30,8 +31,10 @@ export function effectiveNoteLines(
 ): string[] {
   const typed = noteLines(effectiveText(record.notes[key], key, record));
   if (key === 'design') {
-    const verdict = wireFeedbackLine(record);
-    if (verdict) return [verdict, ...typed];
+    // The wire verdict, then the design-QA reminders — all derived, all ahead
+    // of the typed bullets, and any of them suppresses the "All good." default.
+    const prefix = [wireFeedbackLine(record), ...designQaLines(record)].filter(Boolean);
+    if (prefix.length) return [...prefix, ...typed];
   }
   const lines = typed;
   if (lines.length) return lines;

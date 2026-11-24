@@ -156,6 +156,8 @@ export const INSTALL_TEXT_FIELDS: { key: PolishKey; field: InstallTextField; lab
 export const SVT_TEXT_FIELDS: { key: PolishKey; field: SvtTextField; label: string }[] = [
   { key: 'svt.hoLocation', field: 'hoLocation', label: 'HO preferred location' },
   { key: 'svt.hoReason', field: 'hoReason', label: 'Why it does not work' },
+  { key: 'svt.hoAnalysis', field: 'hoAnalysis', label: 'Our analysis of the HO location' },
+  { key: 'svt.agreeReason', field: 'agreeReason', label: 'Why we agree' },
   { key: 'svt.alt1Location', field: 'alt1Location', label: 'Alternative location' },
   { key: 'svt.alt1Reason', field: 'alt1Reason', label: 'Reason' },
   { key: 'svt.alt2Location', field: 'alt2Location', label: 'Alternative location 2' },

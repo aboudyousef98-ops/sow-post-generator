@@ -898,3 +898,60 @@ with no board, grouped by value worst-first. Docs page updated. Verified live
 on draft `6b043781c6572d2dbe710028`: 475 checked, 86 gaps, top = Fort Bend
 County (14 jobs). Gates: 1594 vitest · tsc · eslint · build · nosecrets green.
 **Group C is now complete with no remaining follow-ups.**
+
+---
+
+## 2026-11-24 — SVT Compose rework + Design-Feedback process checks (PENDING deploy)
+
+From Aboud's SVT Compose notes + a follow-up for the Design Feedback card.
+**Not deployed** — banked for the next package. Gates all green (1598 vitest ·
+tsc · eslint).
+
+### A. Battery location → homeowner-first flow (SVT "Pre-Design analysis" card)
+Replaced "does the HO agree with OUR location?" with a HO-first decision tree:
+1. **Does the homeowner have a preferred location?** (tri-state —/Yes/No)
+2. **No** → one "Battery location (SOW preferred)" box; post prints the
+   no-stated-preference line (cost-efficient, easiest for installers).
+3. **Yes** → HO preferred location + our analysis, then **Does the SOW team
+   agree?** Agree → "Why we agree" (HO's location is the decided one). Disagree
+   → "SOW preferred location" + "Why the HO's does not work".
+- The decided location lands in the shared `installNotes.batteryLocation` (feeds
+  the full SOW post + SF). On agree the card copies the HO's location across;
+  the SVT post also reads `svt.hoLocation` directly so it is right even unsynced.
+- New `SvtNotes` fields: `hoHasPreference`, `hoAnalysis`, `sowAgrees`,
+  `agreeReason`; `hoLocation`/`hoReason` kept. `hoAnalysis`/`agreeReason` are
+  polishable (added to `SVT_TEXT_FIELDS` + server `rewriteSchema.POLISH_KEYS`).
+- **Migration:** `migrateRecord` maps the old `hoAgrees` on load — `false`→
+  (preference + disagree, keeping hoLocation/hoReason), `'unknown'`→no preference,
+  `true`→no preference. **⚠ The `true` case has no stored HO location, so any
+  old draft that had "HO agreed with our spot" now reads as "no stated
+  preference" — eyeball those if any exist.** No schemaVersion bump.
+
+### B. Removals / fixes (SVT card + `svtPost.ts`)
+- **Ruled out — considered and rejected** — removed from card AND post.
+- **HOA?** — removed from card AND the "HOA: yes/no" post line.
+- **Equipment depth (in)** → **Equipment width (in)** (label + post wording
+  "deep"→"wide"). Internal key stays `clearDepth` — no record migration.
+- **Cost impact** — whole section removed from card AND post bullet.
+- **Not covered here** — whole section removed from card AND post bullet.
+- **"The Ask"** — heading removed from the Slack/SF post; the closing sentence
+  still prints as a plain trailing line. The card dropdown stays.
+- Note: stored values on old drafts for the removed fields now print nothing
+  (verified by test). Dead exports `COST_HEAD/COST_DRIVERS/NOT_REVIEWED/
+  HO_AGREES_LINE` left in `svtPost.ts` (harmless; could prune later).
+
+### C. Design process checks (SOW Compose "Feedback" card)
+- New `DesignQaRow.tsx` beside the wire-material check: two tri-state dropdowns
+  — "Project files on the shared folder?" and "Used the master template?".
+- New top-level `record.designQa = { sharedFolder?, usedTemplate? }`.
+- Only an explicit **No** adds a reminder to Design Feedback (both Slack + SF),
+  via `designQaLines()` prepended in `effectiveNoteLines('design')` after the
+  wire verdict. A blank/Yes prints nothing (won't flag the ~257 open drafts).
+
+### Files
+- `src/types.ts`, `src/lib/installNotes.ts`, `netlify/functions/lib/rewriteSchema.ts`
+  (new polish keys), `src/lib/storage.ts` (migration), `src/lib/record.ts`
+  (hasContent), `src/lib/svtPost.ts`, `src/lib/template.ts`, `src/lib/designQa.ts`
+  (new), `src/components/SvtCard.tsx`, `src/components/DesignQaRow.tsx` (new),
+  `src/components/ComposeTab.tsx`. Tests updated/added in the matching files
+  plus `src/lib/designQa.test.ts` (new).

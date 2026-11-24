@@ -232,6 +232,8 @@ export interface InstallNotes {
 export type SvtTextField =
   | 'hoLocation'
   | 'hoReason'
+  | 'hoAnalysis'
+  | 'agreeReason'
   | 'alt1Location'
   | 'alt1Reason'
   | 'alt2Location'
@@ -256,21 +258,39 @@ export type SvtAsk = 'goodToGo' | 'hoConfirm' | 'hoConvince' | 'blocked';
 
 export interface SvtNotes {
   /**
-   * Does the homeowner agree with the proposed battery location?
-   * FOUR states, not three (Aboud 2026-11-17, from William Giles):
-   * `undefined` is "not asked yet" and prints nothing; `false` prints the HO's
-   * preference and why it does not work; `'unknown'` prints HO_UNKNOWN_LINE —
-   * "we looked, nobody knows, so we optimised for us", which was the headline
-   * of that note and could not be said with a blank.
-   *
-   * Widening `boolean` to `boolean | 'unknown'` keeps every stored record
-   * valid, so there is no migration and `schemaVersion` stays 1.
+   * Homeowner-first battery-location flow (Aboud 2026-11-24, redesign from the
+   * SVT Compose notes). The question is no longer "does the HO agree with us?"
+   * but "does the HO have a preferred location?" — tri-state:
+   * `undefined` is "not asked yet" (prints nothing), `false` is "no stated
+   * preference" (prints HO_UNKNOWN_LINE — most cost-efficient, easiest for
+   * installers), `true` opens the HO's location, our analysis, and the SOW
+   * agreement question below.
+   */
+  hoHasPreference?: boolean;
+  /** Where the HO wants the batteries, when hoHasPreference === true. */
+  hoLocation?: string;
+  /** Our analysis of the HO's preferred location (shown when hoHasPreference). */
+  hoAnalysis?: string;
+  /**
+   * Does the SOW team agree with the HO's preferred location? Only meaningful
+   * (and only asked) when hoHasPreference === true. Tri-state:
+   * `true` → the HO's location becomes the decided install location, with
+   * `agreeReason` as the justification; `false` → SOW proposes its own location
+   * (the shared installNotes.batteryLocation) and `hoReason` says why the HO's
+   * does not work; `undefined` prints neither.
+   */
+  sowAgrees?: boolean;
+  /** Why the SOW team agrees with the HO's location (when sowAgrees === true). */
+  agreeReason?: string;
+  /** Why the HO's preference does not work (when sowAgrees === false). */
+  hoReason?: string;
+  /**
+   * DEPRECATED (Aboud 2026-11-24). The pre-2026-11-24 "does the HO agree with
+   * the proposed location?" answer. `migrateRecord()` maps it forward into
+   * `hoHasPreference`/`sowAgrees` on load; kept on the type only so old stored
+   * records parse and the migration can read it. Nothing writes it any more.
    */
   hoAgrees?: boolean | 'unknown';
-  /** Where the HO wants the batteries, when hoAgrees === false. */
-  hoLocation?: string;
-  /** Why the HO's preference does not work / why SOW's location is preferred. */
-  hoReason?: string;
   // Up to two alternative locations SOW can offer, each with its reason.
   // Two FIXED slots rather than an array: polish keys are a closed enum on
   // both the client and the server (rewriteSchema.ts), and two covers every
@@ -429,6 +449,21 @@ export interface WireCheck {
 }
 
 /**
+ * Design process QA (Aboud 2026-11-24). Two tri-state checks that ride the
+ * SAME mechanism as the wire verdict — a derived line prepended to Design
+ * Feedback. Each is `undefined` until answered (prints nothing — a brand-new
+ * draft must not flag the designer), `true` = done right (prints nothing), and
+ * only `false` prints the reminder. Top level like `wire`, and NOT a PolishKey
+ * so no AI path can reword the reminder.
+ */
+export interface DesignQa {
+  /** Were the project files saved to the shared folder? `false` → a reminder. */
+  sharedFolder?: boolean;
+  /** Did the designer use the master template? `false` → a reminder. */
+  usedTemplate?: boolean;
+}
+
+/**
  * Every free-text box the AI may polish. Dropdown-derived values (walls,
  * orientation, stories, service) are deliberately NOT here — they can never be
  * altered by the model.
@@ -465,6 +500,12 @@ export interface PostRecord {
    * reword the material. Pinned by wireMaterial.test.ts.
    */
   wire?: WireCheck;
+  /**
+   * Design process QA (Aboud 2026-11-24). OPTIONAL — same no-migration contract
+   * as `wire`: records written before this date have no key and render exactly
+   * as they did. Drives two Design Feedback reminder lines.
+   */
+  designQa?: DesignQa;
   /**
    * SVT pre-design analysis (Aboud 2026-11-15). OPTIONAL — the same
    * no-migration contract as wire/roofMaterial: records written before this

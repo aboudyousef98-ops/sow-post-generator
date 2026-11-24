@@ -25,6 +25,7 @@ import NoteBox from './NoteBox';
 import OutputColumn from './OutputColumn';
 import SvtCard from './SvtCard';
 import WireCheckRow from './WireCheckRow';
+import DesignQaRow from './DesignQaRow';
 
 /**
  * Which compose the form shows (Aboud 2026-11-15): the full SOW scope, or the
@@ -958,6 +959,8 @@ export default function ComposeTab({
             it writes the first bullet of Design Feedback, so the picks and the
             sentence they produce are read in one glance. */}
         <WireCheckRow record={record} update={update} />
+        {/* Design process QA (Aboud 2026-11-24) — also feeds Design Feedback. */}
+        <DesignQaRow record={record} update={update} />
         {FEEDBACK_FIELDS.map(({ key, label, placeholder }) => (
           <NoteBox
             key={key}

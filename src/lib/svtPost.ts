@@ -185,9 +185,11 @@ const capitalize = (t: string) => (t ? t[0].toUpperCase() + t.slice(1) : t);
 
 /**
  * The Clearance bullet. Omar's Garage note is the spec: available space,
- * equipment depth, what is left, and whether that clears the requirement.
+ * equipment width, what is left, and whether that clears the requirement.
  * Equal counts as met. Both numbers are needed for the calculation — one
- * alone says nothing, so it prints nothing.
+ * alone says nothing, so it prints nothing. (The measured dimension is the
+ * equipment WIDTH, relabelled from "depth" on 2026-11-24; the stored key stays
+ * `clearDepth` so no record migrates.)
  */
 function clearanceLines(record: PostRecord): string[] {
   const s: SvtNotes = record.svt ?? {};
@@ -197,7 +199,7 @@ function clearanceLines(record: PostRecord): string[] {
   if (avail !== undefined && depth !== undefined) {
     const left = Math.round(avail - depth);
     const what = CLEAR_EQUIPMENT_LABEL[s.clearEquipment ?? 'equipment'];
-    const head = `The wall has ${inches(avail)}" of space and the ${what} is ${inches(depth)}" deep, leaving about ${left}"`;
+    const head = `The wall has ${inches(avail)}" of space and the ${what} is ${inches(depth)}" wide, leaving about ${left}"`;
     lines.push(
       left >= required
         ? `${head} — the ${inches(required)}" requirement is met.`
@@ -229,33 +231,8 @@ function siteConditionLines(record: PostRecord): string[] {
   } else if (s.detachedStructure === false) {
     lines.push('No detached buildings on the property.');
   }
-  if (s.hoa !== undefined) lines.push(`HOA: ${s.hoa ? 'yes' : 'no'}.`);
   if (s.batteryStacks !== undefined) lines.push(stackLine(s.batteryStacks));
   return lines;
-}
-
-/**
- * The Cost Impact bullet: the direction, then the drivers that explain it.
- *
- * `costNotes` is a one-line noun phrase labelled "Another driver", so it joins
- * the driver list rather than printing as a line of its own — which also means
- * there is no capitalisation question about it.
- */
-function costLines(record: PostRecord): string[] {
-  const s: SvtNotes = record.svt ?? {};
-  const dir = s.costDirection;
-  const typed = (s.costNotes ?? '').trim().replace(/[.\s]+$/, '');
-  if (dir === 'neutral') return [COST_HEAD.neutral];
-  if (dir) {
-    // Unknown strings are dropped: the printed wording stays a closed set even
-    // if a stored record carries a driver this build no longer offers.
-    const drivers = (s.costDrivers ?? []).filter((d) => (COST_DRIVERS as readonly string[]).includes(d));
-    if (typed) drivers.push(typed);
-    return [drivers.length ? `${COST_HEAD[dir]} — ${drivers.join(', ')}.` : `${COST_HEAD[dir]}.`];
-  }
-  // No direction picked. The UI cannot produce this with text in the box, but
-  // a stored record could — print it rather than silently lose it.
-  return noteLines(s.costNotes ?? '');
 }
 
 /**
@@ -284,31 +261,58 @@ function askLines(record: PostRecord): string[] {
 }
 
 /**
- * The Battery Location bullet: the proposed location (the SAME sentence the
- * SF "Battery and Equipment Location" field prints), then the homeowner's
- * answer, then any alternative locations with their reasons.
+ * The Battery Location bullet (Aboud 2026-11-24, homeowner-first redesign).
+ *
+ * The lead sentence is the DECIDED install location — the SAME sentence the SF
+ * "Battery and Equipment Location" field prints, read from the shared
+ * `installNotes.batteryLocation`. SvtCard keeps that field equal to whichever
+ * box is the decision (the HO's when SOW agrees, the SOW box otherwise), so the
+ * three posts can never disagree. The homeowner narrative wraps around it:
+ *   - no stated preference → HO_UNKNOWN_LINE (cost-efficient, installer-easy);
+ *   - a preference the SOW team agrees with → that location leads, and we say so;
+ *   - a preference we disagree with → our location leads, then the HO's and why
+ *     it does not work.
  */
 function batteryLines(record: PostRecord): string[] {
   const n = record.installNotes;
   const s: SvtNotes = record.svt ?? {};
   const lines: string[] = [];
-  if (n) {
+  // The decided install location leads. SvtCard normally syncs the HO's
+  // location into the shared `batteryLocation` on agree, but read it straight
+  // from `svt.hoLocation` here too so the post is right even for an unsynced
+  // record (hand edits, imports). Otherwise the shared field is the decision.
+  const agreedToHo = s.hoHasPreference === true && s.sowAgrees === true && (s.hoLocation ?? '').trim() !== '';
+  if (agreedToHo) {
+    lines.push(...leadSentence('Batteries will be installed', /^batter/i, s.hoLocation ?? '', 'svt.hoLocation', record));
+  } else if (n) {
     lines.push(
       ...leadSentence('Batteries will be installed', /^batter/i, n.batteryLocation ?? '', 'install.batteryLocation', record),
     );
   }
-  // Tri-state: an unanswered question prints nothing (same contract as the
-  // battery yes/no questions — "unanswered" and "No" mean different things).
-  if (s.hoAgrees === true) {
-    lines.push(HO_AGREES_LINE);
-  } else if (s.hoAgrees === 'unknown') {
+  // Tri-state throughout: an unanswered question prints nothing.
+  if (s.hoHasPreference === false) {
     lines.push(HO_UNKNOWN_LINE);
-  } else if (s.hoAgrees === false) {
-    const loc = clauses(s.hoLocation ?? '', 'svt.hoLocation', record);
-    lines.push(
-      loc ? `The homeowner prefers a different location: ${loc}.` : 'The homeowner prefers a different location.',
-    );
-    lines.push(...labelled('Why it does not work', s.hoReason ?? '', 'svt.hoReason', record));
+  } else if (s.hoHasPreference === true) {
+    if (s.sowAgrees === true) {
+      // The decided location IS the HO's — the lead already named it, so don't
+      // restate the place, only that it is theirs and that we concur.
+      lines.push('This is the homeowner’s preferred location.');
+      lines.push(...labelled('Our analysis', s.hoAnalysis ?? '', 'svt.hoAnalysis', record));
+      const why = clauses(s.agreeReason ?? '', 'svt.agreeReason', record);
+      lines.push(why ? `The SOW team agrees — ${why}.` : 'The SOW team agrees with this location.');
+    } else if (s.sowAgrees === false) {
+      const loc = clauses(s.hoLocation ?? '', 'svt.hoLocation', record);
+      lines.push(
+        loc ? `The homeowner prefers a different location: ${loc}.` : 'The homeowner prefers a different location.',
+      );
+      lines.push(...labelled('Our analysis', s.hoAnalysis ?? '', 'svt.hoAnalysis', record));
+      lines.push(...labelled('Why it does not work', s.hoReason ?? '', 'svt.hoReason', record));
+    } else {
+      // Preference stated, SOW agreement not decided yet.
+      const loc = clauses(s.hoLocation ?? '', 'svt.hoLocation', record);
+      lines.push(loc ? `The homeowner prefers ${loc}.` : 'The homeowner has a preferred location.');
+      lines.push(...labelled('Our analysis', s.hoAnalysis ?? '', 'svt.hoAnalysis', record));
+    }
   }
   const alts = [
     { loc: clauses(s.alt1Location ?? '', 'svt.alt1Location', record), reason: clauses(s.alt1Reason ?? '', 'svt.alt1Reason', record) },
@@ -322,46 +326,16 @@ function batteryLines(record: PostRecord): string[] {
 }
 
 /**
- * The Most Likely Conduit Path bullet: the ticked names, then what was ruled
- * out and why, then the notes.
- *
- * The ruled-out line is the one that stops the reader asking "could we not
- * just do X?" — which is exactly the round-trip the William Giles thread cost.
+ * The Most Likely Conduit Path bullet: the ticked names, then the notes.
+ * (The "ruled out" group was removed from the tool on 2026-11-24.)
  */
 function pathLines(record: PostRecord): string[] {
   const s: SvtNotes = record.svt ?? {};
   const names = SVT_PATHS.filter((p) => s[p.field]).map((p) => p.label);
   const lines: string[] = [];
   if (names.length) lines.push(`${names.join(', ')}.`);
-
-  // A path ticked as likely can never also be ruled out — SvtCard clears the
-  // other side on toggle — but filter anyway so a hand-edited record cannot
-  // print a contradiction.
-  const out = SVT_PATHS.filter((p) => (s.ruledOut ?? []).includes(p.field) && !s[p.field]).map((p) => p.label);
-  if (out.length) {
-    const why = (s.ruledOutReason ?? '').trim().replace(/[.\s]+$/, '');
-    lines.push(`Ruled out: ${out.join(', ')}${why ? ` — ${why}` : ''}.`);
-  }
-
   lines.push(...noteLines(effectiveText(s.pathNotes ?? '', 'svt.pathNotes', record)));
   return lines;
-}
-
-/** The Not Covered Here bullet: one line per team the items point at. */
-function notReviewedLines(record: PostRecord): string[] {
-  const s: SvtNotes = record.svt ?? {};
-  const picked = NOT_REVIEWED.filter((x) => (s.notReviewed ?? []).includes(x.key));
-  if (!picked.length) return [];
-  // Group by team so items sharing a pointer share a sentence, and items with
-  // no known team are simply listed.
-  const byTeam = new Map<string | null, string[]>();
-  for (const p of picked) byTeam.set(p.team, [...(byTeam.get(p.team) ?? []), p.key]);
-  return [...byTeam.entries()].map(([team, keys]) => {
-    const list = keys.length > 1 ? `${keys.slice(0, -1).join(', ')} and ${keys[keys.length - 1]}` : keys[0];
-    return team
-      ? `Not covered by this note: ${list} — please check with ${team}.`
-      : `Not covered by this note: ${list}.`;
-  });
 }
 
 /** The Scheduling bullet: the crew-days call, then anything scheduling
@@ -399,14 +373,11 @@ export function buildSvtLines(record: PostRecord): PostItem[] {
       label: 'Installation Notes',
       values: installNoteLines(record.installNotes, record, record.sf.utility, ['batteryLocation', 'other']),
     },
-    { label: 'Cost Impact', values: costLines(record) },
     { label: 'Scheduling', values: schedulingLines(record) },
-    // The homeowner's homework, then the ask — the order every real note ends in.
+    // The homeowner's homework, then the ask. The ask is NOT a labelled bullet
+    // (Aboud 2026-11-24: "remove this wording on the slack post") — it closes
+    // the post as a plain sentence, appended by each builder below.
     { label: 'Homeowner Actions', values: hoActionValues(record) },
-    // The scope boundary sits immediately before the ask: it is the last thing
-    // read, and it answers the question the ask would otherwise invite.
-    { label: 'Not Covered Here', values: notReviewedLines(record) },
-    { label: 'The Ask', values: askLines(record) },
   ];
   return items.filter((it) => it.values.length > 0);
 }
@@ -428,6 +399,8 @@ export function buildSvtPostText(record: PostRecord): string {
   const meta = metaLine(record);
   if (meta) lines.push(meta);
   lines.push(...renderItemsText(buildSvtLines(record)));
+  // The closing ask, as a plain sentence with no "The Ask" heading.
+  lines.push(...askLines(record));
   return lines.join('\n');
 }
 
@@ -445,6 +418,9 @@ export function buildSvtSfText(record: PostRecord): string {
   for (const it of buildSvtLines(record)) {
     parts.push(`${underline(it.label)}\n${it.values.flatMap(runLines).join('\n')}`);
   }
+  // The closing ask, as a plain sentence with no "The Ask" underline heading.
+  const ask = askLines(record);
+  if (ask.length) parts.push(ask.join('\n'));
   return parts.join('\n\n');
 }
 
@@ -454,5 +430,7 @@ export function buildSvtPostHtml(record: PostRecord): string {
   const meta = metaLine(record);
   if (meta) parts.push(`<p>${escapeHtml(meta)}</p>`);
   parts.push(renderItemsHtml(buildSvtLines(record)));
+  // The closing ask, as a plain paragraph with no "The Ask" heading.
+  for (const line of askLines(record)) parts.push(`<p>${escapeHtml(line)}</p>`);
   return parts.join('');
 }

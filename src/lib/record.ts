@@ -81,8 +81,11 @@ export function hasContent(r: PostRecord): boolean {
     n?.batteryBaseNeedsWork !== undefined ||
     n?.wallEven !== undefined ||
     n?.batteryPushFromWall !== undefined ||
-    // SVT pre-design answers (Aboud 2026-11-15): hoAgrees is tri-state like
-    // the battery questions; the path/two-day ticks store undefined when off.
+    // SVT pre-design answers (Aboud 2026-11-15): the HO-first battery flow
+    // answers are tri-state like the battery questions; the path/two-day ticks
+    // store undefined when off. `hoAgrees` stays for not-yet-migrated drafts.
+    s?.hoHasPreference !== undefined ||
+    s?.sowAgrees !== undefined ||
     s?.hoAgrees !== undefined ||
     s?.pathB2b !== undefined ||
     s?.pathAttic !== undefined ||
@@ -110,6 +113,9 @@ export function hasContent(r: PostRecord): boolean {
     (s?.costDrivers?.length ?? 0) > 0 ||
     (s?.hoActions?.length ?? 0) > 0 ||
     s?.ask !== undefined ||
+    // Design process QA (Aboud 2026-11-24): tri-state, `false` is a real answer.
+    r.designQa?.sharedFolder !== undefined ||
+    r.designQa?.usedTemplate !== undefined ||
     (n !== undefined && servicesOf(n).length > 0);
   return filled.some((v) => (v ?? '').trim() !== '') || sf.systemSizeKw !== undefined || dropdownChosen;
 }

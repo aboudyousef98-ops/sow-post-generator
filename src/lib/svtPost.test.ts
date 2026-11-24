@@ -29,7 +29,8 @@ describe('buildSvtPostText', () => {
         specialCases: 'Long SER run adds cost',
       },
       svt: {
-        hoAgrees: false,
+        hoHasPreference: true,
+        sowAgrees: false,
         hoLocation: 'inside the garage',
         hoReason: 'it blocks the clearance to the gas meter',
         alt1Location: 'east wall near the meter',
@@ -59,13 +60,14 @@ describe('buildSvtPostText', () => {
 • *Scheduling:* ${TWO_DAY_LINE}`);
   });
 
-  it('homeowner agreement prints the agree sentence', () => {
+  it('SOW agreement with the HO location prints the agree sentences', () => {
     const rec = svtRecord({
       installNotes: { ...emptyInstallNotes(), batteryLocation: 'on the north wall' },
-      svt: { hoAgrees: true },
+      svt: { hoHasPreference: true, sowAgrees: true },
     });
     const text = buildSvtPostText(rec);
-    expect(text).toContain('◦ The homeowner agrees with the proposed battery location.');
+    expect(text).toContain('◦ This is the homeowner’s preferred location.');
+    expect(text).toContain('◦ The SOW team agrees with this location.');
     expect(text).not.toContain('prefers a different location');
   });
 
@@ -134,7 +136,7 @@ describe('buildSvtPostText', () => {
 
   it('uses polished SVT text when present, raw when reverted', () => {
     const rec = svtRecord({
-      svt: { hoAgrees: false, hoReason: 'raw reason' },
+      svt: { hoHasPreference: true, sowAgrees: false, hoReason: 'raw reason' },
       polished: { 'svt.hoReason': 'Polished reason' },
     });
     expect(buildSvtPostText(rec)).toContain('Why it does not work: Polished reason.');
@@ -191,7 +193,8 @@ describe('buildSvtSfText', () => {
         batteryLocation: 'on the north wall',
       },
       svt: {
-        hoAgrees: false,
+        hoHasPreference: true,
+        sowAgrees: false,
         hoLocation: 'inside the garage',
         pathAttic: true,
         pathExternal: true,

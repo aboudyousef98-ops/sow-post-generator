@@ -29,6 +29,9 @@ export const POLISH_KEYS = [
   // SVT pre-design boxes (Aboud 2026-11-15) — appended, matching the client.
   'svt.hoLocation',
   'svt.hoReason',
+  // HO-first battery flow boxes (Aboud 2026-11-24).
+  'svt.hoAnalysis',
+  'svt.agreeReason',
   'svt.alt1Location',
   'svt.alt1Reason',
   'svt.alt2Location',

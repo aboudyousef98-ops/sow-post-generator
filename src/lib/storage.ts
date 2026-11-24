@@ -3,7 +3,7 @@
 
 import type { BoardState } from '../board/types';
 import type { ExtraWorkState } from '../extrawork/types';
-import type { Ahj, ExportFile, InstallNotes, PostRecord, Settings } from '../types';
+import type { Ahj, ExportFile, InstallNotes, PostRecord, Settings, SvtNotes } from '../types';
 import { emptyBoard, mergeBoard } from './board';
 import { emptyExtraWork, mergeExtraWork } from './extraWork';
 import { emptyInstallNotes } from './installNotes';
@@ -129,11 +129,37 @@ function clampLevel(level: unknown): PostRecord['level'] {
   return Math.min(4, Math.max(1, n)) as PostRecord['level'];
 }
 
+/**
+ * HO-first battery flow migration (Aboud 2026-11-24). The pre-2026-11-24
+ * `hoAgrees` answer maps forward into `hoHasPreference`/`sowAgrees`:
+ * - `false` ("HO wanted a different spot, we disagreed") → the disagree branch,
+ *   preserving the stored `hoLocation`/`hoReason`;
+ * - `'unknown'` ("no stated preference") → `hoHasPreference: false`;
+ * - `true` (legacy "agreed with our spot") → also `hoHasPreference: false` —
+ *   that case carried no HO location to show, so "no stated preference" is the
+ *   least-wrong landing; such drafts are listed in the checkpoint for a glance.
+ * A no-op once the new keys are present, so it is safe to run on every load.
+ */
+export function migrateSvt(svt: SvtNotes | undefined): SvtNotes | undefined {
+  if (!svt || svt.hoAgrees === undefined) return svt;
+  const { hoAgrees, ...rest } = svt;
+  if (rest.hoHasPreference !== undefined || rest.sowAgrees !== undefined) return rest; // already new-model; drop dead key
+  if (hoAgrees === false) return { ...rest, hoHasPreference: true, sowAgrees: false };
+  return { ...rest, hoHasPreference: false };
+}
+
 export function migrateRecord(r: PostRecord): PostRecord {
   const legacyText = r.notes?.layout ?? '';
   const legacyPolished = (r.polished as Record<string, string> | undefined)?.layout;
   const legacyUse = (r.usePolished as Record<string, boolean> | undefined)?.layout;
-  if (r.installNotes && !legacyText && legacyPolished === undefined && legacyUse === undefined && isWellFormed(r)) {
+  if (
+    r.installNotes &&
+    !legacyText &&
+    legacyPolished === undefined &&
+    legacyUse === undefined &&
+    r.svt?.hoAgrees === undefined &&
+    isWellFormed(r)
+  ) {
     return r; // already migrated and sound — same object, so callers can cheaply compare
   }
 
@@ -167,6 +193,7 @@ export function migrateRecord(r: PostRecord): PostRecord {
       region: storedSf.region ?? 'HOU',
       source: storedSf.source ?? 'manual',
     },
+    svt: migrateSvt(r.svt),
     installNotes,
     notes: {
       ...storedNotes,

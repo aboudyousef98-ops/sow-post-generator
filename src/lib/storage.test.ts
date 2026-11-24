@@ -175,6 +175,49 @@ describe('migrateRecord — malformed records never reach the UI', () => {
   });
 })
 
+describe('migrateRecord — HO-first battery flow (2026-11-24)', () => {
+  // The pre-2026-11-24 `hoAgrees` answer maps forward to hoHasPreference/
+  // sowAgrees. A record carrying the dead key must not early-return.
+  const withHoAgrees = (hoAgrees: unknown, extra: Record<string, unknown> = {}) =>
+    migrateRecord({ ...makeRecord(), svt: { hoAgrees, ...extra } } as unknown as PostRecord);
+
+  it("maps a disagreement (false) to a stated preference the SOW team rejected", () => {
+    const m = withHoAgrees(false, { hoLocation: 'inside the garage', hoReason: 'no clearance' });
+    expect(m.svt?.hoHasPreference).toBe(true);
+    expect(m.svt?.sowAgrees).toBe(false);
+    expect(m.svt?.hoLocation).toBe('inside the garage');
+    expect(m.svt?.hoReason).toBe('no clearance');
+    expect('hoAgrees' in (m.svt ?? {})).toBe(false);
+  });
+
+  it("maps 'no stated preference' (unknown) to hoHasPreference false", () => {
+    const m = withHoAgrees('unknown');
+    expect(m.svt?.hoHasPreference).toBe(false);
+    expect('hoAgrees' in (m.svt ?? {})).toBe(false);
+  });
+
+  it('maps a legacy agreement (true) to no stated preference — the least-wrong landing', () => {
+    const m = withHoAgrees(true);
+    expect(m.svt?.hoHasPreference).toBe(false);
+    expect('hoAgrees' in (m.svt ?? {})).toBe(false);
+  });
+
+  it('is a no-op once the new keys are present — the dead key is simply dropped', () => {
+    const m = migrateRecord({
+      ...makeRecord(),
+      svt: { hoAgrees: false, hoHasPreference: true, sowAgrees: true },
+    } as unknown as PostRecord);
+    expect(m.svt?.hoHasPreference).toBe(true);
+    expect(m.svt?.sowAgrees).toBe(true);
+    expect('hoAgrees' in (m.svt ?? {})).toBe(false);
+  });
+
+  it('leaves a record with no svt block alone', () => {
+    const r = makeRecord();
+    expect(migrateRecord(r).svt).toBeUndefined();
+  });
+})
+
 // Utility picker (2026-10-08). sf.utility already existed and was filled ONLY
 // by the Salesforce extractor; Compose now offers it from Settings.utilities.
 describe('utilities roster', () => {
