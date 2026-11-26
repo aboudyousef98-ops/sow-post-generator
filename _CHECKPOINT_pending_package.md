@@ -1149,3 +1149,95 @@ Gate green: `tsc --noEmit` clean; full `vitest run` — **92 files, 1635 tests,
 0 failures** (1635 = prior 1604 + 31 new).
 
 **Not deployed** — awaiting "yalla deploy".
+
+---
+
+## 2026-11-26 (cont.) — Bot API: PATCH /projects/:id/updates/:updateId
+
+**Ask:** let the bot edit its own posted updates — author-scoped (403 for
+anyone else's, no admin override), set editedAt/editedBy, show the same
+"edited" marker a human edit shows, log an `update-edit` activity entry.
+
+**Change (`netlify/functions/bot.mts`):** new route, modeled directly on the
+existing `addUpdate`/`patchProject` handlers — same `readBoard`/`applyToBoard`
+merge path, no storage rewrite. Finds the update by id AND projectId (wrong
+project or a soft-deleted update both 404 — a tombstoned update reads as
+gone, same as a deleted/archived project already does elsewhere in this
+API). `before.by !== who.displayName` → 403, checked BEFORE anything else,
+and unconditionally — sow_bot is seeded `role: admin` in production, and
+admin does not bypass this; it is author identity, not a permission tier.
+Identical resubmitted text is a no-op (no activity entry, no edited stamp),
+mirroring `patchProject`'s own diff-before-write behavior. Activity entry
+carries no `changes` field, matching `putUpdateOnBoard`'s client-side
+convention — the text already lives on the update itself. Docs page
+(`botdocs.mts`) updated with the new endpoint.
+
+**New test infrastructure for bot.mts** (`netlify/functions/lib/bot.test.ts`,
+11 tests) — this file had never been unit-tested before (precedent was
+"live end-to-end tested with a real token" only). A small in-memory
+`FakeStore` mocks `./lib/store` (get/getWithMetadata/setJSON only, everything
+`bot.mts` actually calls) and runs the REAL handler — not a reimplementation
+— through: success + persistence + activity log, 403 on someone else's
+update (including the admin-role case explicitly), 404×3 (missing / deleted
+/ wrong-project), 400×2 (empty/missing text), no-op, 401 on a bad token, and
+a human's own token editing their own update. Lives in `lib/` like the
+other function tests, not beside `bot.mts` — a sibling `bot.test.ts` showed
+up as a phantom "bot.test" function under local `netlify dev` (it scans
+every top-level file in `functions/`; `lib/` is never scanned). `tsconfig.json`
+gained `allowImportingTsExtensions` to import the `.mts` handler directly
+(safe: `noEmit` is already on).
+
+**Live-checked against `sowpost-test`, then reverted exactly:** backed up
+its `tokens` and `board` blobs, injected a synthetic `sow_bot` token record
+(hash computed the same way `botAuth.hashToken` does) plus a throwaway
+project/update, confirmed the data landed correctly in the store itself —
+then found `netlify dev`'s local Blobs access does NOT see the same
+`sowpost-test` data the CLI (`netlify blobs:get/set`) writes to (every
+bearer-authed request 401'd — including pre-existing `GET /board`, nothing
+specific to the new route), so a full local round-trip wasn't possible this
+session. Restored both blobs to their exact backups (tokens: 4, board: 527
+projects / 88 updates — verified). Logging this gap here rather than losing
+it: future live bot-API checks on this laptop need an actual deploy preview
+(matching how Group C's original "live end-to-end" tests were done), not
+`netlify dev`.
+
+Gate green: `tsc --noEmit` clean, `eslint src netlify --max-warnings 0`
+clean, full `vitest run` — **93 files, 1646 tests, 0 failures**.
+
+**Not deployed yet** — bundled into today's "yalla deploy" below.
+
+---
+
+## 2026-11-26 — SHIPPED ✅ deploy `6b0871c59d806e767a0f8c71`
+
+Everything above from today — the badge/fill fix, unassigned-coordinator +
+search-persistence + impossible-counter + Cancelled-hardening fixes, the SOW
+Bot card, and the bot API edit-update route — went to production on
+Aboud's "then deploy lets see what we have."
+
+- **Commits:** `71aa23b` (badge/fill), `cbc1105` (unassigned coordinator +
+  Cancelled hardening — the search-persistence/counter fix rode along inside
+  `71aa23b`'s `BoardTab.tsx` diff, since both touched the same file before
+  either was committed), `eea7c1d` (SOW Bot card), `42fc3da` (bot API PATCH
+  route), `659fd05` (this file). Pushed to `main`.
+- **Deploy:** `netlify deploy --build --prod` (this repo deploys via the
+  CLI, not a git-connected auto-build — confirmed not git-connected per
+  `_stacks` notes). Deploy id `6b0871c59d806e767a0f8c71`, context
+  `production`, state `ready` — `getSite.published_deploy` confirms.
+- **Backup-first protocol followed.** Pre:
+  `_versions/v50-live-backup-2026-11-26-predeploy/` (board: 601 projects /
+  4643 activity / 127 updates; ahjs 84; records 546; extrawork 1; users 7).
+  Post: `_versions/v50-live-backup-2026-11-26-postdeploy/`. **All 5 stores
+  byte-identical pre↔post** — no live edits landed during the deploy window.
+- **Live verification:** site `200`; bundle `index-Bsh1wTaB.js` confirmed —
+  **no `changeme`** (the known "locally-built dist bakes the placeholder
+  token" trap — my own first `npm run build` locally DID bake it, caught
+  before deploying; `netlify deploy --build` injects the site's real env
+  instead and the live bundle is clean), markers present: "duplicate bot
+  notes" ×1, "All clear" ×1, "Latest Slack activity" ×2. Unauthorized bot-API
+  call → `401` (the bearer lane's own "invalid or revoked token", not the
+  browser lane's 403 — correct, different guard).
+- **Not live-exercised:** the bot API PATCH route itself has no production
+  token to call it with yet (0 tokens exist — see the earlier bot-API status
+  check this session). Exercise it for real once Aboud generates the
+  `sow_bot` token from Admin → Users.
