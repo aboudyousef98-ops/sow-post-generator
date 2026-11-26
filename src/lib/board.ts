@@ -106,15 +106,16 @@ export function seedLabels(): BoardLabel[] {
 
 /**
  * Status labels that sit OUTSIDE the SOW pipeline unless someone says
- * otherwise — Aboud 2026-10-19. These three already exist on the live board as
+ * otherwise — Aboud 2026-10-19. These already exist on the live board as
  * team-created labels, so there is nothing to seed and nothing to migrate: the
  * names are matched case-insensitively and the result is only a DEFAULT.
  *
  * Tick/untick "out of scope" in Edit labels and the explicit boolean is stored
  * (which bumps updatedAt), so a deliberate choice always beats this list —
- * same contract as a rename beating a re-seed.
+ * same contract as a rename beating a re-seed. Cancelled is NOT in this list —
+ * see `isCancelledLabel`, which it is hardened against instead.
  */
-const OUT_OF_SCOPE_DEFAULT_NAMES = new Set(['hold', 'sonnen', 'enphase', 'cancelled', 'canceled']);
+const OUT_OF_SCOPE_DEFAULT_NAMES = new Set(['hold', 'sonnen', 'enphase']);
 
 /**
  * True when a status label means "parked, not our scope".
@@ -122,9 +123,17 @@ const OUT_OF_SCOPE_DEFAULT_NAMES = new Set(['hold', 'sonnen', 'enphase', 'cancel
  * `isDone` wins: a label marked both belongs in Completed, because that is the
  * stronger statement about the work. The two are kept mutually exclusive in
  * Edit labels, so this only matters for data written by an older client.
+ *
+ * Cancelled wins next, and UNCONDITIONALLY — a cancelled project must never
+ * count toward coordinator loads, active-project totals, or assignment
+ * suggestions (Aboud 2026-11-26), the same guarantee `isDone` already has.
+ * Hold/Sonnen/ENPHASE stay admin-overridable via the stored boolean; Cancelled
+ * does not, because there is no legitimate case for a cancelled project to
+ * still read as active work.
  */
 export function isOutOfScopeLabel(label: BoardLabel | undefined): boolean {
   if (!label || label.columnKey !== 'status' || label.isDone) return false;
+  if (isCancelledLabel(label)) return true;
   if (typeof label.outOfScope === 'boolean') return label.outOfScope;
   return OUT_OF_SCOPE_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
 }
@@ -135,18 +144,17 @@ export function outOfScopeStatusIds(labels: BoardLabel[]): Set<string> {
 }
 
 /**
- * "Cancelled" status labels (Aboud 2026-11-24). This is a NARROWER check than
- * out-of-scope: it exists only so the attention nudges — install-soon / 0★ /
- * the stale aging dot — can be suppressed for a cancelled project WITHOUT
- * touching Hold/Sonnen/ENPHASE, which still raise those flags today. Routing
- * to Out of SOW scope already rides the out-of-scope name default, so this does
- * NOT drive the section split. Matches 'Cancelled'/'Canceled' case-insensitively.
+ * "Cancelled" status labels (Aboud 2026-11-24, hardened 2026-11-26). Matches
+ * any status named "Cancelled"/"Canceled" or a variant that starts with
+ * "cancel" ("Cancelled — duplicate", "Project Canceled by HO", …), so a
+ * team's own wording still counts. Drives BOTH the attention-nudge mute
+ * (install-soon / 0★ / stale aging dot) AND, via `isOutOfScopeLabel` above,
+ * the section split — so it is excluded from coordinator loads and
+ * active-project counts the same way Hold/Sonnen/ENPHASE are.
  */
-const CANCELLED_DEFAULT_NAMES = new Set(['cancelled', 'canceled']);
-
 export function isCancelledLabel(label: BoardLabel | undefined): boolean {
   if (!label || label.columnKey !== 'status') return false;
-  return CANCELLED_DEFAULT_NAMES.has(label.name.trim().toLowerCase());
+  return label.name.trim().toLowerCase().startsWith('cancel');
 }
 
 /** Ids of every cancelled status label — the set that mutes the attention flags. */
@@ -453,7 +461,7 @@ export function newProject(
   return {
     id: crypto.randomUUID(),
     name: cleanName(rawName),
-    coordinator: author, // Q4 default: the signed-in user
+    coordinator: '', // unassigned — adding a project is not claiming it (Aboud 2026-11-26)
     statusId: defaultLabel(labels, 'status')?.id ?? null,
     phaseId: null,
     designedDate: null,

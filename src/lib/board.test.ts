@@ -165,11 +165,14 @@ describe('duplicate guard', () => {
 });
 
 describe('newProject / patchProject', () => {
-  it('defaults: status = default label, coordinator = author, newest on top', () => {
+  it('defaults: status = default label, coordinator unassigned, newest on top', () => {
     const p = newProject('  Test   Project ', 'Omar Rajab', seedLabels(), T1);
     expect(p.name).toBe('Test Project');
     expect(p.statusId).toBe('status-new');
-    expect(p.coordinator).toBe('Omar Rajab');
+    // Adding a project is not claiming it (Aboud 2026-11-26) — the author only
+    // lands in createdBy/updatedBy, never in coordinator.
+    expect(p.coordinator).toBe('');
+    expect(p.createdBy).toBe('Omar Rajab');
     expect(p.position).toBe(Date.parse(T1));
     expect(p.rating).toBeNull();
   });

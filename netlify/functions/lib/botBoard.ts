@@ -54,7 +54,7 @@ export interface Activity {
 
 export type Section = 'active' | 'predesign' | 'review' | 'scope' | 'completed';
 
-const OUT_OF_SCOPE_NAMES = new Set(['hold', 'sonnen', 'enphase', 'cancelled', 'canceled']);
+const OUT_OF_SCOPE_NAMES = new Set(['hold', 'sonnen', 'enphase']);
 const REVIEW_NAMES = new Set(['installation review']);
 const PREDESIGN_NAMES = new Set(['pre-design', 'predesign', 'pre design']);
 
@@ -88,8 +88,14 @@ function isPredesign(l: Label | undefined): boolean {
   if (typeof l.predesign === 'boolean') return l.predesign;
   return PREDESIGN_NAMES.has(norm(l.name));
 }
+/** Mirror of board.ts isCancelledLabel — hardened, see isOutOfScope below. */
+function isCancelled(l: Label | undefined): boolean {
+  return !!l && l.columnKey === 'status' && norm(l.name).startsWith('cancel');
+}
 function isOutOfScope(l: Label | undefined): boolean {
   if (!l || l.columnKey !== 'status' || l.isDone) return false;
+  // Cancelled wins unconditionally, like isDone — see board.ts for why.
+  if (isCancelled(l)) return true;
   if (typeof l.outOfScope === 'boolean') return l.outOfScope;
   return OUT_OF_SCOPE_NAMES.has(norm(l.name));
 }

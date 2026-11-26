@@ -148,13 +148,15 @@ describe('MobileApp shell', () => {
     expect(lastBoard!.updates[0].text).toBe('waiting on the AHJ to confirm');
   });
 
-  it('board: add project creates a row owned by me with a create activity', () => {
+  it('board: add project creates an unassigned row with a create activity', () => {
     render(<Harness />);
     const input = screen.getByPlaceholderText('Add project');
     fireEvent.change(input, { target: { value: 'New Customer' } });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(lastBoard!.projects).toHaveLength(1);
-    expect(lastBoard!.projects[0].coordinator).toBe('Aboud Yousef');
+    // Adding a project is not claiming it (Aboud 2026-11-26).
+    expect(lastBoard!.projects[0].coordinator).toBe('');
+    expect(lastBoard!.projects[0].createdBy).toBe('Aboud Yousef');
     expect(lastBoard!.activity[0].action).toBe('create');
   });
 
