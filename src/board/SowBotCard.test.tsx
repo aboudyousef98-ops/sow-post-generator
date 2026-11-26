@@ -2,25 +2,30 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { newUpdate } from '../lib/updates';
-import { SOW_BOT_USERNAME } from '../lib/sowBotNotes';
 import SowBotCard from './SowBotCard';
 
 afterEach(() => cleanup());
 
+// Structurally identical to SOW Bot's REAL posts (see sowBotNotes.ts's
+// header comment) — colon outside the bold, bare https:// link lines with
+// no <url|label> wrapping.
 const FULL_NOTE = [
-  '*SOW Bot notes*',
-  '• *Status:* Working on it',
-  '• *Install date:* 12/05/2026',
-  '• *Blockers:* Waiting on AHJ to confirm the permit',
-  '• *Survey / SVT:* Completed',
-  '• *Pre-Design Analysis:* Done',
-  '• *Solrite verification:* Passed',
-  '• *AHJ / utility:* Harris County / CenterPoint',
-  '• *Latest Slack activity:*',
-  '    ◦ <https://workspace.slack.com/archives/C1|Omar Rajab> — confirmed trench depth',
+  '*SOW Bot notes* (updated Nov 26, 2026, 6:30 PM Amman)',
+  '• *Status*: Working on it',
+  '• *Install date*: 12/05/2026',
+  '• *Blockers*: Waiting on AHJ to confirm the permit',
+  '• *Survey / SVT*: Completed',
+  '• *Pre-Design Analysis*: Done',
+  '• *Solrite verification*: Passed',
+  '• *AHJ / utility*: Harris County / CenterPoint',
+  '• *Latest Slack activity*: Omar Rajab confirmed the trench depth.',
+  'https://workspace.slack.com/archives/C1/p1',
 ].join('\n');
 
-const bot = (text: string, at = '2026-11-26T15:30:00.000Z') => newUpdate('p1', text, SOW_BOT_USERNAME, 'note', {}, at);
+// The real stamped `by` — bot.mts always sets it from the token's
+// displayName, never the raw username (the bug that kept this card from
+// ever rendering against SOW Bot's first real posts).
+const bot = (text: string, at = '2026-11-26T15:30:00.000Z') => newUpdate('p1', text, 'SOW Bot - Aboud', 'note', {}, at);
 
 describe('SowBotCard — header', () => {
   it('shows the bot label, avatar, and the Amman-local timestamp', () => {
@@ -50,12 +55,21 @@ describe('SowBotCard — status strip', () => {
   });
 
   it('a missing field renders as the grey unknown chip', () => {
-    const text = ['*SOW Bot notes*', '• *Status:* Done'].join('\n');
+    const text = ['*SOW Bot notes*', '• *Status*: Done'].join('\n');
     render(<SowBotCard update={bot(text)} duplicate={false} />);
     const svtChip = Array.from(document.querySelectorAll('.sowbot-chip')).find((el) =>
       el.textContent?.includes('Survey / SVT'),
     );
     expect(svtChip?.className).toContain('sowbot-chip-unknown');
+  });
+
+  it('SOW Bot\'s "Not found" phrasing renders as the grey unknown chip, not green', () => {
+    const text = ['*SOW Bot notes*', '• *Status*: Done', '• *Install date*: Not found'].join('\n');
+    render(<SowBotCard update={bot(text)} duplicate={false} />);
+    const installChip = Array.from(document.querySelectorAll('.sowbot-chip')).find((el) =>
+      el.textContent?.includes('Install date'),
+    );
+    expect(installChip?.className).toContain('sowbot-chip-unknown');
   });
 });
 
@@ -67,9 +81,20 @@ describe('SowBotCard — Blockers callout (rule 3)', () => {
   });
 
   it('"None" renders the green All clear callout instead', () => {
-    const text = ['*SOW Bot notes*', '• *Status:* Done', '• *Blockers:* None'].join('\n');
+    const text = ['*SOW Bot notes*', '• *Status*: Done', '• *Blockers*: None'].join('\n');
     render(<SowBotCard update={bot(text)} duplicate={false} />);
     expect(document.querySelector('.sowbot-callout.ok')?.textContent).toContain('All clear');
+    expect(document.querySelector('.sowbot-callout.danger')).toBeNull();
+  });
+
+  it('SOW Bot\'s real "None … but here is context" phrasing also renders All clear', () => {
+    const text = [
+      '*SOW Bot notes*',
+      '• *Status*: Done',
+      '• *Blockers*: None open in Slack. Fixes asked by Jad were marked "Updated".',
+    ].join('\n');
+    render(<SowBotCard update={bot(text)} duplicate={false} />);
+    expect(document.querySelector('.sowbot-callout.ok')).toBeTruthy();
     expect(document.querySelector('.sowbot-callout.danger')).toBeNull();
   });
 });
@@ -77,12 +102,12 @@ describe('SowBotCard — Blockers callout (rule 3)', () => {
 describe('SowBotCard — Latest Slack activity (rule 4)', () => {
   it('is collapsed by default, with a clickable link once expanded', () => {
     render(<SowBotCard update={bot(FULL_NOTE)} duplicate={false} />);
-    expect(screen.queryByRole('link', { name: /Omar Rajab/ })).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Show more/ }));
-    const link = screen.getByRole('link', { name: /Omar Rajab/ }) as HTMLAnchorElement;
-    expect(link.href).toBe('https://workspace.slack.com/archives/C1');
+    const link = screen.getByRole('link') as HTMLAnchorElement;
+    expect(link.href).toBe('https://workspace.slack.com/archives/C1/p1');
     fireEvent.click(screen.getByRole('button', { name: /Hide/ }));
-    expect(screen.queryByRole('link', { name: /Omar Rajab/ })).toBeNull();
+    expect(screen.queryByRole('link')).toBeNull();
   });
 });
 
