@@ -996,3 +996,156 @@ Independent of the record (never reads/writes a draft, can't touch a live post).
   `src/components/MessagePolisher.test.tsx` (new), `rewriteSchema.test.ts`.
 
 Gates after D: 1603 vitest · tsc · eslint · vite build · nosecrets green.
+
+---
+
+## 2026-11-26 — Remove coordinator-load + days-in-status badges, fix Status fill
+
+**Ask (screenshot):** remove the "n/3" coordinator-load badges and the "Nd"
+days-in-status chips (both shipped live 2026-11-24 as items 8/9), and fix the
+Status column's color fill, which looked squeezed/cut-off and overlapping the
+next column.
+
+**Root cause of the "weird" fill:** item 9 wrapped the Status cell in a flex
+row (`.board-status-cell { display: flex }`) so the `LabelCell` button (which
+fills via `width: calc(100% + 16px)`) now shared the row with the `Nd` chip —
+flexbox shrank the label pill to make room, so the color fill stopped
+reaching the cell edge and the chip overlapped the next column's border.
+
+**Change (3 files).** `src/board/BoardTab.tsx`: coordinator cell back to a
+bare `<PersonCell>` (dropped the `board-coord-cell` wrapper + load badge +
+`coordinatorLoadMap` memo); Status cell back to a bare `<LabelCell>` (dropped
+the `board-status-cell` wrapper + days-in-status chip); removed the now-dead
+`coordinatorLoads`/`daysInStatus` imports. `src/theme.css`: removed the
+`.board-status-cell` / `.board-days-in-status` / `.board-coord-cell` /
+`.board-coord-load(.over)` rules. `src/board/BoardTab.test.tsx`: removed the
+"item 8" test that asserted the badge rendered (the lib-level tests for
+`coordinatorLoads`/`daysInStatus` in `src/lib/boardExtras.test.ts` are
+untouched — the functions themselves aren't deleted, just not rendered).
+
+Gate green: `vitest run` → **BoardTab.tsx / BoardTab.columns.test.tsx /
+boardExtras.test.ts / boardViews.test.ts, 220 tests, 0 failures**.
+`tsc --noEmit` clean.
+
+**Not yet deployed** — banked here per the package rule, awaiting "yalla
+deploy".
+
+---
+
+## 2026-11-26 (cont.) — New-project assignment, search persistence, impossible counter, Cancelled hardening
+
+Four asks, all code-level fixes.
+
+**1. New projects start unassigned.** `newProject()` (`src/lib/board.ts`) set
+`coordinator: author` ("Q4 default") — adding a row via "+ New project" /
+"+ Add project" silently claimed it for whoever clicked Add. Changed to
+`coordinator: ''`. The SF-import path (`BoardTab.tsx` `runImport`) already
+overrode `coordinator` with the report's own value regardless, so it is
+unaffected — comment updated to stop claiming the old default. 3 tests updated
+(`board.test.ts`, `BoardTab.test.tsx` quick-add, `MobileApp.test.tsx`) to
+assert unassigned + `createdBy` still records the author.
+
+**2. Search text no longer persists across sessions.** `filters` (including
+`search`) round-tripped through `localStorage` (`KEY_FILTERS`) whole, so a
+search left on reappeared next session reading as "the board lost rows."
+Fixed in `BoardTab.tsx`: initial read strips `search` from the persisted
+blob, and the write effect never stores it. Every other filter (coordinators,
+statusIds, mine, showArchived, date range, stale/unrated toggles,
+hideCancelled) still persists as before. The "Filter on — clear" chip
+(item 10, already shipped) already covers search in `anyFilterActive` — no
+change needed there.
+
+**3. Impossible counter ("21 of 19 active") fixed.** `activeTotal` always
+filtered out archived rows, but the filtered `active`/`visible` list includes
+them whenever `filters.showArchived` is on — so toggling it could make the
+filtered count exceed the total. `activeTotal` now mirrors the same
+`showArchived` condition, so the universe both sides are measured against
+always matches. New test: `BoardTab.test.tsx` — archived row hidden/excluded
+by default (3 of 3), then Show archived widens BOTH sides (4 of 4), never 4 of 3.
+
+**4. Cancelled hardened like Done, not just Hold.** `isOutOfScopeLabel`
+(`src/lib/board.ts`, mirrored in `netlify/functions/lib/botBoard.ts`) matched
+Hold/Sonnen/ENPHASE/Cancelled by name, admin-overridable via a stored
+`outOfScope` boolean — fine for the parking-lot statuses, but it meant a
+stray/explicit `outOfScope: false` on a Cancelled-named status would keep
+counting it in `coordinatorLoads`, the active-project header total, and any
+assignment indicator, the one place that must never happen. Cancelled now
+wins UNCONDITIONALLY, the same guarantee `isDone` already has — removed from
+the overridable `OUT_OF_SCOPE_DEFAULT_NAMES` set and checked explicitly before
+it. Also widened the name match from an exact 'cancelled'/'canceled' Set to
+`startsWith('cancel')`, so a team's own wording ("Cancelled — duplicate",
+"Project Canceled by HO") still counts. `coordinatorLoads` already had a
+passing test for the default case (`boardExtras.test.ts` item 8); the
+hardening closes the override gap underneath it.
+
+Gate green: `tsc --noEmit` clean; full `vitest run` — **90 files, 1604 tests,
+0 failures** (1603 + 1 new).
+
+**Not yet deployed** — banked per the package rule, awaiting "yalla deploy".
+
+---
+
+## 2026-11-26 (cont.) — SOW Bot card in the Updates panel
+
+**Ask:** pin a parsed summary of the bot's "*SOW Bot notes*" update at the top
+of each project's Updates panel — status-chip strip, red Blockers callout
+(green "All clear" when empty), collapsed Latest Slack activity with
+clickable links, newest-only + "duplicate bot notes" badge, raw-text fallback
+on parse failure. Additive only — the sow_bot post itself still renders in
+the ordinary thread below, unchanged, with its normal Edit/Delete.
+
+**SOW Bot has not posted a single real note yet** — no API token exists
+anywhere as of this session (see the bot-API status check earlier today: 0
+active tokens in production or test). So the bullet shape this parses —
+`• *Label:* value` / `• *Label:*` + indented `◦` sub-bullets — is NOT a
+real sample; it's the exact convention every other post builder in this app
+already emits (`renderItemsText` in `template.ts`). If SOW Bot's actual
+wording differs once it starts posting, `parseSowBotNotes` returning `null`
+(→ the raw-text fallback, rule 6) is the signal to revisit the regexes in
+`src/lib/sowBotNotes.ts`, not a bug.
+
+**Files (new):** `src/lib/sowBotNotes.ts` (parser, classifier, newest/duplicate
+selection, Amman-time formatter) + `sowBotNotes.test.ts` (22 tests — field
+extraction, all 4 states, Blockers' binary rule, fallback on malformed text,
+duplicate selection). `src/board/SowBotCard.tsx` (the component) +
+`SowBotCard.test.tsx` (9 tests — header, chips, callout, collapse/links,
+duplicate badge, fallback). Touched: `src/board/UpdatesPanel.tsx` (3 lines —
+computes the newest note, renders the card first in the scroll area),
+`src/theme.css` (new `.sowbot-*` rules only).
+
+**Design, run through the `impeccable` skill (Operate mode) rather than
+freehanded:** every chip/callout color is the existing token set mixed toward
+white/black until it clears 4.5:1 (computed, not eyeballed) — not a new
+palette. Pending reuses `--dyn-warn-bg`/`--dyn-warn-ink` exactly as the app
+already defines them. The card's teal accent (`--dyn-teal-soft` head +
+`--dyn-teal-line` 1px border, ALL sides) is the same combo already used for
+selected/active states elsewhere, not a new one — and specifically not the
+`border-left` "side-tab" treatment the skill's detector flags as an AI-slop
+tell; ran `impeccable detect` against the 3 touched files afterward, 0 new
+findings (3 pre-existing unrelated hits elsewhere in theme.css, left alone).
+Avatar background is `--dyn-teal-ink` darkened ~30% toward black — the token
+alone is only 3.1:1 against white text, short of the floor at this size.
+
+**Verified live**, not just in jsdom: built a throwaway Vite entry
+(`sowbot-preview.html` + `src/sowbot-preview.tsx`) mounting the card directly
+with 3 fixtures (blockers+duplicate, all-clear, fallback), screenshotted in
+Chrome, confirmed chip colors/strip wrapping/Show-more expand+links/callouts
+all render as designed, then deleted both files — nothing of it is in this
+commit. Used that detour because `netlify dev`'s local API_PATH_TOKEN is
+currently mismatched (every `/api/<token>/*` call 403s against this laptop's
+dev server — unrelated to this feature, logged here so it isn't rediscovered
+cold; the client's stale `localStorage['sowpost.board']` cache was masking it
+by rendering old data as if synced).
+
+**sowpost-test only, as instructed.** Also used the test store directly once:
+backed up its `board` blob, pushed a throwaway project + a `sow_bot`-authored
+update to confirm the end-to-end selection/dedup path server-side, then
+restored the exact backup (527 projects / 88 updates, verified byte-identical
+after restore). No production reads or writes. No schema change — the
+`ProjectUpdate` type is untouched, per the ask ("don't change how the update
+is stored").
+
+Gate green: `tsc --noEmit` clean; full `vitest run` — **92 files, 1635 tests,
+0 failures** (1635 = prior 1604 + 31 new).
+
+**Not deployed** — awaiting "yalla deploy".
