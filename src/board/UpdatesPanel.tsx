@@ -13,8 +13,10 @@ import FormatToolbar, { continueList, formatHotkey } from '../components/FormatT
 import RichText from '../components/RichText';
 import { relativeTime } from '../lib/dates';
 import { newRequest, parseSlackPaste, resolveRequest } from '../lib/requests';
+import { selectSowBotNote } from '../lib/sowBotNotes';
 import { deleteUpdate, editUpdate, newReply, newUpdate, threadRoots } from '../lib/updates';
 import type { ProjectPatch } from '../lib/board';
+import SowBotCard from './SowBotCard';
 import type { BoardProject, ProjectRequest, ProjectUpdate, UpdateKind } from './types';
 
 const KIND_BADGE: Partial<Record<UpdateKind, string>> = {
@@ -106,6 +108,11 @@ export default function UpdatesPanel({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // The pinned bot card (Aboud 2026-11-26) — additive only. The sow_bot post
+  // itself still renders in the thread below, unchanged, with its normal
+  // Edit/Delete (rule 7); this is a parsed, at-a-glance copy of the newest one.
+  const botNote = selectSowBotNote(updates, project.id);
 
   const thread = threadRoots(updates, project.id);
   const myRequests = requests.filter((r) => r.projectId === project.id && !r.deleted);
@@ -278,6 +285,8 @@ export default function UpdatesPanel({
       )}
 
       <div className="upd-panel-scroll">
+        {botNote && <SowBotCard update={botNote.update} duplicate={botNote.duplicate} />}
+
         {/* Slack requests — the designers' asks for THIS project. Resolving is
             what releases the "Ready to submit"/"Done" gate. */}
         <div className="upd-req-block">
