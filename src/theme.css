@@ -6875,41 +6875,6 @@ tr:hover .board-label-cell.empty {
   box-shadow: inset 0 0 0 2px var(--dyn-orange);
 }
 
-/* Days-in-status chip in the status cell (item 9). */
-.board-status-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.board-days-in-status {
-  flex: none;
-  font-size: 11px;
-  color: var(--muted);
-  font-variant-numeric: tabular-nums;
-}
-
-/* Coordinator load counter "2/3" (item 8). */
-.board-coord-cell {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-.board-coord-load {
-  flex: none;
-  font-size: 11px;
-  color: var(--muted);
-  background: var(--chip-bg, rgba(127, 127, 127, 0.14));
-  border-radius: 10px;
-  padding: 1px 6px;
-  font-variant-numeric: tabular-nums;
-}
-.board-coord-load.over {
-  color: var(--dyn-danger);
-  font-weight: 600;
-}
-
 /* Updates-panel Source / Requested-by meta row (item 13). */
 .upd-panel-meta {
   display: flex;
@@ -7597,6 +7562,164 @@ tr:hover .board-label-cell.empty {
 .upd-badge-pending-info {
   background: #e8f1ff;
   color: #1c4f91;
+}
+
+/* SOW Bot card (Aboud 2026-11-26) — pinned summary of the bot's parsed note,
+   above the ordinary thread. Teal accent (not navy, which every human avatar
+   in .upd-avatar already uses) is the one thing that marks it as automated;
+   everything else — radius, type scale, chip shape — matches the panel
+   around it. One border declares elevation; no shadow is layered on top. */
+.sowbot-card {
+  border: 1px solid var(--dyn-teal-line);
+  border-radius: var(--radius-card);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+.sowbot-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  background: var(--dyn-teal-soft);
+}
+.sowbot-avatar {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
+  border-radius: 50%;
+  /* --dyn-teal-ink darkened ~30% toward black: the token alone is only
+     3.1:1 against white text, short of the 4.5:1 floor at this size. */
+  background: #047273;
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.sowbot-name {
+  font-size: 13.5px;
+  color: var(--dyn-navy);
+}
+.sowbot-updated {
+  margin-left: auto;
+  font-size: 12px;
+  /* --dyn-muted darkened ~8%: 4.3:1 on this card's teal-soft head, short of
+     the floor — this hits 5.0:1 there. */
+  color: #6d6d6d;
+  white-space: nowrap;
+}
+.sowbot-dup-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  background: var(--dyn-warn-bg);
+  color: var(--dyn-warn-ink);
+}
+
+.sowbot-fallback {
+  padding: 10px 14px 12px;
+}
+
+.sowbot-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 10px 14px 0;
+  list-style: none;
+}
+.sowbot-chip {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+  cursor: default;
+}
+/* Each pair is this field's hue mixed toward white (bg) and toward black
+   (ink) until it clears 4.5:1 — not a freehand palette. Pending reuses the
+   warn tokens exactly as the rest of the app already defines them. */
+.sowbot-chip-ok {
+  background: #e7f1e0;
+  color: #4b772b;
+}
+.sowbot-chip-pending {
+  background: var(--dyn-warn-bg);
+  color: var(--dyn-warn-ink);
+}
+.sowbot-chip-blocked {
+  background: #f8e5e5;
+  color: var(--dyn-danger);
+}
+.sowbot-chip-unknown {
+  background: var(--dyn-subtle);
+  color: #6d6d6d;
+}
+
+.sowbot-fields {
+  margin: 10px 14px 0;
+  display: grid;
+  grid-template-columns: minmax(120px, auto) 1fr;
+  gap: 6px 10px;
+}
+.sowbot-field {
+  display: contents;
+}
+.sowbot-field dt {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dyn-navy);
+}
+.sowbot-field dd {
+  margin: 0;
+  font-size: 13px;
+}
+.sowbot-field dd .rich {
+  font-size: 13px;
+}
+
+.sowbot-callout {
+  margin: 10px 14px 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.sowbot-callout.danger {
+  background: #f8e5e5;
+  color: var(--dyn-danger);
+}
+.sowbot-callout.danger strong {
+  display: block;
+  margin-bottom: 2px;
+}
+.sowbot-callout.ok {
+  background: #e7f1e0;
+  color: #4b772b;
+}
+
+.sowbot-activity {
+  margin: 10px 14px 12px;
+}
+.sowbot-activity-toggle {
+  border: none;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--dyn-navy);
+  padding: 0;
+}
+.sowbot-activity-toggle:hover {
+  text-decoration: underline;
+}
+.sowbot-activity-body {
+  margin-top: 6px;
+  font-size: 13px;
 }
 
 .upd-modal .modal-actions {

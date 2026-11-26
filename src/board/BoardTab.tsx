@@ -79,8 +79,6 @@ import {
   agingTitle,
   anyFilterActive,
   bandMove,
-  coordinatorLoads,
-  daysInStatus,
   groupProjects,
   installDateOf,
   installSoonTitle,
@@ -994,7 +992,10 @@ export default function BoardTab({
   focusId,
   onFocusHandled,
 }: Props) {
-  const [filters, setFilters] = useState<Filters>(() => readJson(KEY_FILTERS, NO_FILTERS));
+  // Search text is deliberately NOT carried into the next session (Aboud
+  // 2026-11-26) — a stale "Omar" in the box reads as "the board lost rows"
+  // until someone notices and clears it. Every other filter still persists.
+  const [filters, setFilters] = useState<Filters>(() => ({ ...readJson(KEY_FILTERS, NO_FILTERS), search: '' }));
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnSizing, setColumnSizing] = useState(() => readJson<Record<string, number>>(KEY_WIDTHS, {}));
   // "Last update" USED to default to hidden. It is now the way into a row's
@@ -1100,7 +1101,8 @@ export default function BoardTab({
     localStorage.setItem(KEY_VISIBILITY, JSON.stringify(columnVisibility));
   }, [columnVisibility]);
   useEffect(() => {
-    localStorage.setItem(KEY_FILTERS, JSON.stringify(filters));
+    // Never write search text to storage — it must not resurface next session.
+    localStorage.setItem(KEY_FILTERS, JSON.stringify({ ...filters, search: '' }));
   }, [filters]);
   useEffect(() => {
     localStorage.setItem(KEY_DONE_OPEN, doneOpen ? '1' : '0');
@@ -1213,12 +1215,6 @@ export default function BoardTab({
 
   const agingFor = (p: BoardProject): AgingState =>
     isCancelled(p) ? 'none' : agingState(p, installByProject.get(p.id) ?? null, today);
-
-  /** coordinator name → {load, cap} — active + Pre-Design-not-Done (item 8). */
-  const coordinatorLoadMap = useMemo(
-    () => coordinatorLoads(board.projects, board.labels),
-    [board.projects, board.labels],
-  );
 
   // ---- column permissions (Aboud 2026-11-15) --------------------------------
 
@@ -1655,8 +1651,8 @@ export default function BoardTab({
       if (row.match === 'new') {
         const created: BoardProject = {
           ...newProject(row.name, me, cur.labels, now),
-          // newProject puts the author in `coordinator`; the report decides it
-          // here, and '' (the Design report's "-") must stay unassigned.
+          // The report decides the coordinator here, overriding newProject's
+          // unassigned default — '' (the Design report's "-") stays unassigned.
           coordinator: row.coordinator,
           phaseId: row.phaseChange?.toId ?? null,
           // Only set when Salesforce's own status names a board status (Hold
@@ -2216,27 +2212,14 @@ export default function BoardTab({
         maxSize: 800,
         accessorFn: (p) => p.coordinator || undefined,
         sortUndefined: 'last',
-        cell: ({ row }) => {
-          const load = row.original.coordinator ? coordinatorLoadMap.get(row.original.coordinator) : undefined;
-          return (
-            <div className="board-coord-cell">
-              <PersonCell
-                value={row.original.coordinator}
-                authors={authors}
-                me={me}
-                onPick={(coordinator) => applyPatch(row.original, { coordinator })}
-              />
-              {load && (
-                <span
-                  className={`board-coord-load${load.load > load.cap ? ' over' : ''}`}
-                  title={`${row.original.coordinator}: ${load.load} active / Pre-Design project${load.load === 1 ? '' : 's'} (daily cap ${load.cap})`}
-                >
-                  {load.load}/{load.cap}
-                </span>
-              )}
-            </div>
-          );
-        },
+        cell: ({ row }) => (
+          <PersonCell
+            value={row.original.coordinator}
+            authors={authors}
+            me={me}
+            onPick={(coordinator) => applyPatch(row.original, { coordinator })}
+          />
+        ),
       },
       {
         // Who is reviewing the installation (Aboud 2026-11-03). Same picker as
@@ -2268,7 +2251,6 @@ export default function BoardTab({
         accessorFn: (p) => labelSortValue(board.labels, p.statusId),
         sortUndefined: 'last',
         cell: ({ row }) => (
-          <div className="board-status-cell">
           <LabelCell
             labels={board.labels}
             columnKey="status"
@@ -2307,18 +2289,6 @@ export default function BoardTab({
             }}
             onEditLabels={() => setEditLabels('status')}
           />
-          {(() => {
-            // "Days in status" (item 9) — measured from the newest status
-            // change in the activity log, creation date as the fallback.
-            const d = daysInStatus(board.activity, row.original, today);
-            if (d == null || d < 1) return null;
-            return (
-              <span className="board-days-in-status" title={`${d} day${d === 1 ? '' : 's'} in this status`}>
-                {d}d
-              </span>
-            );
-          })()}
-          </div>
         ),
       },
       {
@@ -2468,7 +2438,7 @@ export default function BoardTab({
     // applyPatch/archive/etc. read boardRef, so the defs only need to refresh
     // when the data they RENDER changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [board.labels, board.activity, authors, me, isAdmin, postsByProject, installByProject, updateCountById, openReqCountById, coordinatorLoadMap, today, cancelledIds, selected, allShownSelected, someShownSelected],
+    [board.labels, board.activity, authors, me, isAdmin, postsByProject, installByProject, updateCountById, openReqCountById, today, cancelledIds, selected, allShownSelected, someShownSelected],
   );
 
   // Reconciled every render: a saved order from an older release must not hide
@@ -2638,10 +2608,17 @@ export default function BoardTab({
   };
 
   // Header counts speak about ACTIVE work; the completed and out-of-scope
-  // sections carry their own counts.
+  // sections carry their own counts. The universe here must match what
+  // `visible`/`active` are filtered FROM, or the header can read "21 of 19" —
+  // "Show archived" is the one filter that WIDENS the set rather than
+  // narrowing it, so the total has to widen with it too (Aboud 2026-11-26).
   const activeTotal = useMemo(
-    () => splitSections(board.projects.filter((p) => !p.deletedAt && !p.archivedAt), board.labels).active.length,
-    [board.projects, board.labels],
+    () =>
+      splitSections(
+        board.projects.filter((p) => !p.deletedAt && (filters.showArchived ? true : !p.archivedAt)),
+        board.labels,
+      ).active.length,
+    [board.projects, board.labels, filters.showArchived],
   );
   const dupStatus = duplicate ? labelById(board.labels, duplicate.statusId)?.name : '';
   const presets = useMemo(() => viewPresets(board.labels), [board.labels]);

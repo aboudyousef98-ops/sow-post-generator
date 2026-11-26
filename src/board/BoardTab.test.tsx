@@ -105,7 +105,7 @@ describe('BoardTab', () => {
     vi.unstubAllGlobals();
   });
 
-  it('quick-add creates a row with the default status and me as coordinator', () => {
+  it('quick-add creates a row with the default status and an unassigned coordinator', () => {
     render(<Harness />);
     expect(screen.getByText(/No projects yet/)).toBeTruthy();
 
@@ -113,7 +113,11 @@ describe('BoardTab', () => {
 
     expect(screen.getByText('Martha Thompson')).toBeTruthy(); // name cleaned
     expect(screen.getByText('New project')).toBeTruthy(); // default label
-    expect(screen.getAllByText('Aboud Yousef').length).toBeGreaterThan(0); // Q4
+    // Adding a project is not claiming it (Aboud 2026-11-26) — coordinator
+    // starts unassigned, not the person who added the row.
+    const row = screen.getByText('Martha Thompson').closest('tr')!;
+    const coordCell = row.querySelector('[data-column-id="coordinator"]')!;
+    expect(within(coordCell as HTMLElement).getByText('—')).toBeTruthy();
     // Input stays ready for the next one.
     expect((screen.getByLabelText('Add project') as HTMLInputElement).value).toBe('');
   });
@@ -394,9 +398,17 @@ describe('BoardTab', () => {
     expect(screen.getByText('Patrick Lingwall')).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Search projects'), { target: { value: '' } });
-    // Reassign one row to Omar, then "My projects" keeps only mine.
-    const row = screen.getByText('Patrick Lingwall').closest('tr')!;
-    fireEvent.click(within(row).getByRole('button', { name: /Aboud Yousef/ }));
+    // Both rows start unassigned (Aboud 2026-11-26) — assign one to me and
+    // the other to Omar, then "My projects" keeps only mine. The picker opens
+    // off the empty "—" trigger, not a name.
+    const openCoordPicker = (name: string) => {
+      const row = screen.getByText(name).closest('tr')!;
+      const coordCell = row.querySelector('[data-column-id="coordinator"]')!;
+      fireEvent.click(within(coordCell as HTMLElement).getByRole('button'));
+    };
+    openCoordPicker('Martha Thompson');
+    fireEvent.click(screen.getByRole('button', { name: 'Assign to me' }));
+    openCoordPicker('Patrick Lingwall');
     fireEvent.click(screen.getByRole('option', { name: /Omar Rajab/ }));
     fireEvent.click(screen.getByRole('button', { name: 'My projects' }));
     expect(screen.getByText('Martha Thompson')).toBeTruthy();
@@ -463,6 +475,19 @@ describe('BoardTab — Tier 1', () => {
 
     fireEvent.click(toggle);
     expect(screen.getByText('Karan Staggers')).toBeTruthy();
+  });
+
+  it('the header count never exceeds the total, even with Show archived on (Aboud 2026-11-26)', () => {
+    const board = withRows();
+    board.projects.push({ ...boardProject('Retired Row', 'pj-5'), statusId: 'status-new', archivedAt: '2026-11-01T00:00:00.000Z' });
+    render(<Harness initial={board} />);
+    // Archived by default — hidden and not counted.
+    expect(screen.getByText('3 of 3 active projects')).toBeTruthy();
+    // "Show archived" WIDENS the set it is filtered from, so the total must
+    // widen with it — otherwise this reads "4 of 3", an impossible count.
+    fireEvent.click(screen.getByRole('button', { name: 'Show archived' }));
+    expect(screen.getByText('Retired Row')).toBeTruthy();
+    expect(screen.getByText('4 of 4 active projects')).toBeTruthy();
   });
 
   // ---- Column permissions (Aboud 2026-11-15) --------------------------------
@@ -1888,15 +1913,5 @@ describe('BoardTab — 2026-11-23 features', () => {
     const chip = screen.getByText(/Filter on — clear/);
     fireEvent.click(chip);
     expect(screen.queryByText(/Filter on — clear/)).toBeNull();
-  });
-
-  it('item 8: a coordinator load badge shows count / cap', () => {
-    const rows = [
-      { ...boardProject('One', 'p1'), coordinator: 'Omar Rajab', statusId: 'status-working' },
-      { ...boardProject('Two', 'p2'), coordinator: 'Omar Rajab', statusId: 'status-working' },
-    ];
-    render(<Harness initial={board(rows)} />);
-    // Both rows share the coordinator, so each renders the same 2/3 badge.
-    expect(screen.getAllByText('2/3').length).toBe(2);
   });
 });
