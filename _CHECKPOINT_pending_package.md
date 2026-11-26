@@ -1241,3 +1241,19 @@ Aboud's "then deploy lets see what we have."
   token to call it with yet (0 tokens exist — see the earlier bot-API status
   check this session). Exercise it for real once Aboud generates the
   `sow_bot` token from Admin → Users.
+
+---
+
+## 2026-11-26 (cont.) — HOTFIX SHIPPED ✅ deploy `6b0875fedf2fcc7e371be456`
+
+Aboud asked "where is the UI for the bot update" minutes after the first
+deploy — SOW Bot had already posted 11 real notes to production and the
+card never rendered for any of them. Root-caused against the real data (see
+commit `586a30f`): `by` is the token's display name, not the username the
+selector checked; the bullet grammar's colon position and link placement
+also didn't match the bot's real output. Fixed, all 11 real posts verified
+parsing, 93 files / 1656 tests green, shipped immediately rather than
+waiting for the next package (actively broken, user was looking at it).
+
+Backup: `_versions/v51-live-backup-2026-11-26-{pre,post}deploy/` — all 5
+stores byte-identical. `getSite.published_deploy` confirms `6b0875fedf2fcc7e371be456`.
