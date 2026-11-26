@@ -222,6 +222,10 @@ export default async (req: Request): Promise<Response> => {
     if (seg.length === 3 && seg[0] === 'projects' && seg[2] === 'updates' && method === 'POST') {
       return await addUpdate(store, req, seg[1], who);
     }
+    // PATCH /projects/:id/updates/:updateId
+    if (seg.length === 4 && seg[0] === 'projects' && seg[2] === 'updates' && method === 'PATCH') {
+      return await editUpdate(store, req, seg[1], seg[3], who);
+    }
   } catch (e) {
     console.log(JSON.stringify({ at: new Date().toISOString(), endpoint: 'bot', error: String(e) }));
     return err(500, 'internal error');
@@ -465,6 +469,60 @@ async function addUpdate(store: Store, req: Request, id: string, who: BotIdentit
   if (!merged) return err(503, 'conflict, retry');
   console.log(JSON.stringify({ at: now, endpoint: 'bot', op: 'update', id: id.slice(0, 8), by: who.username }));
   return jsonResponse(201, { update }, undefined);
+}
+
+// ---- PATCH /projects/:id/updates/:updateId -----------------------------------
+
+interface ApiUpdate {
+  id: string;
+  projectId: string;
+  text: string;
+  by: string;
+  at: string;
+  kind: string;
+  updatedAt: string;
+  editedAt?: string;
+  editedBy?: string;
+  deleted?: { at: string; by: string };
+}
+
+async function editUpdate(store: Store, req: Request, projectId: string, updateId: string, who: BotIdentity): Promise<Response> {
+  const body = (await readJsonBody(req)) as Record<string, unknown> | null | 'too-large';
+  if (body === 'too-large') return err(413, 'payload too large');
+  if (!body || typeof body.text !== 'string' || !body.text.trim()) return err(400, 'text required');
+
+  const board = await readBoard(store);
+  const updates = (board.updates ?? []) as unknown as ApiUpdate[];
+  // A deleted update reads as gone, same as GET /projects/:id already treats
+  // deleted/archived projects — there is nothing left here to edit.
+  const before = updates.find((u) => u.id === updateId && u.projectId === projectId && !u.deleted);
+  if (!before) return err(404, 'no such update');
+
+  // The token's own user, and only that user — never an admin override. A
+  // bot token has no "act as anyone" mode; it is one fixed identity.
+  if (before.by !== who.displayName) return err(403, 'can only edit your own updates');
+
+  const text = body.text.trim();
+  const now = new Date().toISOString();
+  if (text === before.text) {
+    return jsonResponse(200, { update: before, noop: true }, undefined);
+  }
+
+  const after: ApiUpdate = { ...before, text, editedAt: now, editedBy: who.displayName, updatedAt: now };
+  const activity: Activity = {
+    id: uuid(),
+    projectId,
+    actor: who.displayName,
+    action: 'update-edit',
+    batchId: uuid(),
+    source: 'api',
+    at: now,
+  };
+
+  const merged = await applyToBoard(store, { updates: [after as never], activity: [activity as never] });
+  if (!merged) return err(503, 'conflict, retry');
+  console.log(JSON.stringify({ at: now, endpoint: 'bot', op: 'update-edit', id: updateId.slice(0, 8), by: who.username }));
+  return jsonResponse(200, { update: after }, undefined);
 }
 
 // ---- POST /changes/:batchId/revert ------------------------------------------

@@ -119,6 +119,7 @@ const html = `<!DOCTYPE html>
       <li><a href="#post-projects">POST /projects</a></li>
       <li><a href="#patch-project">PATCH /projects/:id</a></li>
       <li><a href="#post-update">POST /projects/:id/updates</a></li>
+      <li><a href="#patch-update">PATCH /projects/:id/updates/:updateId</a></li>
       <li><a href="#get-changes">GET /changes</a></li>
       <li><a href="#post-revert">POST /changes/:batchId/revert</a></li>
     </ul>
@@ -302,6 +303,40 @@ const html = `<!DOCTYPE html>
     "at": "2026-11-23T10:00:00.000Z"
   }
 }</code></pre>
+  </div>
+
+  <h2 id="patch-update">Edit an update</h2>
+  <div class="ep">
+    <p><span class="method m-patch">PATCH</span><span class="path">/api/bot/v1/projects/:id/updates/:updateId</span></p>
+    <p>
+      Edits the text of an update <strong>you posted</strong>. Only the update's own
+      author (the token's user) may edit it &mdash; anyone else's update returns
+      <code>403</code>, with no admin override. Sets <code>editedAt</code>/<code>editedBy</code> and
+      shows the same "edited" marker the app's own UI shows for a human edit, and logs an
+      <code>update-edit</code> entry in the activity feed.
+    </p>
+    <h3>Body</h3>
+    <table>
+      <tr><th>Field</th><th>Notes</th></tr>
+      <tr><td><code>text</code></td><td><strong>Required.</strong> The new update text</td></tr>
+    </table>
+    <h3>Example</h3>
+    <pre><code>curl -X PATCH "$SITE/api/bot/v1/projects/p_123/updates/u_9" \\
+  -H "Authorization: Bearer $SOW_BOT_TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"text":"Called the AHJ, signed SOW received."}'</code></pre>
+    <h3>Response</h3>
+    <pre><code>{
+  "update": {
+    "id": "u_9",
+    "text": "Called the AHJ, signed SOW received.",
+    "by": "SOW Bot - Aboud",
+    "editedAt": "2026-11-26T18:30:00.000Z",
+    "editedBy": "SOW Bot - Aboud"
+  }
+}</code></pre>
+    <h3>Response — 403 (not your update)</h3>
+    <pre><code>{ "error": "can only edit your own updates" }</code></pre>
   </div>
 
   <h2 id="get-changes">Activity log</h2>
